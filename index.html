@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sitios</title>
+  <style>
+    :root {
+      --bg: #0b0b0f;
+      --card: #16161d;
+      --text: #f5f5f7;
+      --muted: #a1a1aa;
+      --accent: #3b82f6;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #0b0b0f, #0f0f16);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      padding: 24px;
+    }
+
+    .search-bar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(11,11,15,0.85);
+      backdrop-filter: blur(20px);
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+
+    .search-bar input {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: none;
+      outline: none;
+      background: var(--card);
+      color: var(--text);
+      font-size: 16px;
+      transition: box-shadow .3s ease, transform .2s ease;
+    }
+
+    .search-bar input:focus {
+      box-shadow: 0 0 0 2px var(--accent);
+      transform: scale(1.01);
+    }
+
+    ul.sites {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 16px;
+    }
+
+    .site-card {
+      background: linear-gradient(180deg, #1a1a23, #14141c);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      cursor: pointer;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp .6s ease forwards;
+      transition: transform .25s ease, box-shadow .25s ease;
+    }
+
+    .site-card:hover {
+      transform: translateY(-4px) scale(1.01);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+    }
+
+    .site-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .site-name {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .site-url {
+      font-size: 14px;
+      color: var(--accent);
+      word-break: break-all;
+    }
+
+    .version-notes {
+      font-size: 15px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    @keyframes fadeUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      margin-top: 40px;
+      animation: fadeUp .6s ease forwards;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="search-bar">
+      <input type="text" id="search" placeholder="Buscar sitio..." />
+    </div>
+
+    <ul class="sites" id="sitesList"></ul>
+    <div class="empty" id="empty" style="display:none;">No se encontraron sitios</div>
+  </div>
+
+  <script>
+    let sitesData = [];
+
+    async function loadSites() {
+      try {
+        const res = await fetch('db.json');
+        sitesData = await res.json();
+        renderSites(sitesData);
+      } catch (e) {
+        console.error('Error cargando db.json', e);
+      }
+    }
+
+    function renderSites(data) {
+      const list = document.getElementById('sitesList');
+      const empty = document.getElementById('empty');
+      list.innerHTML = '';
+
+      if (data.length === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+
+      data.forEach((site, index) => {
+        const li = document.createElement('li');
+        li.className = 'site-card';
+        li.style.animationDelay = `${index * 0.05}s`;
+
+        li.innerHTML = `
+          <div class="site-header">
+            <div class="site-name">${site.name}</div>
+          </div>
+          <div class="site-url">${site.url}</div>
+          <div class="version-notes">${site.notes}</div>
+        `;
+
+        li.addEventListener('click', () => {
+          window.open(site.url, '_blank');
+        });
+
+        list.appendChild(li);
+      });
+    }
+
+    document.getElementById('search').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const filtered = sitesData.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.url.toLowerCase().includes(q) ||
+        s.notes.toLowerCase().includes(q)
+      );
+      renderSites(filtered);
+    });
+
+    loadSites();
+  </script>
+</body>
+</html>
