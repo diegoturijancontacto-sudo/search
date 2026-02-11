@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Proyectos Kanban</title>
+    <title>Gestor de Proyectos Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .drag-over {
@@ -13,7 +13,6 @@
         .project-card:active {
             cursor: grabbing;
         }
-        /* Animación de carga */
         .loader {
             border-top-color: #4f46e5;
             animation: spinner 0.6s linear infinite;
@@ -22,9 +21,42 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Estilos para Gantt */
+        .gantt-grid {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+        }
+        .gantt-row-header {
+            border-bottom: 1px solid #e5e7eb;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            background: #f9fafb;
+        }
+        .gantt-bar-container {
+            position: relative;
+            height: 40px;
+            border-bottom: 1px solid #e5e7eb;
+            background-image: linear-gradient(to right, #f3f4f6 1px, transparent 1px);
+            background-size: calc(100% / 7) 100%;
+        }
+        .gantt-bar {
+            position: absolute;
+            height: 24px;
+            top: 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            overflow: hidden;
+            white-space: nowrap;
+        }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+<body class="bg-gray-100 min-h-screen">
 
     <!-- Indicador de Carga Global -->
     <div id="loadingOverlay" class="fixed inset-0 bg-white bg-opacity-70 z-[100] hidden flex flex-col items-center justify-center">
@@ -32,27 +64,29 @@
         <p class="text-indigo-600 font-semibold">Sincronizando...</p>
     </div>
 
-    <div class="max-w-6xl mx-auto">
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
         <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h1 class="text-3xl font-bold text-gray-800">Panel de Proyectos</h1>
-                <p class="text-gray-600">Organiza tus tareas arrastrando y soltando</p>
+                <h1 class="text-3xl font-bold text-gray-800 tracking-tight">Gestión de Proyectos</h1>
+                <div class="flex mt-4 bg-gray-200 p-1 rounded-lg w-fit">
+                    <button onclick="switchView('kanban')" id="tab-kanban" class="px-4 py-2 rounded-md text-sm font-medium bg-white shadow-sm text-indigo-600 transition-all">Tablero Kanban</button>
+                    <button onclick="switchView('gantt')" id="tab-gantt" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-800 transition-all">Diagrama de Gantt</button>
+                </div>
             </div>
-            <button onclick="openModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200 shadow-lg">
+            <button onclick="openModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200 shadow-lg h-fit self-end md:self-center">
                 + Nuevo Proyecto
             </button>
         </header>
 
-        <!-- Tablero Kanban -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Vista Kanban -->
+        <div id="view-kanban" class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- En Curso -->
             <div class="flex flex-col h-full">
                 <div class="bg-blue-600 text-white p-3 rounded-t-lg font-bold flex justify-between items-center">
                     <span>EN CURSO</span>
                     <span id="count-curso" class="bg-blue-500 text-xs px-2 py-1 rounded-full">0</span>
                 </div>
-                <div id="curso" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" class="kanban-column flex-1 bg-white p-4 rounded-b-lg shadow-sm min-h-[500px] transition-colors border-2 border-transparent">
-                </div>
+                <div id="curso" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" class="kanban-column flex-1 bg-white p-4 rounded-b-lg shadow-sm min-h-[500px] transition-colors border-2 border-transparent"></div>
             </div>
 
             <!-- En Pausa -->
@@ -61,8 +95,7 @@
                     <span>EN PAUSA</span>
                     <span id="count-pausa" class="bg-yellow-400 text-xs px-2 py-1 rounded-full">0</span>
                 </div>
-                <div id="pausa" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" class="kanban-column flex-1 bg-white p-4 rounded-b-lg shadow-sm min-h-[500px] transition-colors border-2 border-transparent">
-                </div>
+                <div id="pausa" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" class="kanban-column flex-1 bg-white p-4 rounded-b-lg shadow-sm min-h-[500px] transition-colors border-2 border-transparent"></div>
             </div>
 
             <!-- Terminados -->
@@ -71,7 +104,33 @@
                     <span>TERMINADO</span>
                     <span id="count-terminado" class="bg-green-500 text-xs px-2 py-1 rounded-full">0</span>
                 </div>
-                <div id="terminado" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" class="kanban-column flex-1 bg-white p-4 rounded-b-lg shadow-sm min-h-[500px] transition-colors border-2 border-transparent">
+                <div id="terminado" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" class="kanban-column flex-1 bg-white p-4 rounded-b-lg shadow-sm min-h-[500px] transition-colors border-2 border-transparent"></div>
+            </div>
+        </div>
+
+        <!-- Vista Gantt -->
+        <div id="view-gantt" class="hidden bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="p-4 border-bottom bg-gray-50 flex justify-between items-center">
+                <h2 class="font-bold text-gray-700 text-lg">Cronograma</h2>
+                <span class="text-xs text-gray-500 italic">Vista semanal basada en fechas de proyecto</span>
+            </div>
+            <div class="overflow-x-auto">
+                <div class="min-w-[800px]">
+                    <div class="gantt-grid bg-gray-100 font-bold text-xs uppercase text-gray-500">
+                        <div class="p-3 border-b border-r">Proyecto / Responsable</div>
+                        <div class="p-3 border-b flex">
+                            <div class="flex-1 text-center border-r">Lunes</div>
+                            <div class="flex-1 text-center border-r">Martes</div>
+                            <div class="flex-1 text-center border-r">Miércoles</div>
+                            <div class="flex-1 text-center border-r">Jueves</div>
+                            <div class="flex-1 text-center border-r">Viernes</div>
+                            <div class="flex-1 text-center border-r">Sábado</div>
+                            <div class="flex-1 text-center">Domingo</div>
+                        </div>
+                    </div>
+                    <div id="gantt-content">
+                        <!-- Filas de Gantt se generan aquí -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -89,11 +148,21 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Responsable</label>
-                    <input type="text" id="projOwner" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ej: Juan Pérez">
+                    <input type="text" id="projOwner" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Fecha Inicio</label>
+                        <input type="date" id="projStart" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Fecha Fin</label>
+                        <input type="date" id="projEnd" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm">
+                    </div>
                 </div>
                 <div id="statusContainer">
                     <label class="block text-sm font-medium text-gray-700">Estado Inicial</label>
-                    <select id="projStatus" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <select id="projStatus" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
                         <option value="curso">En Curso</option>
                         <option value="pausa">En Pausa</option>
                         <option value="terminado">Terminado</option>
@@ -113,6 +182,10 @@
         let projects = [];
 
         window.onload = () => {
+            // Establecer fechas por defecto
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('projStart').value = today;
+            document.getElementById('projEnd').value = today;
             fetchProjects();
         };
 
@@ -122,16 +195,35 @@
             else overlay.classList.add('hidden');
         }
 
+        function switchView(view) {
+            const vKanban = document.getElementById('view-kanban');
+            const vGantt = document.getElementById('view-gantt');
+            const tKanban = document.getElementById('tab-kanban');
+            const tGantt = document.getElementById('tab-gantt');
+
+            if (view === 'kanban') {
+                vKanban.classList.remove('hidden');
+                vGantt.classList.add('hidden');
+                tKanban.className = "px-4 py-2 rounded-md text-sm font-medium bg-white shadow-sm text-indigo-600";
+                tGantt.className = "px-4 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-800";
+            } else {
+                vKanban.classList.add('hidden');
+                vGantt.classList.remove('hidden');
+                tKanban.className = "px-4 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-800";
+                tGantt.className = "px-4 py-2 rounded-md text-sm font-medium bg-white shadow-sm text-indigo-600";
+                renderGantt();
+            }
+        }
+
         function fetchProjects() {
             if (!WEB_APP_URL) {
                 projects = [
-                    { id: '1', name: 'Rediseño Web', owner: 'Ana García', status: 'curso' },
-                    { id: '2', name: 'Inventario Q1', owner: 'Luis Torres', status: 'pausa' }
+                    { id: '1', name: 'Rediseño Web', owner: 'Ana García', status: 'curso', start: '2023-10-01', end: '2023-10-04' },
+                    { id: '2', name: 'Inventario Q1', owner: 'Luis Torres', status: 'pausa', start: '2023-10-02', end: '2023-10-06' }
                 ];
                 renderBoard();
                 return;
             }
-
             showLoading(true);
             fetch(WEB_APP_URL)
                 .then(res => res.json())
@@ -139,7 +231,7 @@
                     projects = data;
                     renderBoard();
                 })
-                .catch(err => console.error("Error al cargar datos:", err))
+                .catch(err => console.error(err))
                 .finally(() => showLoading(false));
         }
 
@@ -155,55 +247,80 @@
                     const card = document.createElement('div');
                     card.className = 'project-card group bg-gray-50 p-4 mb-3 rounded-lg border border-gray-200 shadow-sm cursor-grab hover:shadow-md transition duration-200 relative';
                     card.draggable = true;
-                    card.id = `proj-${proj.id}`;
                     card.dataset.id = proj.id;
                     card.ondragstart = drag;
                     
                     card.innerHTML = `
                         <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onclick="editProject('${proj.id}')" class="text-gray-400 hover:text-indigo-600 p-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
                             </button>
                             <button onclick="deleteProject('${proj.id}')" class="text-gray-400 hover:text-red-500 p-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
                             </button>
                         </div>
                         <h3 class="font-bold text-gray-800 pr-12">${proj.name}</h3>
-                        <p class="text-sm text-gray-500 mt-2 flex items-center">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                            ${proj.owner}
-                        </p>
+                        <p class="text-xs text-gray-500 mt-1">${proj.owner}</p>
+                        <div class="mt-3 text-[10px] text-gray-400 font-mono flex justify-between">
+                            <span>INICIO: ${proj.start || '---'}</span>
+                            <span>FIN: ${proj.end || '---'}</span>
+                        </div>
                     `;
                     container.appendChild(card);
                 });
             });
         }
 
-        function allowDrop(ev) {
-            ev.preventDefault();
-            ev.currentTarget.classList.add('drag-over');
+        function renderGantt() {
+            const container = document.getElementById('gantt-content');
+            container.innerHTML = '';
+            
+            projects.forEach(proj => {
+                const row = document.createElement('div');
+                row.className = 'gantt-grid';
+                
+                // Color basado en estado
+                let bgColor = '#3b82f6'; // Curso
+                if(proj.status === 'pausa') bgColor = '#f59e0b';
+                if(proj.status === 'terminado') bgColor = '#10b981';
+
+                // Cálculo básico de posición de barra (Demo simplificada de 7 días)
+                // En una app real usaríamos librerías como date-fns para precisión
+                const startDay = proj.start ? new Date(proj.start).getDay() || 7 : 1; 
+                const duration = 2; // Default duration
+                
+                const leftPos = ((startDay - 1) / 7) * 100;
+                const widthPos = (duration / 7) * 100;
+
+                row.innerHTML = `
+                    <div class="gantt-row-header border-r text-sm truncate" title="${proj.name}">
+                        <span class="font-semibold text-gray-700">${proj.name}</span>
+                        <span class="ml-2 text-[10px] text-gray-400">(${proj.owner})</span>
+                    </div>
+                    <div class="gantt-bar-container">
+                        <div class="gantt-bar" style="left: ${leftPos}%; width: ${widthPos}%; background-color: ${bgColor};">
+                            ${proj.name}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
         }
 
-        function dragLeave(ev) {
-            ev.currentTarget.classList.remove('drag-over');
-        }
-
-        function drag(ev) {
-            ev.dataTransfer.setData("text", ev.target.dataset.id);
-        }
-
+        // Drag and Drop
+        function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); }
+        function dragLeave(ev) { ev.currentTarget.classList.remove('drag-over'); }
+        function drag(ev) { ev.dataTransfer.setData("text", ev.target.dataset.id); }
         function drop(ev) {
             ev.preventDefault();
             const container = ev.currentTarget;
             container.classList.remove('drag-over');
-            
-            const projectId = ev.dataTransfer.getData("text");
+            const id = ev.dataTransfer.getData("text");
             const newStatus = container.id;
-
-            const project = projects.find(p => p.id == projectId);
+            const project = projects.find(p => p.id == id);
             if (project && project.status !== newStatus) {
                 project.status = newStatus;
-                updateProjectInSheets(project);
+                updateProjectInSheets(project, 'status_only');
                 renderBoard();
             }
         }
@@ -212,13 +329,14 @@
             document.getElementById('modal').classList.remove('hidden');
             const title = document.getElementById('modalTitle');
             const statusContainer = document.getElementById('statusContainer');
-            
             if (isEdit && projData) {
                 title.innerText = "Editar Proyecto";
                 document.getElementById('projId').value = projData.id;
                 document.getElementById('projName').value = projData.name;
                 document.getElementById('projOwner').value = projData.owner;
-                statusContainer.classList.add('hidden'); // No cambiamos estado desde el modal para no confundir con el drag&drop
+                document.getElementById('projStart').value = projData.start || '';
+                document.getElementById('projEnd').value = projData.end || '';
+                statusContainer.classList.add('hidden');
             } else {
                 title.innerText = "Añadir Nuevo Proyecto";
                 document.getElementById('projId').value = '';
@@ -228,90 +346,61 @@
             }
         }
 
-        function closeModal() {
-            document.getElementById('modal').classList.add('hidden');
-        }
-
-        function editProject(id) {
-            const project = projects.find(p => p.id == id);
-            if (project) {
-                openModal(true, project);
-            }
-        }
+        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
 
         function saveProject() {
             const id = document.getElementById('projId').value;
             const name = document.getElementById('projName').value;
             const owner = document.getElementById('projOwner').value;
+            const start = document.getElementById('projStart').value;
+            const end = document.getElementById('projEnd').value;
             
-            if (!name || !owner) {
-                alert("Por favor rellena todos los campos");
-                return;
-            }
+            if (!name || !owner) return alert("Completa los campos obligatorios");
 
             if (id) {
-                // Modo Edición
                 const project = projects.find(p => p.id == id);
                 project.name = name;
                 project.owner = owner;
+                project.start = start;
+                project.end = end;
                 updateProjectInSheets(project, 'full_update');
             } else {
-                // Modo Nuevo
                 const status = document.getElementById('projStatus').value;
-                const newProj = {
-                    id: Date.now().toString(),
-                    name: name,
-                    owner: owner,
-                    status: status
-                };
+                const newProj = { id: Date.now().toString(), name, owner, status, start, end };
                 projects.push(newProj);
                 saveProjectToSheets(newProj);
             }
-
             renderBoard();
             closeModal();
         }
 
+        function editProject(id) {
+            const project = projects.find(p => p.id == id);
+            if (project) openModal(true, project);
+        }
+
         function deleteProject(id) {
-            if (!confirm('¿Estás seguro de que deseas eliminar este proyecto?')) return;
-            
+            if (!confirm('¿Eliminar proyecto?')) return;
             projects = projects.filter(p => p.id != id);
             renderBoard();
-            
             if (!WEB_APP_URL) return;
-            
             showLoading(true);
-            fetch(WEB_APP_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete', data: { id: id } })
-            })
-            .finally(() => showLoading(false));
+            fetch(WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'delete', data: { id } }) })
+                .finally(() => showLoading(false));
         }
 
         function saveProjectToSheets(proj) {
             if (!WEB_APP_URL) return;
-            
             showLoading(true);
-            fetch(WEB_APP_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'add', data: proj })
-            })
-            .finally(() => showLoading(false));
+            fetch(WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'add', data: proj }) })
+                .finally(() => showLoading(false));
         }
 
-        function updateProjectInSheets(proj, updateType = 'status_only') {
+        function updateProjectInSheets(proj, updateType) {
             if (!WEB_APP_URL) return;
-
             showLoading(true);
-            fetch(WEB_APP_URL, {
-                method: 'POST',
-                body: JSON.stringify({ 
-                    action: 'update', 
-                    type: updateType,
-                    data: proj 
-                })
-            })
-            .finally(() => showLoading(false));
+            fetch(WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'update', type: updateType, data: proj }) })
+                .finally(() => showLoading(false));
         }
     </script>
 </body>
