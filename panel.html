@@ -21,7 +21,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        /* Personalización de Scrollbars para Gantt */
         #gantt-scroll-area::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -110,7 +109,7 @@
                     <tr>
                         <th class="p-4 font-semibold text-slate-600">Nombre del Proyecto</th>
                         <th class="p-4 font-semibold text-slate-600 text-center">Responsable</th>
-                        <th class="p-4 font-semibold text-slate-600 text-center">Fechas</th>
+                        <th class="p-4 font-semibold text-slate-600 text-center">Días en Curso</th>
                         <th class="p-4 font-semibold text-slate-600 text-center">Estado</th>
                         <th class="p-4 font-semibold text-slate-600 text-right">Acciones</th>
                     </tr>
@@ -167,19 +166,26 @@
                     <label class="block text-sm font-bold text-slate-700 mb-1">Responsable</label>
                     <input type="text" id="projOwner" required class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all" placeholder="Nombre de persona">
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-bold text-slate-700 mb-1">Fecha Inicio</label>
-                        <input type="date" id="projStart" required class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-slate-700 mb-1">Fecha Fin</label>
-                        <input type="date" id="projEnd" required class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all">
+                <div id="days-field-container">
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Días Estimados</label>
+                    <input type="number" id="projDays" min="1" value="7" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all" placeholder="Ej: 7">
+                    <p class="text-xs text-slate-400 mt-1">Fecha inicio: hoy automáticamente</p>
+                </div>
+                <div id="date-fields-container" class="hidden">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Fecha Inicio</label>
+                            <input type="date" id="projStart" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-slate-700 mb-1">Fecha Fin</label>
+                            <input type="date" id="projEnd" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all">
+                        </div>
                     </div>
                 </div>
                 <div>
                     <label class="block text-sm font-bold text-slate-700 mb-1">Estado</label>
-                    <select id="projStatus" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all bg-white">
+                    <select id="projStatus" onchange="handleStatusChange()" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all bg-white">
                         <option value="curso">En Curso</option>
                         <option value="pausa">Pausa</option>
                         <option value="terminado">Terminado</option>
@@ -195,14 +201,66 @@
     </div>
 
     <script>
-        // CONFIGURACIÓN DE URL DE GOOGLE APPS SCRIPT
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxJpPgkX8dUfMkZBgrNTnMqJMJRyjwz82jA2Ho05yvahbrRfyZagoHMnbQo7Qch8CT9lw/exec'; // PEGA AQUÍ TU URL DE IMPLEMENTACIÓN
+        // ============================================
+        // CONFIGURACIÓN (¡ACTUALIZA ESTO!)
+        // ============================================
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxJpPgkX8dUfMkZBgrNTnMqJMJRyjwz82jA2Ho05yvahbrRfyZagoHMnbQo7Qch8CT9lw/exec';
+        const WHATSAPP_BOT_URL = 'https://bot-yy1q.onrender.com/send';
+        const WHATSAPP_NUMBER = '120363406622431210@g.us'; // <--- NÚMERO DE WHATSAPP O GRUPO
+        const PANEL_URL = 'https://diegoturijancontacto-sudo.github.io/search/panel.html';
 
         let projects = [];
         let ganttConfig = { pxPerDay: 50, headerStep: 1 };
 
         // Inicialización
         document.addEventListener('DOMContentLoaded', refreshData);
+
+        // ============================================
+        // FUNCIONES PARA NOTIFICACIONES WHATSAPP
+        // ============================================
+        async function sendWhatsAppNotification(message) {
+            if (!WHATSAPP_NUMBER) {
+                console.warn('Número de WhatsApp no configurado. No se envió notificación.');
+                return;
+            }
+            try {
+                const url = `${WHATSAPP_BOT_URL}?number=${encodeURIComponent(WHATSAPP_NUMBER)}&message=${encodeURIComponent(message)}`;
+                // Enviamos la notificación sin esperar respuesta para no ralentizar la UI
+                fetch(url, { mode: 'no-cors' })
+                    .then(() => console.log('Notificación enviada intento (modo no-cors)'))
+                    .catch(err => console.error('Error al enviar notificación WhatsApp:', err));
+            } catch (error) {
+                console.error('Error al preparar notificación WhatsApp:', error);
+            }
+        }
+
+        function formatProjectMessage(action, projData) {
+            const actionText = action === 'create' ? '🟢 NUEVO PROYECTO CREADO' : '🔴 PROYECTO ELIMINADO';
+            const fechaActual = new Date().toLocaleString('es-ES', { timeZone: 'America/Asuncion' });
+            let mensaje = `${actionText}\n`;
+            mensaje += `📅 Fecha/Hora: ${fechaActual}\n`;
+            mensaje += `━━━━━━━━━━━━━━━━\n`;
+            mensaje += `📌 *${projData.name}*\n`;
+            mensaje += `👤 Responsable: ${projData.owner}\n`;
+            
+            if (action === 'create') {
+                mensaje += `📊 Estado: ${projData.status === 'curso' ? 'En Curso' : projData.status === 'pausa' ? 'Pausa' : 'Terminado'}\n`;
+                mensaje += `📅 Inicio: ${projData.start}\n`;
+                if (projData.status !== 'terminado') {
+                    mensaje += `⏳ Días estimados: ${projData.days || 'N/A'}\n`;
+                } else {
+                    mensaje += `🏁 Fin: ${projData.end}\n`;
+                }
+            }
+            
+            mensaje += `━━━━━━━━━━━━━━━━\n`;
+            mensaje += `🔗 Ver panel: ${PANEL_URL}`;
+            return mensaje;
+        }
+
+        // ============================================
+        // FUNCIONES DE GESTIÓN DE DATOS
+        // ============================================
 
         function showLoading(show) {
             document.getElementById('loading').classList.toggle('hidden', !show);
@@ -242,8 +300,25 @@
             if (view === 'gantt') renderGantt();
         }
 
-        // --- LÓGICA KANBAN ---
+        // Función para calcular días transcurridos
+        function calculateDaysElapsed(startDate, status) {
+            if (!startDate) return 0;
+            
+            const start = new Date(startDate);
+            const today = new Date();
+            
+            if (status === 'terminado') {
+                const project = projects.find(p => p.start === startDate);
+                if (project && project.end) {
+                    const end = new Date(project.end);
+                    return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+                }
+            }
+            
+            return Math.ceil((today - start) / (1000 * 60 * 60 * 24));
+        }
 
+        // --- LÓGICA KANBAN ---
         function renderBoard() {
             const columns = ['curso', 'pausa', 'terminado'];
             columns.forEach(col => {
@@ -260,12 +335,17 @@
                     card.ondragstart = (e) => e.dataTransfer.setData('text/plain', proj.id);
                     card.onclick = () => editProject(proj.id);
                     
+                    const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
+                    
                     card.innerHTML = `
                         <h4 class="font-bold text-slate-800 mb-1">${proj.name}</h4>
                         <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-tight">${proj.owner}</p>
-                        <div class="flex items-center text-[10px] font-bold text-slate-500 bg-slate-50 p-1.5 rounded-md w-fit border border-slate-100">
-                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                            ${proj.start} / ${proj.end}
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center text-[10px] font-bold text-slate-500 bg-slate-50 p-1.5 rounded-md w-fit border border-slate-100">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                ${daysElapsed} días
+                            </div>
+                            ${proj.status === 'terminado' ? '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Completado</span>' : ''}
                         </div>
                     `;
                     container.appendChild(card);
@@ -273,8 +353,15 @@
             });
         }
 
-        function allowDrop(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
-        function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+        function allowDrop(e) { 
+            e.preventDefault(); 
+            e.currentTarget.classList.add('drag-over'); 
+        }
+        
+        function dragLeave(e) { 
+            e.currentTarget.classList.remove('drag-over'); 
+        }
+        
         function drop(e) {
             e.preventDefault();
             const col = e.currentTarget;
@@ -282,14 +369,18 @@
             const id = e.dataTransfer.getData('text/plain');
             const project = projects.find(p => p.id == id);
             if (project && project.status !== col.id) {
+                const oldStatus = project.status;
                 project.status = col.id;
+                if (col.id === 'terminado' && oldStatus !== 'terminado') {
+                    const today = new Date();
+                    project.end = today.toISOString().split('T')[0];
+                }
                 renderAll();
                 updateProjectInSheets(project, 'status_only');
             }
         }
 
         // --- LÓGICA LISTA ---
-
         function renderList() {
             const container = document.getElementById('list-content');
             container.innerHTML = '';
@@ -300,11 +391,13 @@
                 let badgeClass = 'bg-blue-100 text-blue-600';
                 if(proj.status === 'pausa') badgeClass = 'bg-amber-100 text-amber-600';
                 if(proj.status === 'terminado') badgeClass = 'bg-emerald-100 text-emerald-600';
+                
+                const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
 
                 tr.innerHTML = `
                     <td class="p-4"><div class="font-bold text-slate-700">${proj.name}</div></td>
                     <td class="p-4 text-center text-slate-500 text-sm font-medium">${proj.owner}</td>
-                    <td class="p-4 text-center text-slate-400 text-[11px] font-mono">${proj.start} a ${proj.end}</td>
+                    <td class="p-4 text-center text-slate-700 font-bold">${daysElapsed} días</td>
                     <td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeClass}">${proj.status}</span></td>
                     <td class="p-4 text-right">
                         <button onclick="editProject('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Editar</button>
@@ -315,7 +408,6 @@
         }
 
         // --- LÓGICA GANTT DINÁMICO ---
-
         function changeZoom(direction) {
             if (direction === 'in') {
                 ganttConfig.pxPerDay = 50;
@@ -382,7 +474,15 @@
                 // Lista lateral
                 const listItem = document.createElement('div');
                 listItem.className = 'h-12 border-b border-slate-100 flex flex-col justify-center px-4 hover:bg-slate-50 transition cursor-pointer';
-                listItem.innerHTML = `<span class="font-bold text-slate-700 text-xs truncate">${proj.name}</span><span class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">${proj.owner}</span>`;
+                
+                const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
+                
+                listItem.innerHTML = `
+                    <span class="font-bold text-slate-700 text-xs truncate">${proj.name}</span>
+                    <span class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter flex items-center gap-1">
+                        ${proj.owner} • ${daysElapsed} días
+                    </span>
+                `;
                 listItem.onclick = () => editProject(proj.id);
                 listContainer.appendChild(listItem);
 
@@ -402,7 +502,7 @@
                 bar.style.top = `${(index * ROW_HEIGHT) + 12}px`;
                 bar.style.left = `${left}px`;
                 bar.style.width = `${width}px`;
-                bar.innerText = proj.name;
+                bar.innerText = `${proj.name} (${daysElapsed} días)`;
                 bar.onclick = () => editProject(proj.id);
                 barsContainer.appendChild(bar);
 
@@ -420,6 +520,26 @@
         });
 
         // --- LÓGICA MODAL Y FORMULARIO ---
+        function handleStatusChange() {
+            const status = document.getElementById('projStatus').value;
+            const daysField = document.getElementById('days-field-container');
+            const dateFields = document.getElementById('date-fields-container');
+            
+            if (status === 'terminado') {
+                daysField.classList.add('hidden');
+                dateFields.classList.remove('hidden');
+                
+                if (!document.getElementById('projId').value) {
+                    const today = new Date();
+                    const todayStr = today.toISOString().split('T')[0];
+                    document.getElementById('projStart').value = todayStr;
+                    document.getElementById('projEnd').value = todayStr;
+                }
+            } else {
+                daysField.classList.remove('hidden');
+                dateFields.classList.add('hidden');
+            }
+        }
 
         function openModal(isEdit = false, proj = null) {
             const modal = document.getElementById('modal');
@@ -436,17 +556,39 @@
                 document.getElementById('projName').value = proj.name;
                 document.getElementById('projOwner').value = proj.owner;
                 document.getElementById('projStatus').value = proj.status;
-                document.getElementById('projStart').value = proj.start;
-                document.getElementById('projEnd').value = proj.end;
+                
+                if (proj.status === 'terminado') {
+                    document.getElementById('days-field-container').classList.add('hidden');
+                    document.getElementById('date-fields-container').classList.remove('hidden');
+                    document.getElementById('projStart').value = proj.start;
+                    document.getElementById('projEnd').value = proj.end;
+                } else {
+                    document.getElementById('days-field-container').classList.remove('hidden');
+                    document.getElementById('date-fields-container').classList.add('hidden');
+                    if (proj.days) {
+                        document.getElementById('projDays').value = proj.days;
+                    }
+                }
             } else {
                 title.innerText = "Nuevo Proyecto";
                 document.getElementById('projId').value = "";
                 document.getElementById('projStatus').value = "curso";
+                document.getElementById('days-field-container').classList.remove('hidden');
+                document.getElementById('date-fields-container').classList.add('hidden');
+                document.getElementById('projDays').value = "7";
             }
             modal.classList.remove('hidden');
         }
 
-        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+        function closeModal() { 
+            document.getElementById('modal').classList.add('hidden'); 
+        }
+
+        function calculateEndDate(startDate, days) {
+            const date = new Date(startDate);
+            date.setDate(date.getDate() + parseInt(days));
+            return date.toISOString().split('T')[0];
+        }
 
         async function saveProject(e) {
             e.preventDefault();
@@ -454,20 +596,46 @@
             const name = document.getElementById('projName').value;
             const owner = document.getElementById('projOwner').value;
             const status = document.getElementById('projStatus').value;
-            const start = document.getElementById('projStart').value;
-            const end = document.getElementById('projEnd').value;
+            
+            let start, end, days = null;
+            const today = new Date().toISOString().split('T')[0];
+            
+            if (status === 'terminado') {
+                start = document.getElementById('projStart').value;
+                end = document.getElementById('projEnd').value;
+                if (!start || !end) {
+                    alert('Por favor selecciona las fechas de inicio y fin');
+                    return;
+                }
+            } else {
+                days = document.getElementById('projDays').value;
+                start = today;
+                end = calculateEndDate(today, days);
+            }
 
-            const projData = { id: id || Date.now().toString(), name, owner, status, start, end };
+            const projData = { 
+                id: id || Date.now().toString(), 
+                name, 
+                owner, 
+                status, 
+                start, 
+                end,
+                days: days
+            };
+
+            const isNewProject = !id;
 
             if (id) {
-                // Actualizar localmente
                 const idx = projects.findIndex(p => p.id == id);
                 projects[idx] = projData;
                 await updateProjectInSheets(projData, 'full_update');
             } else {
-                // Añadir localmente
                 projects.push(projData);
                 await sendToSheets(projData, 'add');
+                
+                // Enviar notificación WhatsApp para nuevos proyectos
+                const mensaje = formatProjectMessage('create', projData);
+                sendWhatsAppNotification(mensaje);
             }
             
             renderAll();
@@ -509,19 +677,27 @@
             const id = document.getElementById('projId').value;
             if (!id || !confirm('¿Estás seguro de eliminar este proyecto?')) return;
             
+            const projectToDelete = projects.find(p => p.id == id);
+            
             projects = projects.filter(p => p.id != id);
             renderAll();
             closeModal();
 
-            if (!WEB_APP_URL) return;
-            showLoading(true);
-            try {
-                await fetch(WEB_APP_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'delete', data: { id } })
-                });
-            } finally {
-                showLoading(false);
+            if (WEB_APP_URL) {
+                showLoading(true);
+                try {
+                    await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'delete', data: { id } })
+                    });
+                    
+                    if (projectToDelete) {
+                        const mensaje = formatProjectMessage('delete', projectToDelete);
+                        sendWhatsAppNotification(mensaje);
+                    }
+                } finally {
+                    showLoading(false);
+                }
             }
         }
     </script>
