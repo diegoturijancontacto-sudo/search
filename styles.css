@@ -1,0 +1,42 @@
+.drag-over {
+            border: 2px dashed #4f46e5;
+            background-color: #f5f3ff;
+        }
+        .project-card:active {
+            cursor: grabbing;
+        }
+        .loader {
+            border-top-color: #4f46e5;
+            animation: spinner 0.6s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #gantt-scroll-area::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        #gantt-scroll-area::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #gantt-scroll-area::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        #gantt-scroll-area::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
