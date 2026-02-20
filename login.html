@@ -73,7 +73,13 @@
             try {
                 const response = await fetch(WEB_APP_URL);
                 const data = await response.json();
-                const users = data.users || [];
+                const users = (data.responsables || []).map(r => ({
+                    id: r.id,
+                    name: r.nombre,
+                    email: r.email,
+                    role: r.rol,
+                    createdAt: r.fecha_registro
+                }));
                 
                 const container = document.getElementById('users-container');
                 
@@ -97,7 +103,7 @@
                                 <div>
                                     <h3 class="font-bold text-slate-800">${user.name}</h3>
                                     <p class="text-sm text-slate-500">${user.email}</p>
-                                    <span class="inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 text-slate-600'}">
+                                    <span class="inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${user.role === 'director' ? 'bg-purple-100 text-purple-600' : user.role === 'supervisor' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'}">
                                         ${user.role}
                                     </span>
                                 </div>
