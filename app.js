@@ -1,210 +1,477 @@
 // ============================================
-// CONFIGURACIÓN (¡ACTUALIZA ESTO!)
+// CONFIGURACIÓN
 // ============================================
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxJpPgkX8dUfMkZBgrNTnMqJMJRyjwz82jA2Ho05yvahbrRfyZagoHMnbQo7Qch8CT9lw/exec';
 const WHATSAPP_BOT_URL = 'https://bot-yy1q.onrender.com/send';
-const WHATSAPP_NUMBER = '120363406622431210@g.us'; // <--- NÚMERO DE WHATSAPP O GRUPO
+const WHATSAPP_NUMBER = '120363406622431210@g.us';
 const PANEL_URL = 'https://diegoturijancontacto-sudo.github.io/search/panel.html';
 
-let projects = [];
+// ============================================
+// ESTADO GLOBAL
+// ============================================
+let proyectos = [];
+let subproyectos = [];
+let tareas = [];
+let responsables = [];
+let comentarios = [];
+let historial = [];
+
+// Navegación jerárquica
+let currentProyecto = null;
+let currentSubproyecto = null;
+let currentNavLevel = 'home'; // 'home' | 'proyecto' | 'subproyecto'
+
 let ganttConfig = { pxPerDay: 50, headerStep: 1 };
-
-// Inicialización
-document.addEventListener('DOMContentLoaded', refreshData);
+let currentUserFilter = '';
 
 // ============================================
-// FUNCIONES PARA NOTIFICACIONES WHATSAPP
+// INICIALIZACIÓN
 // ============================================
-async function sendWhatsAppNotification(message) {
-    if (!WHATSAPP_NUMBER) {
-        console.warn('Número de WhatsApp no configurado. No se envió notificación.');
+document.addEventListener('DOMContentLoaded', function () {
+    checkCurrentUser();
+    renderCurrentLevel(); // Render initial state immediately
+    refreshData();        // Then load data from backend
+    const ganttScrollArea = document.getElementById('gantt-scroll-area');
+    if (ganttScrollArea) {
+        ganttScrollArea.addEventListener('scroll', function (e) {
+            document.getElementById('gantt-project-list').scrollTop = e.target.scrollTop;
+        });
+    }
+});
+
+// ============================================
+// SESIÓN DE USUARIO
+// ============================================
+function checkCurrentUser() {
+    const userJson = sessionStorage.getItem('currentUser');
+    const display = document.getElementById('current-user-display');
+    if (!userJson) {
+        window.location.href = 'login.html';
         return;
     }
-    try {
-        const url = `${WHATSAPP_BOT_URL}?number=${encodeURIComponent(WHATSAPP_NUMBER)}&message=${encodeURIComponent(message)}`;
-        // Enviamos la notificación sin esperar respuesta para no ralentizar la UI
-        fetch(url, { mode: 'no-cors' })
-            .then(() => console.log('Notificación enviada intento (modo no-cors)'))
-            .catch(err => console.error('Error al enviar notificación WhatsApp:', err));
-    } catch (error) {
-        console.error('Error al preparar notificación WhatsApp:', error);
+    const user = JSON.parse(userJson);
+    display.innerText = '\u{1F464} ' + user.name + ' (' + getRoleLabel(user.role) + ')';
+}
+
+function getRoleLabel(role) {
+    switch (role) {
+        case 'director': return 'Director';
+        case 'supervisor': return 'Supervisor';
+        case 'responsable': return 'Responsable';
+        default: return role;
     }
 }
 
-function formatProjectMessage(action, projData) {
-    const actionText = action === 'create' ? '🟢 NUEVO PROYECTO CREADO' : '🔴 PROYECTO ELIMINADO';
-    const fechaActual = new Date().toLocaleString('es-ES', { timeZone: 'America/Asuncion' });
-    let mensaje = `${actionText}\n`;
-    mensaje += `📅 Fecha/Hora: ${fechaActual}\n`;
-    mensaje += `━━━━━━━━━━━━━━━━\n`;
-    mensaje += `📌 *${projData.name}*\n`;
-    mensaje += `👤 Responsable: ${projData.owner}\n`;
+function getCurrentUser() {
+    const userJson = sessionStorage.getItem('currentUser');
+    return userJson ? JSON.parse(userJson) : null;
+}
 
-    // Añadir notas si existen
-    if (projData.notes) {
-        mensaje += `📝 Notas: ${projData.notes}\n`;
-    }
-
-    if (action === 'create') {
-        mensaje += `📊 Estado: ${projData.status === 'curso' ? 'En Curso' : projData.status === 'pausa' ? 'Pausa' : 'Terminado'}\n`;
-        mensaje += `📅 Inicio: ${projData.start}\n`;
-        if (projData.status !== 'terminado') {
-            mensaje += `⏳ Días estimados: ${projData.days || 'N/A'}\n`;
-        } else {
-            mensaje += `🏁 Fin: ${projData.end}\n`;
-        }
-    }
-
-    mensaje += `━━━━━━━━━━━━━━━━\n`;
-    mensaje += `🔗 Ver panel: ${PANEL_URL}`;
-    return mensaje;
+function logout() {
+    sessionStorage.removeItem('currentUser');
+    window.location.href = 'login.html';
 }
 
 // ============================================
-// FUNCIONES DE GESTIÓN DE DATOS
+// CARGA DE DATOS
 // ============================================
-
 function showLoading(show) {
     document.getElementById('loading').classList.toggle('hidden', !show);
 }
 
 async function refreshData() {
-    if (!WEB_APP_URL) {
-        console.warn("Falta WEB_APP_URL. Los cambios no se guardarán en Google Sheets.");
-        return;
-    }
+    if (!WEB_APP_URL) return;
     showLoading(true);
     try {
         const response = await fetch(WEB_APP_URL);
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        try { data = JSON.parse(responseText); } catch (e) {
+            console.error('Error parsing JSON:', e);
+            return;
+        }
+        if (data.error) {
+            console.error('Error del servidor:', data.error);
+            return;
+        }
+        proyectos = data.proyectos || [];
+        subproyectos = data.subproyectos || [];
+        tareas = data.tareas || [];
+        responsables = data.responsables || [];
+        comentarios = data.comentarios || [];
+        historial = data.historial || [];
 
-        // Ahora data es un objeto con projects y users
-        projects = data.projects || [];
-        availableUsers = data.users || [];
+        console.log('Proyectos:', proyectos.length, 'Subproyectos:', subproyectos.length, 'Tareas:', tareas.length);
 
-        console.log('Proyectos cargados:', projects.length);
-        console.log('Usuarios cargados:', availableUsers.length);
-
-        updateUserSelect();
-        updateMentions();
-        renderAll();
+        renderCurrentLevel();
+        updateResponsableSelect();
+        updateUserFilterSelect();
     } catch (error) {
-        console.error("Error al cargar datos:", error);
+        console.error('Error al cargar datos:', error);
     } finally {
         showLoading(false);
     }
 }
 
-function renderAll() {
-    // Si hay un filtro activo, aplicarlo
-    if (currentUserFilter) {
-        filterProjects();
+// ============================================
+// NAVEGACIÓN JERÁRQUICA
+// ============================================
+function navigateTo(level) {
+    if (level === 'home') {
+        currentProyecto = null;
+        currentSubproyecto = null;
+        currentNavLevel = 'home';
+    } else if (level === 'proyecto') {
+        currentSubproyecto = null;
+        currentNavLevel = 'proyecto';
+    }
+    renderCurrentLevel();
+}
+
+function selectProyecto(id) {
+    currentProyecto = proyectos.find(p => p.id === id);
+    currentSubproyecto = null;
+    currentNavLevel = 'proyecto';
+    renderCurrentLevel();
+}
+
+function selectSubproyecto(id) {
+    currentSubproyecto = subproyectos.find(s => s.id === id);
+    currentNavLevel = 'subproyecto';
+    renderCurrentLevel();
+}
+
+function renderCurrentLevel() {
+    updateBreadcrumb();
+    updateHeaderActions();
+    updateFilterBar();
+
+    document.getElementById('view-proyectos').classList.add('hidden');
+    document.getElementById('view-subproyectos').classList.add('hidden');
+    document.getElementById('view-tareas').classList.add('hidden');
+
+    if (currentNavLevel === 'home') {
+        document.getElementById('view-proyectos').classList.remove('hidden');
+        renderProyectos();
+    } else if (currentNavLevel === 'proyecto') {
+        document.getElementById('view-subproyectos').classList.remove('hidden');
+        renderSubproyectos();
+    } else if (currentNavLevel === 'subproyecto') {
+        document.getElementById('view-tareas').classList.remove('hidden');
+        renderTareasBoard();
+        renderTareasList();
+    }
+}
+
+function updateBreadcrumb() {
+    const elProyecto = document.getElementById('breadcrumb-proyecto');
+    const elSubproyecto = document.getElementById('breadcrumb-subproyecto');
+    const elProyectoBtn = document.getElementById('breadcrumb-proyecto-btn');
+    const elSubproyectoName = document.getElementById('breadcrumb-subproyecto-name');
+
+    if (currentNavLevel === 'home') {
+        elProyecto.classList.add('hidden');
+        elSubproyecto.classList.add('hidden');
+    } else if (currentNavLevel === 'proyecto') {
+        elProyecto.classList.remove('hidden');
+        elProyecto.style.display = 'inline-flex';
+        elProyectoBtn.innerText = currentProyecto ? currentProyecto.nombre : '';
+        elSubproyecto.classList.add('hidden');
+    } else if (currentNavLevel === 'subproyecto') {
+        elProyecto.classList.remove('hidden');
+        elProyecto.style.display = 'inline-flex';
+        elProyectoBtn.innerText = currentProyecto ? currentProyecto.nombre : '';
+        elSubproyecto.classList.remove('hidden');
+        elSubproyecto.style.display = 'inline-flex';
+        elSubproyectoName.innerText = currentSubproyecto ? currentSubproyecto.nombre : '';
+    }
+}
+
+function updateHeaderActions() {
+    const user = getCurrentUser();
+    const isDirector = user && user.role === 'director';
+    const container = document.getElementById('header-actions');
+    let extraBtns = '';
+
+    if (currentNavLevel === 'home' && isDirector) {
+        extraBtns = '<button onclick="openProyectoModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nuevo Proyecto</button>';
+    } else if (currentNavLevel === 'proyecto' && isDirector) {
+        extraBtns = '<button onclick="openSubproyectoModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nuevo Subproyecto</button>';
+    } else if (currentNavLevel === 'subproyecto' && isDirector) {
+        extraBtns = '<button onclick="openTareaModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nueva Tarea</button>';
+    }
+
+    container.innerHTML = extraBtns + '<button onclick="refreshData()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2.5 rounded-lg font-medium shadow-sm transition-all">Actualizar</button><a href="admin.html" class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2.5 rounded-lg font-medium transition-all flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Usuarios</a>';
+}
+
+function updateFilterBar() {
+    const bar = document.getElementById('filter-bar');
+    if (currentNavLevel === 'subproyecto') {
+        bar.classList.remove('hidden');
+        bar.style.display = 'flex';
     } else {
-        renderBoard(projects);
-        renderList(projects);
-        renderGantt(projects);
+        bar.classList.add('hidden');
     }
 }
 
-function switchView(view) {
-    ['board', 'list', 'gantt'].forEach(v => {
-        document.getElementById('view-' + v).classList.add('hidden');
-        document.getElementById('btn-' + v).className = 'view-btn px-6 py-2 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900';
-    });
-    document.getElementById('view-' + view).classList.remove('hidden');
-    document.getElementById('btn-' + view).className = 'view-btn px-6 py-2 rounded-lg font-medium transition-all bg-white text-indigo-600 shadow-sm';
+// ============================================
+// RENDER: PROYECTOS
+// ============================================
+function renderProyectos() {
+    const container = document.getElementById('view-proyectos');
+    const user = getCurrentUser();
+    const isDirector = user && user.role === 'director';
 
-    if (view === 'gantt') renderGantt();
-}
-
-// Función para calcular días transcurridos
-function calculateDaysElapsed(startDate, status) {
-    if (!startDate) return 0;
-
-    const start = new Date(startDate);
-    const today = new Date();
-
-    if (status === 'terminado') {
-        const project = projects.find(p => p.start === startDate);
-        if (project && project.end) {
-            const end = new Date(project.end);
-            return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-        }
+    if (proyectos.length === 0) {
+        container.innerHTML = '<div class="col-span-full text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay proyectos aún</p>' + (isDirector ? '<p class="text-sm">Haz clic en "Nuevo Proyecto" para comenzar</p>' : '') + '</div>';
+        return;
     }
 
-    return Math.ceil((today - start) / (1000 * 60 * 60 * 24));
+    container.innerHTML = proyectos.map(function(p) {
+        const subCount = subproyectos.filter(function(s) { return s.id_proyecto === p.id; }).length;
+        const estadoBadge = p.estado === 'completado' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600';
+        const firstChar = (p.nombre || '?').charAt(0).toUpperCase();
+        const editBtn = isDirector ? '<button onclick="event.stopPropagation(); openProyectoModal(\'' + p.id + '\')" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">Editar</button>' : '';
+        const descHtml = p.descripcion ? '<p class="text-sm text-slate-500 mb-3 line-clamp-2">' + p.descripcion + '</p>' : '';
+        return '<div onclick="selectProyecto(\'' + p.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"><div class="flex items-start justify-between mb-3"><div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg group-hover:bg-indigo-200 transition-colors">' + firstChar + '</div><span class="text-xs px-2 py-1 rounded-full font-bold ' + estadoBadge + '">' + (p.estado || 'activo') + '</span></div><h3 class="font-bold text-slate-800 text-lg mb-1">' + (p.nombre || 'Sin nombre') + '</h3>' + descHtml + '<div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100"><span class="text-xs text-slate-400 font-medium">' + subCount + ' subproyecto' + (subCount !== 1 ? 's' : '') + '</span>' + editBtn + '</div></div>';
+    }).join('');
 }
 
-// --- LÓGICA KANBAN ---
-function renderBoard(projectsToRender = null) {
-    const projectsToUse = projectsToRender || projects;
-    console.log("Renderizando board con", projectsToUse.length, "proyectos");
+// ============================================
+// RENDER: SUBPROYECTOS
+// ============================================
+function renderSubproyectos() {
+    const container = document.getElementById('view-subproyectos');
+    const user = getCurrentUser();
+    const isDirector = user && user.role === 'director';
+    const subs = subproyectos.filter(function(s) { return s.id_proyecto === (currentProyecto ? currentProyecto.id : null); });
 
-    const columns = ['curso', 'pausa', 'terminado'];
+    if (subs.length === 0) {
+        container.innerHTML = '<div class="col-span-full text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay subproyectos en este proyecto</p>' + (isDirector ? '<p class="text-sm">Haz clic en "Nuevo Subproyecto" para comenzar</p>' : '') + '</div>';
+        return;
+    }
 
-    columns.forEach(col => {
-        const container = document.getElementById(col);
-        if (!container) {
-            console.error(`Columna ${col} no encontrada`);
-            return;
-        }
+    container.innerHTML = subs.map(function(s) {
+        const taskCount = tareas.filter(function(t) { return t.id_subproyecto === s.id; }).length;
+        const completadoCount = tareas.filter(function(t) { return t.id_subproyecto === s.id && t.estatus === 'completado'; }).length;
+        const enRevisionCount = tareas.filter(function(t) { return t.id_subproyecto === s.id && t.estatus === 'en_revision'; }).length;
+        const enCursoCount = tareas.filter(function(t) { return t.id_subproyecto === s.id && t.estatus === 'en_curso'; }).length;
+        const pendienteCount = tareas.filter(function(t) { return t.id_subproyecto === s.id && t.estatus === 'pendiente'; }).length;
+        const progress = taskCount > 0 ? Math.round((completadoCount / taskCount) * 100) : 0;
+        const firstChar = (s.nombre || '?').charAt(0).toUpperCase();
+        const editBtn = isDirector ? '<button onclick="event.stopPropagation(); openSubproyectoModal(\'' + s.id + '\')" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">Editar</button>' : '';
+        const descHtml = s.descripcion ? '<p class="text-sm text-slate-500 mb-2 line-clamp-2">' + s.descripcion + '</p>' : '';
+        const fechasHtml = (s.fecha_inicio || s.fecha_fin_estimada) ? '<div class="flex gap-2 text-xs text-slate-400 mb-3">' + (s.fecha_inicio ? '<span>\uD83D\uDCC5 ' + s.fecha_inicio + '</span>' : '') + (s.fecha_fin_estimada ? '<span>\uD83C\uDFC1 ' + s.fecha_fin_estimada + '</span>' : '') + '</div>' : '';
+        const countersHtml = '<div class="flex gap-1 mb-3 flex-wrap">' +
+            (pendienteCount > 0 ? '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold">' + pendienteCount + ' pendiente</span>' : '') +
+            (enCursoCount > 0 ? '<span class="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-bold">' + enCursoCount + ' en curso</span>' : '') +
+            (enRevisionCount > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-bold">' + enRevisionCount + ' en revisi\u00F3n</span>' : '') +
+            (completadoCount > 0 ? '<span class="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold">' + completadoCount + ' completado</span>' : '') +
+            '</div>';
+        return '<div onclick="selectSubproyecto(\'' + s.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"><div class="flex items-start justify-between mb-3"><div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-lg group-hover:bg-violet-200 transition-colors">' + firstChar + '</div><span class="text-xs text-slate-400 font-medium">' + taskCount + ' tarea' + (taskCount !== 1 ? 's' : '') + '</span></div><h3 class="font-bold text-slate-800 text-lg mb-1">' + (s.nombre || 'Sin nombre') + '</h3>' + descHtml + fechasHtml + countersHtml + '<div class="w-full bg-slate-100 rounded-full h-1.5 mb-3"><div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width:' + progress + '%"></div></div><div class="flex items-center justify-between pt-2 border-t border-slate-100"><span class="text-xs text-slate-400">' + progress + '% completado</span>' + editBtn + '</div></div>';
+    }).join('');
+}
 
+// ============================================
+// RENDER: TAREAS (KANBAN)
+// ============================================
+function getTareasActuales() {
+    let result = tareas.filter(function(t) { return t.id_subproyecto === (currentSubproyecto ? currentSubproyecto.id : null); });
+    if (currentUserFilter) {
+        const resp = responsables.find(function(r) { return r.nombre === currentUserFilter; });
+        if (resp) result = result.filter(function(t) { return t.id_responsable === resp.id; });
+    }
+    return result;
+}
+
+function renderTareasBoard() {
+    const cols = ['pendiente', 'en_curso', 'en_revision', 'completado'];
+    const tareasActuales = getTareasActuales();
+    const user = getCurrentUser();
+    const isSupervisor = user && user.role === 'supervisor';
+    const isDirector = user && user.role === 'director';
+
+    cols.forEach(function(col) {
+        const container = document.getElementById('col-' + col);
+        if (!container) return;
         container.innerHTML = '';
-        const filtered = projectsToUse.filter(p => p && p.status === col);
-
-        document.getElementById(`count-${col}`).innerText = filtered.length;
-
-        filtered.forEach(proj => {
-            const card = document.createElement('div');
-            card.className = 'project-card bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow';
-            card.draggable = true;
-            card.id = `card-${proj.id}`;
-            card.ondragstart = (e) => {
-                e.dataTransfer.setData('text/plain', proj.id);
-            };
-
-            const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
-            const commentCount = comments.filter(c => c.projectId == proj.id).length;
-
-            card.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <h4 class="font-bold text-slate-800 mb-1">${proj.name || 'Sin nombre'}</h4>
-                    <div class="flex gap-1">
-                        ${proj.notes ?
-                    `<button onclick="event.stopPropagation(); showNotes('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-1.5 rounded-lg transition-colors" title="Ver notas">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                                </svg>
-                            </button>` :
-                    ''
-                }
-                        <button onclick="event.stopPropagation(); showProjectComments('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors relative" title="Comentarios">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                            </svg>
-                            ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">${commentCount}</span>` : ''}
-                        </button>
-                        <button onclick="event.stopPropagation(); editProject('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors" title="Editar">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-                <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-tight">${proj.owner || 'Sin responsable'}</p>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center text-[10px] font-bold text-slate-500 bg-slate-50 p-1.5 rounded-md w-fit border border-slate-100">
-                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        ${daysElapsed} días
-                    </div>
-                    ${proj.status === 'terminado' ? '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Completado</span>' : ''}
-                </div>
-            `;
+        const filtered = tareasActuales.filter(function(t) { return t.estatus === col; });
+        document.getElementById('count-' + col).innerText = filtered.length;
+        filtered.forEach(function(tarea) {
+            const card = createTareaCard(tarea, isSupervisor, isDirector);
             container.appendChild(card);
         });
     });
 }
 
+function createTareaCard(tarea, isSupervisor, isDirector) {
+    const card = document.createElement('div');
+    card.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow';
+    card.draggable = tarea.estatus !== 'completado';
+    card.id = 'tarea-' + tarea.id;
+    card.ondragstart = function(e) { e.dataTransfer.setData('text/plain', tarea.id); };
+
+    const resp = responsables.find(function(r) { return r.id === tarea.id_responsable; });
+    const respNombre = resp ? resp.nombre : 'Sin asignar';
+    const prioColor = getPriorityColor(tarea.prioridad);
+    const prioIcon = getPriorityIcon(tarea.prioridad);
+    const commentCount = comentarios.filter(function(c) { return c.id_tarea === tarea.id; }).length;
+    const canEdit = isDirector || isSupervisor;
+
+    const commentBtnHtml = '<button onclick="event.stopPropagation(); showTareaComments(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded relative" title="Comentarios"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' + (commentCount > 0 ? '<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">' + commentCount + '</span>' : '') + '</button>';
+    const editBtnHtml = canEdit ? '<button onclick="event.stopPropagation(); openTareaModal(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded" title="Editar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>' : '';
+
+    let actionBtns = '';
+    if (tarea.estatus === 'pendiente') {
+        actionBtns = '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'en_curso\')" class="text-xs bg-blue-100 text-blue-600 hover:bg-blue-200 px-2 py-1 rounded-md font-medium">\u25B6 Iniciar</button>';
+    } else if (tarea.estatus === 'en_curso') {
+        actionBtns = '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'pendiente\')" class="text-xs bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded-md font-medium">\u23F8 Pausar</button><button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'en_revision\')" class="text-xs bg-amber-100 text-amber-600 hover:bg-amber-200 px-2 py-1 rounded-md font-medium">\uD83D\uDD0D Enviar a revisi\u00F3n</button>';
+    } else if (tarea.estatus === 'en_revision') {
+        if (isSupervisor || isDirector) {
+            actionBtns = '<button onclick="event.stopPropagation(); openAprobacionModal(\'' + tarea.id + '\')" class="text-xs bg-emerald-100 text-emerald-600 hover:bg-emerald-200 px-2 py-1 rounded-md font-medium">\u2705 Aprobar / Rechazar</button>';
+        } else {
+            actionBtns = '<span class="text-xs text-amber-500 font-medium">\u23F3 Esperando aprobaci\u00F3n</span>';
+        }
+    } else {
+        actionBtns = '<span class="text-xs text-emerald-600 font-medium">\u2705 Completado</span>';
+    }
+
+    const fechaHtml = tarea.fecha_limite ? '<p class="text-xs text-slate-400 mt-1">\uD83D\uDCC5 ' + tarea.fecha_limite + '</p>' : '';
+
+    card.innerHTML = '<div class="flex items-start justify-between mb-2"><span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span><div class="flex gap-1">' + commentBtnHtml + editBtnHtml + '</div></div><p class="text-sm text-slate-700 mb-2 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-xs text-slate-400 font-medium">' + respNombre + '</p>' + fechaHtml + '<div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100">' + actionBtns + '</div>';
+    return card;
+}
+
+// ============================================
+// RENDER: LISTA DE TAREAS
+// ============================================
+function renderTareasList() {
+    const container = document.getElementById('list-content');
+    if (!container) return;
+    container.innerHTML = '';
+    const tareasActuales = getTareasActuales();
+    const user = getCurrentUser();
+    const canEdit = user && (user.role === 'director' || user.role === 'supervisor');
+
+    tareasActuales.forEach(function(tarea) {
+        const resp = responsables.find(function(r) { return r.id === tarea.id_responsable; });
+        const respNombre = resp ? resp.nombre : 'Sin asignar';
+        const prioColor = getPriorityColor(tarea.prioridad);
+        const statusBadge = getStatusBadge(tarea.estatus);
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+        const editBtn = canEdit ? '<button onclick="openTareaModal(\'' + tarea.id + '\')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg text-xs font-bold uppercase">Editar</button>' : '';
+        tr.innerHTML = '<td class="p-4 text-slate-700 max-w-xs"><p class="text-sm leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p></td><td class="p-4 text-center text-slate-500 text-sm">' + respNombre + '</td><td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + getPriorityIcon(tarea.prioridad) + ' ' + (tarea.prioridad || 'media') + '</span></td><td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td><td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '-') + '</td><td class="p-4 text-right"><div class="flex gap-1 justify-end">' + editBtn + '</div></td>';
+        container.appendChild(tr);
+    });
+}
+
+// ============================================
+// GANTT
+// ============================================
+function changeZoom(direction) {
+    if (direction === 'in') { ganttConfig.pxPerDay = 50; ganttConfig.headerStep = 1; }
+    else { ganttConfig.pxPerDay = 12; ganttConfig.headerStep = 7; }
+    renderGantt();
+}
+
+function renderGantt() {
+    const listContainer = document.getElementById('gantt-project-list');
+    const headerContainer = document.getElementById('gantt-header');
+    const barsContainer = document.getElementById('gantt-bars-area');
+    const gridContainer = document.getElementById('gantt-grid-lines');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '';
+    headerContainer.innerHTML = '';
+    barsContainer.innerHTML = '';
+    gridContainer.innerHTML = '';
+
+    const tareasActuales = getTareasActuales();
+    const validTareas = tareasActuales.filter(function(t) { return t.fecha_creacion && t.fecha_limite; });
+
+    if (validTareas.length === 0) {
+        listContainer.innerHTML = '<div class="p-6 text-sm text-slate-400">Sin fechas definidas.</div>';
+        return;
+    }
+
+    let minDate = new Date(Math.min.apply(null, validTareas.map(function(t) { return new Date(t.fecha_creacion); })));
+    let maxDate = new Date(Math.max.apply(null, validTareas.map(function(t) { return new Date(t.fecha_limite); })));
+    minDate.setDate(minDate.getDate() - 3);
+    maxDate.setDate(maxDate.getDate() + 10);
+
+    const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
+
+    for (let i = 0; i <= totalDays; i++) {
+        const currentDate = new Date(minDate);
+        currentDate.setDate(minDate.getDate() + i);
+        const leftPos = i * ganttConfig.pxPerDay;
+
+        const line = document.createElement('div');
+        line.className = 'absolute top-0 bottom-0 border-r border-slate-100';
+        line.style.left = leftPos + 'px';
+        line.style.width = ganttConfig.pxPerDay + 'px';
+        gridContainer.appendChild(line);
+
+        if (i % ganttConfig.headerStep === 0) {
+            const dateCell = document.createElement('div');
+            dateCell.className = 'absolute top-0 h-full flex items-center justify-center text-[10px] text-slate-400 border-r border-slate-200 truncate px-1 uppercase font-bold';
+            dateCell.style.left = leftPos + 'px';
+            dateCell.style.width = (ganttConfig.pxPerDay * ganttConfig.headerStep) + 'px';
+            dateCell.innerText = currentDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+            headerContainer.appendChild(dateCell);
+        }
+    }
+
+    const ROW_HEIGHT = 48;
+    const barColors = { pendiente: 'bg-slate-400', en_curso: 'bg-blue-500', en_revision: 'bg-amber-500', completado: 'bg-emerald-500' };
+
+    validTareas.forEach(function(tarea, index) {
+        const resp = responsables.find(function(r) { return r.id === tarea.id_responsable; });
+        const listItem = document.createElement('div');
+        listItem.className = 'h-12 border-b border-slate-100 flex flex-col justify-center px-4 hover:bg-slate-50 cursor-pointer';
+        const detailShort = (tarea.detalles || 'Sin detalles').substring(0, 30);
+        listItem.innerHTML = '<span class="font-bold text-slate-700 text-xs truncate">' + detailShort + '...</span><span class="text-[9px] text-slate-400 font-bold uppercase">' + (resp ? resp.nombre : 'Sin asignar') + '</span>';
+        listItem.onclick = function() { openTareaModal(tarea.id); };
+        listContainer.appendChild(listItem);
+
+        const start = new Date(tarea.fecha_creacion);
+        const end = new Date(tarea.fecha_limite);
+        const left = ((start - minDate) / (1000 * 60 * 60 * 24)) * ganttConfig.pxPerDay;
+        const duration = Math.max(1, ((end - start) / (1000 * 60 * 60 * 24)) + 1);
+        const width = duration * ganttConfig.pxPerDay;
+        const barColor = barColors[tarea.estatus] || 'bg-slate-400';
+
+        const bar = document.createElement('div');
+        bar.className = 'absolute h-6 rounded-md text-[10px] text-white flex items-center px-2 overflow-hidden whitespace-nowrap cursor-pointer hover:brightness-110 z-10 font-bold ' + barColor;
+        bar.style.top = ((index * ROW_HEIGHT) + 12) + 'px';
+        bar.style.left = left + 'px';
+        bar.style.width = Math.max(width, 30) + 'px';
+        bar.innerText = (tarea.detalles || '').substring(0, 20);
+        bar.onclick = function() { openTareaModal(tarea.id); };
+        barsContainer.appendChild(bar);
+    });
+
+    barsContainer.style.height = (validTareas.length * ROW_HEIGHT) + 'px';
+}
+
+// ============================================
+// SWITCH VIEW
+// ============================================
+function switchView(view) {
+    ['board', 'list', 'gantt'].forEach(function(v) {
+        document.getElementById('view-' + v).classList.add('hidden');
+        document.getElementById('btn-' + v).className = 'view-btn px-6 py-2 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900';
+    });
+    document.getElementById('view-' + view).classList.remove('hidden');
+    document.getElementById('btn-' + view).className = 'view-btn px-6 py-2 rounded-lg font-medium transition-all bg-white text-indigo-600 shadow-sm';
+    if (view === 'gantt') renderGantt();
+    if (view === 'list') renderTareasList();
+}
+
+// ============================================
+// DRAG & DROP (TAREAS)
+// ============================================
 function allowDrop(e) {
     e.preventDefault();
     e.currentTarget.classList.add('drag-over');
@@ -214,1449 +481,449 @@ function dragLeave(e) {
     e.currentTarget.classList.remove('drag-over');
 }
 
-function drop(e) {
+function dropTask(e) {
     e.preventDefault();
     const col = e.currentTarget;
     col.classList.remove('drag-over');
+    const tareaId = e.dataTransfer.getData('text/plain');
+    const tarea = tareas.find(function(t) { return t.id === tareaId; });
+    if (!tarea) return;
+    const colId = col.id.replace('col-', '');
+    if (colId === tarea.estatus) return;
+    const user = getCurrentUser();
+    if (colId === 'completado' && user && user.role !== 'supervisor' && user.role !== 'director') {
+        alert('Solo el supervisor puede mover tareas a Completado.');
+        return;
+    }
+    quickChangeEstatus(tareaId, colId);
+}
 
-    const id = e.dataTransfer.getData('text/plain');
-    const type = e.dataTransfer.getData('type');
+// ============================================
+// CAMBIO RÁPIDO DE ESTADO
+// ============================================
+async function quickChangeEstatus(tareaId, nuevoEstatus) {
+    const tarea = tareas.find(function(t) { return t.id === tareaId; });
+    if (!tarea) return;
+    tarea.estatus = nuevoEstatus;
+    renderTareasBoard();
+    renderTareasList();
+    await postToBackend('tarea_update', tarea);
+}
 
-    const project = projects.find(p => p.id == id);
-    if (!project) return;
+// ============================================
+// MODALES: PROYECTO
+// ============================================
+function openProyectoModal(id) {
+    const modal = document.getElementById('modal-proyecto');
+    const form = document.getElementById('form-proyecto');
+    const title = document.getElementById('modal-proyecto-title');
+    const btnDelete = document.getElementById('btn-delete-proyecto');
+    form.reset();
+    if (id) {
+        const p = proyectos.find(function(x) { return x.id === id; });
+        if (!p) return;
+        title.innerText = 'Editar Proyecto';
+        document.getElementById('proyectoId').value = p.id;
+        document.getElementById('proyectoNombre').value = p.nombre || '';
+        document.getElementById('proyectoDesc').value = p.descripcion || '';
+        document.getElementById('proyectoEstado').value = p.estado || 'activo';
+        btnDelete.classList.remove('hidden');
+    } else {
+        title.innerText = 'Nuevo Proyecto';
+        document.getElementById('proyectoId').value = '';
+        btnDelete.classList.add('hidden');
+    }
+    modal.classList.remove('hidden');
+}
 
-    // Obtener el elemento sobre el que se soltó
-    const targetCard = e.target.closest('.project-card');
+function closeProyectoModal() {
+    document.getElementById('modal-proyecto').classList.add('hidden');
+}
 
-    if (targetCard && targetCard.id !== `card-${id}`) {
-        // Se soltó sobre otra tarjeta - convertir en subproyecto
-        const targetId = targetCard.id.replace('card-', '');
-        const targetProject = projects.find(p => p.id == targetId);
-
-        if (targetProject && targetProject.owner === project.owner) {
-            // Solo permitir subproyectos del mismo responsable
-            makeSubProject(id, targetId);
-        }
-    } else if (project.status !== col.id) {
-        // Se soltó en la columna - cambiar estado
-        const oldStatus = project.status;
-        project.status = col.id;
-        if (col.id === 'terminado' && oldStatus !== 'terminado') {
-            const today = new Date();
-            project.end = today.toISOString().split('T')[0];
-        }
-
-        if (currentUserFilter) {
-            filterProjects();
+async function saveProyecto(e) {
+    e.preventDefault();
+    const id = document.getElementById('proyectoId').value;
+    const data = {
+        id: id || Date.now().toString(),
+        nombre: document.getElementById('proyectoNombre').value,
+        descripcion: document.getElementById('proyectoDesc').value,
+        estado: document.getElementById('proyectoEstado').value
+    };
+    showLoading(true);
+    try {
+        if (id) {
+            const idx = proyectos.findIndex(function(p) { return p.id === id; });
+            proyectos[idx] = Object.assign({}, proyectos[idx], data);
+            await postToBackend('proyecto_update', data);
         } else {
-            renderAll();
+            proyectos.push(data);
+            await postToBackend('proyecto_add', data);
+            sendWhatsAppNotification('\uD83D\uDFE2 NUEVO PROYECTO: *' + data.nombre + '*\n\uD83D\uDCC5 ' + new Date().toLocaleString('es-ES') + '\n\uD83D\uDD17 ' + PANEL_URL);
         }
-        updateProjectInSheets(project, 'status_only');
+        closeProyectoModal();
+        renderProyectos();
+    } finally {
+        showLoading(false);
     }
 }
 
-// --- LÓGICA LISTA ---
-function renderList(projectsToRender = null) {
-    const projectsToUse = projectsToRender || projects;
+async function deleteProyecto() {
+    const id = document.getElementById('proyectoId').value;
+    if (!id || !confirm('\u00BFEliminar este proyecto y todos sus subproyectos?')) return;
+    proyectos = proyectos.filter(function(p) { return p.id !== id; });
+    closeProyectoModal();
+    renderProyectos();
+    await postToBackend('proyecto_delete', { id: id });
+}
 
-    const container = document.getElementById('list-content');
-    if (!container) return;
+// ============================================
+// MODALES: SUBPROYECTO
+// ============================================
+function openSubproyectoModal(id) {
+    const modal = document.getElementById('modal-subproyecto');
+    const form = document.getElementById('form-subproyecto');
+    const title = document.getElementById('modal-subproyecto-title');
+    const btnDelete = document.getElementById('btn-delete-subproyecto');
+    form.reset();
+    if (id) {
+        const s = subproyectos.find(function(x) { return x.id === id; });
+        if (!s) return;
+        title.innerText = 'Editar Subproyecto';
+        document.getElementById('subproyectoId').value = s.id;
+        document.getElementById('subproyectoNombre').value = s.nombre || '';
+        document.getElementById('subproyectoDesc').value = s.descripcion || '';
+        document.getElementById('subproyectoFechaInicio').value = s.fecha_inicio || '';
+        document.getElementById('subproyectoFechaFin').value = s.fecha_fin_estimada || '';
+        btnDelete.classList.remove('hidden');
+    } else {
+        title.innerText = 'Nuevo Subproyecto';
+        document.getElementById('subproyectoId').value = '';
+        btnDelete.classList.add('hidden');
+    }
+    modal.classList.remove('hidden');
+}
 
-    container.innerHTML = '';
+function closeSubproyectoModal() {
+    document.getElementById('modal-subproyecto').classList.add('hidden');
+}
 
-    projectsToUse.forEach(proj => {
-        if (!proj) return;
-
-        const tr = document.createElement('tr');
-        tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors group';
-
-        let badgeClass = 'bg-blue-100 text-blue-600';
-        let statusText = 'En Curso';
-        if (proj.status === 'pausa') {
-            badgeClass = 'bg-amber-100 text-amber-600';
-            statusText = 'Pausa';
+async function saveSubproyecto(e) {
+    e.preventDefault();
+    const id = document.getElementById('subproyectoId').value;
+    const data = {
+        id: id || Date.now().toString(),
+        id_proyecto: currentProyecto ? currentProyecto.id : null,
+        nombre: document.getElementById('subproyectoNombre').value,
+        descripcion: document.getElementById('subproyectoDesc').value,
+        fecha_inicio: document.getElementById('subproyectoFechaInicio').value,
+        fecha_fin_estimada: document.getElementById('subproyectoFechaFin').value
+    };
+    showLoading(true);
+    try {
+        if (id) {
+            const idx = subproyectos.findIndex(function(s) { return s.id === id; });
+            subproyectos[idx] = Object.assign({}, subproyectos[idx], data);
+            await postToBackend('subproyecto_update', data);
+        } else {
+            subproyectos.push(data);
+            await postToBackend('subproyecto_add', data);
         }
-        if (proj.status === 'terminado') {
-            badgeClass = 'bg-emerald-100 text-emerald-600';
-            statusText = 'Terminado';
-        }
+        closeSubproyectoModal();
+        renderSubproyectos();
+    } finally {
+        showLoading(false);
+    }
+}
 
-        const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
-        const commentCount = comments.filter(c => c.projectId == proj.id).length;
+async function deleteSubproyecto() {
+    const id = document.getElementById('subproyectoId').value;
+    if (!id || !confirm('\u00BFEliminar este subproyecto y todas sus tareas?')) return;
+    subproyectos = subproyectos.filter(function(s) { return s.id !== id; });
+    closeSubproyectoModal();
+    renderSubproyectos();
+    await postToBackend('subproyecto_delete', { id: id });
+}
 
-        tr.innerHTML = `
-            <td class="p-4">
-                <div class="flex items-center gap-2">
-                    <div class="font-bold text-slate-700">${proj.name || 'Sin nombre'}</div>
-                    ${proj.notes ? '<span class="text-indigo-500 text-xs bg-indigo-50 px-2 py-0.5 rounded-full">📝</span>' : ''}
-                </div>
-            </td>
-            <td class="p-4 text-center text-slate-500 text-sm font-medium">${proj.owner || 'Sin responsable'}</td>
-            <td class="p-4 text-center text-slate-700 font-bold">${daysElapsed} días</td>
-            <td class="p-4 text-center">
-                <span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeClass}">${statusText}</span>
-            </td>
-            <td class="p-4 text-right">
-                <div class="flex gap-1 justify-end">
-                    ${proj.notes ?
-                `<button onclick="showNotes('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors" title="Ver notas">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                            </svg>
-                        </button>` : ''
-            }
-                    <button onclick="showProjectComments('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-2 rounded-lg transition-colors relative" title="Comentarios">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                        </svg>
-                        ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">${commentCount}</span>` : ''}
-                    </button>
-                    <button onclick="editProject('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Editar</button>
-                </div>
-            </td>
-        `;
-        container.appendChild(tr);
+// ============================================
+// MODALES: TAREA
+// ============================================
+function updateResponsableSelect() {
+    const select = document.getElementById('tareaResponsable');
+    if (!select) return;
+    select.innerHTML = '<option value="">Sin asignar</option>';
+    responsables.forEach(function(r) {
+        select.innerHTML += '<option value="' + r.id + '">' + r.nombre + ' (' + (r.rol || '') + ')</option>';
     });
 }
 
-// --- LÓGICA GANTT DINÁMICO ---
-function changeZoom(direction) {
-    if (direction === 'in') {
-        ganttConfig.pxPerDay = 50;
-        ganttConfig.headerStep = 1;
-    } else {
-        ganttConfig.pxPerDay = 12;
-        ganttConfig.headerStep = 7;
-    }
-    renderGantt();
-}
-
-// Sincronización scroll Gantt
-document.getElementById('gantt-scroll-area').addEventListener('scroll', function (e) {
-    document.getElementById('gantt-project-list').scrollTop = e.target.scrollTop;
-});
-
-// --- LÓGICA MODAL Y FORMULARIO ---
-function handleStatusChange() {
-    const status = document.getElementById('projStatus').value;
-    const daysField = document.getElementById('days-field-container');
-    const dateFields = document.getElementById('date-fields-container');
-
-    if (status === 'terminado') {
-        daysField.classList.add('hidden');
-        dateFields.classList.remove('hidden');
-
-        if (!document.getElementById('projId').value) {
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
-            document.getElementById('projStart').value = todayStr;
-            document.getElementById('projEnd').value = todayStr;
-        }
-    } else {
-        daysField.classList.remove('hidden');
-        dateFields.classList.add('hidden');
-    }
-}
-
-function openModal(isEdit = false, proj = null) {
-    const modal = document.getElementById('modal');
-    const form = document.getElementById('project-form');
-    const title = document.getElementById('modal-title');
-    const btnDel = document.getElementById('btn-delete-modal');
-
+function openTareaModal(id) {
+    const user = getCurrentUser();
+    const modal = document.getElementById('modal-tarea');
+    const form = document.getElementById('form-tarea');
+    const title = document.getElementById('modal-tarea-title');
+    const btnDelete = document.getElementById('btn-delete-tarea');
+    const statusSelect = document.getElementById('tareaEstatus');
     form.reset();
-    btnDel.classList.toggle('hidden', !isEdit);
+    updateResponsableSelect();
 
-    if (isEdit && proj) {
-        title.innerText = "Editar Proyecto";
-        document.getElementById('projId').value = proj.id;
-        document.getElementById('projName').value = proj.name;
-        document.getElementById('projOwner').value = proj.owner;
-        document.getElementById('projStatus').value = proj.status;
-        document.getElementById('projPriority').value = proj.priority || 'media'; // NUEVO
-        document.getElementById('projNotes').value = proj.notes || '';
+    const isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
+    statusSelect.innerHTML = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisi\u00F3n</option>' + (isPrivileged ? '<option value="completado">Completado</option>' : '');
 
-        if (proj.status === 'terminado') {
-            document.getElementById('days-field-container').classList.add('hidden');
-            document.getElementById('date-fields-container').classList.remove('hidden');
-            document.getElementById('projStart').value = proj.start;
-            document.getElementById('projEnd').value = proj.end;
-        } else {
-            document.getElementById('days-field-container').classList.remove('hidden');
-            document.getElementById('date-fields-container').classList.add('hidden');
-            if (proj.days) {
-                document.getElementById('projDays').value = proj.days;
-            }
-        }
+    if (id) {
+        const t = tareas.find(function(x) { return x.id === id; });
+        if (!t) return;
+        title.innerText = 'Editar Tarea';
+        document.getElementById('tareaId').value = t.id;
+        document.getElementById('tareaDetalles').value = t.detalles || '';
+        document.getElementById('tareaResponsable').value = t.id_responsable || '';
+        document.getElementById('tareaPrioridad').value = t.prioridad || 'media';
+        document.getElementById('tareaEstatus').value = t.estatus || 'pendiente';
+        document.getElementById('tareaFechaLimite').value = t.fecha_limite || '';
+        btnDelete.classList.remove('hidden');
     } else {
-        title.innerText = "Nuevo Proyecto";
-        document.getElementById('projId').value = "";
-        document.getElementById('projStatus').value = "curso";
-        document.getElementById('projPriority').value = "media"; // NUEVO
-        document.getElementById('days-field-container').classList.remove('hidden');
-        document.getElementById('date-fields-container').classList.add('hidden');
-        document.getElementById('projDays').value = "7";
-        document.getElementById('projNotes').value = '';
+        title.innerText = 'Nueva Tarea';
+        document.getElementById('tareaId').value = '';
+        btnDelete.classList.add('hidden');
     }
     modal.classList.remove('hidden');
 }
 
-function closeModal() {
-    document.getElementById('modal').classList.add('hidden');
+function closeTareaModal() {
+    document.getElementById('modal-tarea').classList.add('hidden');
 }
 
-function calculateEndDate(startDate, days) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + parseInt(days));
-    return date.toISOString().split('T')[0];
-}
-
-async function saveProject(e) {
+async function saveTarea(e) {
     e.preventDefault();
-
-    if (document.getElementById('btn-save').disabled) return;
-
-    setLoading(true);
-
+    const id = document.getElementById('tareaId').value;
+    const data = {
+        id: id || Date.now().toString(),
+        id_subproyecto: currentSubproyecto ? currentSubproyecto.id : null,
+        id_responsable: document.getElementById('tareaResponsable').value,
+        prioridad: document.getElementById('tareaPrioridad').value,
+        estatus: document.getElementById('tareaEstatus').value,
+        detalles: document.getElementById('tareaDetalles').value,
+        adjuntos: [],
+        fecha_limite: document.getElementById('tareaFechaLimite').value
+    };
+    showLoading(true);
     try {
-        const id = document.getElementById('projId').value;
-        const name = document.getElementById('projName').value;
-        const owner = document.getElementById('projOwner').value;
-        const status = document.getElementById('projStatus').value;
-        const priority = document.getElementById('projPriority').value; // NUEVO
-        const notes = document.getElementById('projNotes').value;
-
-        let start, end, days = null;
-        const today = new Date().toISOString().split('T')[0];
-
-        if (status === 'terminado') {
-            start = document.getElementById('projStart').value;
-            end = document.getElementById('projEnd').value;
-            if (!start || !end) {
-                alert('Por favor selecciona las fechas de inicio y fin');
-                setLoading(false);
-                return;
-            }
-        } else {
-            days = document.getElementById('projDays').value;
-            start = today;
-            end = calculateEndDate(today, days);
-        }
-
-        const projData = {
-            id: id || Date.now().toString(),
-            name,
-            owner,
-            status,
-            priority, // NUEVO
-            parentId: null, // NUEVO
-            start,
-            end,
-            days: days,
-            notes: notes
-        };
-
         if (id) {
-            const idx = projects.findIndex(p => p.id == id);
-            // Mantener parentId existente
-            projData.parentId = projects[idx].parentId || null;
-            projects[idx] = projData;
-            await updateProjectInSheets(projData, 'full_update');
+            const idx = tareas.findIndex(function(t) { return t.id === id; });
+            tareas[idx] = Object.assign({}, tareas[idx], data);
+            await postToBackend('tarea_update', data);
         } else {
-            projects.push(projData);
-            await sendToSheets(projData, 'add');
-            const mensaje = formatProjectMessage('create', projData);
-            sendWhatsAppNotification(mensaje);
+            tareas.push(data);
+            await postToBackend('tarea_add', data);
         }
-
-        renderAll();
-        closeModal();
-    } catch (error) {
-        console.error('Error al guardar:', error);
-        alert('Error al guardar el proyecto. Por favor intenta de nuevo.');
-    } finally {
-        setLoading(false);
-    }
-}
-
-async function updateProjectInSheets(proj, type) {
-    if (!WEB_APP_URL) return;
-    showLoading(true);
-    try {
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            mode: 'no-cors', // Quita esto si no es necesario
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action: 'update', type: type, data: proj })
-        });
+        closeTareaModal();
+        renderTareasBoard();
+        renderTareasList();
     } finally {
         showLoading(false);
     }
 }
 
-async function sendToSheets(proj, action) {
-    if (!WEB_APP_URL) return;
+async function deleteTarea() {
+    const id = document.getElementById('tareaId').value;
+    if (!id || !confirm('\u00BFEliminar esta tarea?')) return;
+    tareas = tareas.filter(function(t) { return t.id !== id; });
+    closeTareaModal();
+    renderTareasBoard();
+    renderTareasList();
+    await postToBackend('tarea_delete', { id: id });
+}
+
+// ============================================
+// MODAL DE APROBACIÓN
+// ============================================
+function openAprobacionModal(tareaId) {
+    const tarea = tareas.find(function(t) { return t.id === tareaId; });
+    if (!tarea) return;
+    const resp = responsables.find(function(r) { return r.id === tarea.id_responsable; });
+    document.getElementById('aprobacionTareaId').value = tareaId;
+    document.getElementById('aprobacionObservaciones').value = '';
+    document.getElementById('aprobacion-tarea-info').innerHTML = '<p class="font-bold mb-1">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-xs text-slate-500">Responsable: ' + (resp ? resp.nombre : 'Sin asignar') + ' \u2022 Prioridad: ' + (tarea.prioridad || 'media') + '</p>';
+    document.getElementById('modal-aprobacion').classList.remove('hidden');
+}
+
+function closeAprobacionModal() {
+    document.getElementById('modal-aprobacion').classList.add('hidden');
+}
+
+async function aprobarTarea() {
+    const tareaId = document.getElementById('aprobacionTareaId').value;
+    const obs = document.getElementById('aprobacionObservaciones').value;
+    const user = getCurrentUser();
     showLoading(true);
     try {
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            mode: 'no-cors', // Quita esto si no es necesario
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action: action, data: proj })
-        });
+        await postToBackend('tarea_aprobar', { id_tarea: tareaId, id_supervisor: user ? user.id : '', observaciones: obs });
+        const tarea = tareas.find(function(t) { return t.id === tareaId; });
+        if (tarea) tarea.estatus = 'completado';
+        closeAprobacionModal();
+        renderTareasBoard();
+        renderTareasList();
     } finally {
         showLoading(false);
     }
 }
 
-function editProject(id) {
-    const project = projects.find(p => p.id == id);
-    if (project) openModal(true, project);
-}
-
-async function deleteCurrentProject() {
-    const id = document.getElementById('projId').value;
-    if (!id || !confirm('¿Estás seguro de eliminar este proyecto?')) return;
-
-    const projectToDelete = projects.find(p => p.id == id);
-
-    projects = projects.filter(p => p.id != id);
-    renderAll();
-    closeModal();
-
-    if (WEB_APP_URL) {
-        showLoading(true);
-        try {
-            await fetch(WEB_APP_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete', data: { id } })
-            });
-
-            if (projectToDelete) {
-                const mensaje = formatProjectMessage('delete', projectToDelete);
-                sendWhatsAppNotification(mensaje);
-            }
-        } finally {
-            showLoading(false);
-        }
+async function rechazarTarea() {
+    const tareaId = document.getElementById('aprobacionTareaId').value;
+    const obs = document.getElementById('aprobacionObservaciones').value;
+    const user = getCurrentUser();
+    showLoading(true);
+    try {
+        await postToBackend('tarea_rechazar', { id_tarea: tareaId, id_supervisor: user ? user.id : '', observaciones: obs });
+        const tarea = tareas.find(function(t) { return t.id === tareaId; });
+        if (tarea) tarea.estatus = 'en_curso';
+        closeAprobacionModal();
+        renderTareasBoard();
+        renderTareasList();
+    } finally {
+        showLoading(false);
     }
 }
 
-// Función para abrir el modal de notas
-function showNotes(projectId) {
-    const project = projects.find(p => p.id == projectId);
-    if (!project) return;
+// ============================================
+// COMENTARIOS
+// ============================================
+function showTareaComments(tareaId) {
+    const tarea = tareas.find(function(t) { return t.id === tareaId; });
+    if (!tarea) return;
+    const tareaComments = comentarios.filter(function(c) { return c.id_tarea === tareaId; });
+    const modal = document.getElementById('comments-modal');
+    document.getElementById('comments-modal-title').innerText = 'Comentarios: ' + (tarea.detalles || '').substring(0, 40);
 
-    const modal = document.getElementById('notes-modal');
-    const title = document.getElementById('notes-modal-title');
-    const content = document.getElementById('notes-modal-content');
+    const commentsHtml = tareaComments.length === 0
+        ? '<p class="text-center text-slate-400 py-4">No hay comentarios a\u00FAn</p>'
+        : tareaComments.map(function(c) {
+            const resp = responsables.find(function(r) { return r.id === c.id_responsable; });
+            return '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><div class="flex justify-between items-start mb-1"><span class="font-bold text-xs text-indigo-600">' + (resp ? resp.nombre : c.id_responsable) + '</span><span class="text-[10px] text-slate-400">' + (c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span></div><p class="text-sm text-slate-700">' + c.comentario + '</p></div>';
+        }).join('');
 
-    title.innerText = `Notas: ${project.name}`;
-
-    // Crear contenido del modal
-    content.innerHTML = `
-        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div class="flex items-center gap-3 mb-3">
-                <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                    </svg>
-                </div>
-                <div>
-                    <p class="font-bold text-slate-800">${project.owner}</p>
-                    <p class="text-xs text-slate-500">Responsable</p>
-                </div>
-            </div>
-            
-            <div class="mb-4">
-                <p class="text-sm font-bold text-slate-700 mb-2">📝 Notas:</p>
-                ${project.notes ?
-            `<div class="bg-white p-4 rounded-lg border border-slate-200 text-slate-700 whitespace-pre-wrap">${project.notes}</div>` :
-            '<p class="text-slate-400 italic bg-white p-4 rounded-lg border border-slate-200">Este proyecto no tiene notas.</p>'
-        }
-            </div>
-            
-            <div class="flex items-center gap-2 text-xs text-slate-500 border-t border-slate-200 pt-3">
-                <span class="bg-slate-200 px-2 py-1 rounded-full">📅 Inicio: ${project.start || 'No definido'}</span>
-                <span class="bg-slate-200 px-2 py-1 rounded-full">🏁 Fin: ${project.end || 'No definido'}</span>
-                <span class="bg-slate-200 px-2 py-1 rounded-full">📊 ${project.status === 'curso' ? 'En Curso' : project.status === 'pausa' ? 'Pausa' : 'Terminado'}</span>
-            </div>
-        </div>
-    `;
-
+    document.getElementById('comments-modal-content').innerHTML = '<div class="space-y-4"><div class="space-y-3 max-h-60 overflow-y-auto">' + commentsHtml + '</div><div class="border-t border-slate-200 pt-4"><textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm" placeholder="Escribe tu comentario..."></textarea><div class="flex justify-end mt-2"><button onclick="addTareaComment(\'' + tareaId + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Enviar</button></div></div></div>';
     modal.classList.remove('hidden');
 }
 
-// Función para cerrar el modal de notas
-function closeNotesModal() {
-    document.getElementById('notes-modal').classList.add('hidden');
-}
-
-// Cerrar modal con tecla ESC
-document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-        closeNotesModal();
-    }
-});
-
-// Funciones para manejar el estado de carga del botón
-function setLoading(loading) {
-    const btn = document.getElementById('btn-save');
-    const btnText = document.getElementById('btn-save-text');
-    const btnSpinner = document.getElementById('btn-save-spinner');
-
-    if (loading) {
-        btn.disabled = true;
-        btn.classList.add('opacity-75', 'cursor-not-allowed');
-        btnText.classList.add('hidden');
-        btnSpinner.classList.remove('hidden');
-    } else {
-        btn.disabled = false;
-        btn.classList.remove('opacity-75', 'cursor-not-allowed');
-        btnText.classList.remove('hidden');
-        btnSpinner.classList.add('hidden');
-    }
-}
-
-// Variables para filtros
-let currentUserFilter = '';
-let availableUsers = [];
-
-// Cargar usuarios al iniciar
-async function loadUsers() {
+async function addTareaComment(tareaId) {
+    const text = document.getElementById('new-comment').value;
+    if (!text.trim()) return;
+    const currentUser = getCurrentUser();
+    const resp = responsables.find(function(r) { return r.id === (currentUser ? currentUser.id : ''); });
+    const commentData = {
+        id: Date.now().toString(),
+        id_tarea: tareaId,
+        id_responsable: resp ? resp.id : (currentUser ? currentUser.id : ''),
+        comentario: text,
+        fecha: new Date().toISOString()
+    };
+    showLoading(true);
     try {
-        const response = await fetch(WEB_APP_URL);
-        const data = await response.json();
-        availableUsers = data.users || [];
-        updateUserSelect();
-        updateMentions();
-    } catch (error) {
-        console.error('Error cargando usuarios:', error);
+        await postToBackend('comentario_add', commentData);
+        comentarios.push(commentData);
+        showTareaComments(tareaId);
+    } finally {
+        showLoading(false);
     }
 }
 
-// Actualizar select de filtro
-function updateUserSelect() {
+function closeCommentsModal() {
+    document.getElementById('comments-modal').classList.add('hidden');
+}
+
+// ============================================
+// FILTRO
+// ============================================
+function updateUserFilterSelect() {
     const select = document.getElementById('filterUser');
     if (!select) return;
-
-    select.innerHTML = '<option value="">Todos los usuarios</option>';
-    availableUsers.forEach(user => {
-        select.innerHTML += `<option value="${user.name}" ${currentUserFilter === user.name ? 'selected' : ''}>${user.name}</option>`;
+    select.innerHTML = '<option value="">Todos</option>';
+    responsables.forEach(function(r) {
+        select.innerHTML += '<option value="' + r.nombre + '" ' + (currentUserFilter === r.nombre ? 'selected' : '') + '>' + r.nombre + '</option>';
     });
 }
 
-// Sistema de menciones @
-function setupMentions() {
-    const ownerInput = document.getElementById('projOwner');
-    let mentionContainer = document.getElementById('mention-suggestions');
-
-    if (!mentionContainer) {
-        mentionContainer = document.createElement('div');
-        mentionContainer.id = 'mention-suggestions';
-        mentionContainer.className = 'absolute z-50 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto hidden';
-        ownerInput.parentElement.style.position = 'relative';
-        ownerInput.parentElement.appendChild(mentionContainer);
-    }
-
-    ownerInput.addEventListener('input', function (e) {
-        const value = e.target.value;
-        const atIndex = value.lastIndexOf('@');
-
-        if (atIndex !== -1 && (atIndex === 0 || value[atIndex - 1] === ' ')) {
-            const searchTerm = value.substring(atIndex + 1).toLowerCase();
-            const matches = availableUsers.filter(user =>
-                user.name.toLowerCase().includes(searchTerm)
-            );
-
-            if (matches.length > 0) {
-                showMentions(matches, atIndex);
-            } else {
-                mentionContainer.classList.add('hidden');
-            }
-        } else {
-            mentionContainer.classList.add('hidden');
-        }
-    });
-
-    ownerInput.addEventListener('blur', function () {
-        setTimeout(() => mentionContainer.classList.add('hidden'), 200);
-    });
-}
-
-function showMentions(users, atIndex) {
-    const container = document.getElementById('mention-suggestions');
-    const input = document.getElementById('projOwner');
-
-    container.innerHTML = '';
-    users.forEach(user => {
-        const div = document.createElement('div');
-        div.className = 'px-4 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-2';
-        div.innerHTML = `
-            <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">
-                ${user.name.charAt(0).toUpperCase()}
-            </span>
-            <span class="font-medium">${user.name}</span>
-            <span class="text-xs text-slate-400">${user.role}</span>
-        `;
-        div.onclick = () => {
-            const currentValue = input.value;
-            input.value = currentValue.substring(0, atIndex) + user.name + ' ';
-            container.classList.add('hidden');
-        };
-        container.appendChild(div);
-    });
-
-    container.classList.remove('hidden');
-}
-
-function updateMentions() {
-    if (document.getElementById('projOwner')) {
-        setupMentions();
-    }
-}
-
-// Funciones de filtro
 function applyUserFilter() {
-    const select = document.getElementById('filterUser');
-    currentUserFilter = select.value;
-
-    const badge = document.getElementById('filterBadge');
-    if (currentUserFilter) {
-        badge.classList.remove('hidden');
-        badge.innerText = `Filtrado por: ${currentUserFilter}`;
-    } else {
-        badge.classList.add('hidden');
-    }
-
-    filterProjects();
+    currentUserFilter = document.getElementById('filterUser').value;
+    renderTareasBoard();
+    renderTareasList();
 }
 
 function clearFilter() {
     currentUserFilter = '';
     document.getElementById('filterUser').value = '';
-    document.getElementById('filterBadge').classList.add('hidden');
-    filterProjects();
-}
-
-function filterProjects() {
-    console.log('Filtrando por usuario:', currentUserFilter);
-    console.log('Total proyectos:', projects.length);
-
-    const filteredProjects = currentUserFilter
-        ? projects.filter(p => p.owner === currentUserFilter)
-        : projects;
-
-    console.log('Proyectos filtrados:', filteredProjects.length);
-
-    // Actualizar las vistas con los proyectos filtrados
-    renderBoard(filteredProjects);
-    renderList(filteredProjects);
-    renderGantt(filteredProjects);
-}
-
-// Modificar las funciones de renderizado para aceptar proyectos filtrados
-function renderBoard(projectsToRender = null) {
-    const projectsToUse = projectsToRender || projects;
-
-    // Organizar por responsable
-    const organizedByOwner = organizeProjectsByOwner(projectsToUse);
-
-    const columns = ['curso', 'pausa', 'terminado'];
-
-    columns.forEach(col => {
-        const container = document.getElementById(col);
-        if (!container) return;
-
-        container.innerHTML = '';
-
-        // Filtrar proyectos de esta columna
-        const columnProjects = projectsToUse.filter(p => p && p.status === col);
-
-        // Organizar por responsable para esta columna
-        const ownerGroups = {};
-        columnProjects.forEach(p => {
-            if (!ownerGroups[p.owner]) {
-                ownerGroups[p.owner] = [];
-            }
-            ownerGroups[p.owner].push(p);
-        });
-
-        // Mostrar conteo total
-        document.getElementById(`count-${col}`).innerText = columnProjects.length;
-
-        // Renderizar por grupo de responsable
-        Object.keys(ownerGroups).sort().forEach(owner => {
-            const ownerProjects = ownerGroups[owner];
-
-            // Separar padres e hijos
-            const parents = ownerProjects.filter(p => !p.parentId);
-            const children = ownerProjects.filter(p => p.parentId);
-
-            // Crear contenedor del grupo
-            const groupDiv = document.createElement('div');
-            groupDiv.className = 'mb-4';
-            groupDiv.innerHTML = `
-                <div class="flex items-center gap-2 mb-2 px-2">
-                    <div class="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold">
-                        ${owner.charAt(0).toUpperCase()}
-                    </div>
-                    <h4 class="font-bold text-sm text-slate-600">${owner}</h4>
-                    <span class="ml-auto text-xs bg-slate-200 px-2 py-0.5 rounded-full">${ownerProjects.length}</span>
-                </div>
-                <div class="space-y-2" id="group-${col}-${owner.replace(/\s/g, '')}">
-                </div>
-            `;
-
-            container.appendChild(groupDiv);
-            const groupContainer = groupDiv.querySelector(`[id^="group-"]`);
-
-            // Renderizar proyectos padre
-            parents.sort((a, b) => {
-                const priorityOrder = { 'alta': 0, 'media': 1, 'baja': 2 };
-                return (priorityOrder[a.priority] || 1) - (priorityOrder[b.priority] || 1);
-            }).forEach(parent => {
-                const parentCard = createProjectCard(parent, true);
-                groupContainer.appendChild(parentCard);
-
-                // Renderizar hijos
-                const projectChildren = children.filter(c => c.parentId === parent.id);
-                projectChildren.sort((a, b) => a.name.localeCompare(b.name)).forEach(child => {
-                    const childCard = createProjectCard(child, false);
-                    childCard.classList.add('ml-6', 'border-l-4', 'border-indigo-200', 'bg-indigo-50/30');
-                    groupContainer.appendChild(childCard);
-                });
-            });
-        });
-    });
-}
-
-// Función auxiliar para crear tarjetas de proyecto
-function createProjectCard(proj, isParent = true) {
-    const card = document.createElement('div');
-    card.className = `project-card bg-white p-4 rounded-xl shadow-sm border ${isParent ? 'border-slate-200' : 'border-indigo-100'} mb-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow`;
-    card.draggable = true;
-    card.id = `card-${proj.id}`;
-    card.setAttribute('data-owner', proj.owner);
-    card.setAttribute('data-priority', proj.priority);
-    card.setAttribute('data-parent', proj.parentId || '');
-
-    card.ondragstart = (e) => {
-        e.dataTransfer.setData('text/plain', proj.id);
-        e.dataTransfer.setData('type', 'project');
-    };
-
-    const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
-    const commentCount = comments.filter(c => c.projectId == proj.id).length;
-    const priorityColor = getPriorityColor(proj.priority);
-    const priorityIcon = getPriorityIcon(proj.priority);
-
-    card.innerHTML = `
-        <div class="flex justify-between items-start">
-            <div class="flex-1">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-xs font-bold px-2 py-0.5 rounded-full ${priorityColor}">
-                        ${priorityIcon} ${proj.priority}
-                    </span>
-                    ${!isParent ? '<span class="text-xs text-indigo-400">⊢ subproyecto</span>' : ''}
-                </div>
-                <h4 class="font-bold text-slate-800 mb-1">${proj.name || 'Sin nombre'}</h4>
-            </div>
-            <div class="flex gap-1">
-                ${proj.notes ?
-            `<button onclick="event.stopPropagation(); showNotes('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-1.5 rounded-lg transition-colors" title="Ver notas">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                        </svg>
-                    </button>` : ''
-        }
-                <button onclick="event.stopPropagation(); showProjectComments('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors relative" title="Comentarios">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                    </svg>
-                    ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">${commentCount}</span>` : ''}
-                </button>
-                <button onclick="event.stopPropagation(); editProject('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors" title="Editar">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                    </svg>
-                </button>
-                ${proj.parentId ?
-            `<button onclick="event.stopPropagation(); removeHierarchy('${proj.id}')" class="text-amber-500 hover:bg-amber-50 p-1.5 rounded-lg transition-colors" title="Convertir en proyecto independiente">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                        </svg>
-                    </button>` : ''
-        }
-            </div>
-        </div>
-        
-        <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-tight">${proj.owner || 'Sin responsable'}</p>
-        
-        <!-- Botones de acción rápida -->
-        <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
-            <div class="flex gap-1">
-                ${proj.status === 'curso' ? `
-                    <button onclick="event.stopPropagation(); quickChangeStatus('${proj.id}', 'pausa')" class="text-xs bg-amber-100 text-amber-600 hover:bg-amber-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Pausar
-                    </button>
-                    <button onclick="event.stopPropagation(); quickChangeStatus('${proj.id}', 'terminado')" class="text-xs bg-emerald-100 text-emerald-600 hover:bg-emerald-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Terminar
-                    </button>
-                ` : proj.status === 'pausa' ? `
-                    <button onclick="event.stopPropagation(); quickChangeStatus('${proj.id}', 'curso')" class="text-xs bg-blue-100 text-blue-600 hover:bg-blue-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Reanudar
-                    </button>
-                    <button onclick="event.stopPropagation(); quickChangeStatus('${proj.id}', 'terminado')" class="text-xs bg-emerald-100 text-emerald-600 hover:bg-emerald-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Terminar
-                    </button>
-                ` : proj.status === 'terminado' ? `
-                    <span class="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md font-medium">✅ Completado</span>
-                ` : ''}
-            </div>
-            
-            <!-- Botón de notificar avance (solo para proyectos en curso) -->
-            ${proj.status === 'curso' ? `
-                <button onclick="event.stopPropagation(); openProgressModal('${proj.id}')" class="text-xs bg-indigo-100 text-indigo-600 hover:bg-indigo-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
-                    </svg>
-                    Notificar avance
-                </button>
-            ` : ''}
-        </div>
-    `;
-
-    return card;
-}
-
-function renderGantt(projectsToRender = null) {
-    const projectsToUse = projectsToRender || projects;
-
-    const listContainer = document.getElementById('gantt-project-list');
-    const headerContainer = document.getElementById('gantt-header');
-    const barsContainer = document.getElementById('gantt-bars-area');
-    const gridContainer = document.getElementById('gantt-grid-lines');
-
-    if (!listContainer || !headerContainer || !barsContainer || !gridContainer) {
-        console.error("Contenedores de Gantt no encontrados");
-        return;
-    }
-
-    listContainer.innerHTML = '';
-    headerContainer.innerHTML = '';
-    barsContainer.innerHTML = '';
-    gridContainer.innerHTML = '';
-
-    const validProjects = projectsToUse.filter(p => p && p.start && p.end);
-
-    if (validProjects.length === 0) {
-        listContainer.innerHTML = '<div class="p-6 text-sm text-slate-400">Sin fechas definidas.</div>';
-        return;
-    }
-
-    // Cálculo de límites temporales
-    let minDate = new Date(Math.min(...validProjects.map(p => new Date(p.start))));
-    let maxDate = new Date(Math.max(...validProjects.map(p => new Date(p.end))));
-    minDate.setDate(minDate.getDate() - 5);
-    maxDate.setDate(maxDate.getDate() + 15);
-
-    const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
-
-    // Render de Cabecera y Grid
-    for (let i = 0; i <= totalDays; i++) {
-        const currentDate = new Date(minDate);
-        currentDate.setDate(minDate.getDate() + i);
-        const leftPos = i * ganttConfig.pxPerDay;
-
-        const line = document.createElement('div');
-        line.className = 'absolute top-0 bottom-0 border-r border-slate-100';
-        line.style.left = `${leftPos}px`;
-        line.style.width = `${ganttConfig.pxPerDay}px`;
-        const dayNum = currentDate.getDay();
-        if (dayNum === 0 || dayNum === 6) line.classList.add('bg-slate-50/50');
-        gridContainer.appendChild(line);
-
-        if (i % ganttConfig.headerStep === 0) {
-            const dateCell = document.createElement('div');
-            dateCell.className = 'absolute top-0 h-full flex items-center justify-center text-[10px] text-slate-400 border-r border-slate-200 truncate px-1 uppercase font-bold';
-            dateCell.style.left = `${leftPos}px`;
-            dateCell.style.width = `${ganttConfig.pxPerDay * ganttConfig.headerStep}px`;
-            dateCell.innerText = currentDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-            headerContainer.appendChild(dateCell);
-        }
-    }
-
-    // Render de Barras
-    const ROW_HEIGHT = 48;
-    validProjects.forEach((proj, index) => {
-        // Lista lateral
-        const listItem = document.createElement('div');
-        listItem.className = 'h-12 border-b border-slate-100 flex flex-col justify-center px-4 hover:bg-slate-50 transition cursor-pointer';
-
-        const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
-        const commentCount = comments.filter(c => c.projectId == proj.id).length;
-
-        listItem.innerHTML = `
-            <div class="flex items-center justify-between">
-                <span class="font-bold text-slate-700 text-xs truncate">${proj.name || 'Sin nombre'}</span>
-                ${commentCount > 0 ? '<span class="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 rounded-full">💬</span>' : ''}
-            </div>
-            <span class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter flex items-center gap-1">
-                ${proj.owner || 'Sin responsable'} • ${daysElapsed} días
-            </span>
-        `;
-        listItem.onclick = () => editProject(proj.id);
-        listContainer.appendChild(listItem);
-
-        // Cálculo de barra
-        const start = new Date(proj.start);
-        const end = new Date(proj.end);
-        const left = ((start - minDate) / (1000 * 60 * 60 * 24)) * ganttConfig.pxPerDay;
-        const duration = ((end - start) / (1000 * 60 * 60 * 24)) + 1;
-        const width = duration * ganttConfig.pxPerDay;
-
-        let barColor = 'bg-blue-500 shadow-blue-100';
-        if (proj.status === 'pausa') barColor = 'bg-amber-500 shadow-amber-100';
-        if (proj.status === 'terminado') barColor = 'bg-emerald-500 shadow-emerald-100';
-
-        const bar = document.createElement('div');
-        bar.className = `absolute h-6 rounded-md shadow-sm text-[10px] text-white flex items-center px-2 overflow-hidden whitespace-nowrap cursor-pointer hover:brightness-110 transition z-10 font-bold ${barColor}`;
-        bar.style.top = `${(index * ROW_HEIGHT) + 12}px`;
-        bar.style.left = `${left}px`;
-        bar.style.width = `${width}px`;
-        bar.innerText = `${proj.name} (${daysElapsed} días)${commentCount > 0 ? ' 💬' : ''}`;
-        bar.onclick = () => editProject(proj.id);
-        barsContainer.appendChild(bar);
-
-        const rowLine = document.createElement('div');
-        rowLine.className = 'absolute w-full border-b border-slate-100 pointer-events-none';
-        rowLine.style.top = `${(index + 1) * ROW_HEIGHT}px`;
-        barsContainer.appendChild(rowLine);
-    });
-
-    barsContainer.style.height = `${validProjects.length * ROW_HEIGHT}px`;
-}
-
-// Modificar refreshData para cargar usuarios también
-async function refreshData() {
-    if (!WEB_APP_URL) {
-        console.warn("Falta WEB_APP_URL. Los cambios no se guardarán en Google Sheets.");
-        return;
-    }
-    showLoading(true);
-    try {
-        const response = await fetch(WEB_APP_URL);
-        console.log("Response status:", response.status);
-
-        const responseText = await response.text();
-        console.log("Raw response:", responseText.substring(0, 500));
-
-        let data;
-        try {
-            data = JSON.parse(responseText);
-        } catch (e) {
-            console.error("Error parsing JSON:", e);
-            console.log("Response was not JSON:", responseText);
-            return;
-        }
-
-        console.log("Parsed data:", data);
-
-        // Verificar si hay error
-        if (data.error) {
-            console.error("Error from Apps Script:", data.error);
-            alert("Error del servidor: " + data.error);
-            return;
-        }
-
-        // Ahora data es un objeto con projects y users
-        projects = data.projects || [];
-        availableUsers = data.users || [];
-
-        console.log('Proyectos cargados:', projects.length, projects);
-        console.log('Usuarios cargados:', availableUsers.length, availableUsers);
-
-        if (projects.length === 0) {
-            console.warn("No se encontraron proyectos. Verifica la estructura de la hoja de cálculo.");
-            console.log("Headers esperados: ID, Nombre, Responsable, Estado, Fecha Inicio, Fecha Fin, Días, Notas");
-        }
-
-        updateUserSelect();
-        updateMentions();
-        renderAll();
-    } catch (error) {
-        console.error("Error al cargar datos:", error);
-    } finally {
-        showLoading(false);
-    }
+    renderTareasBoard();
+    renderTareasList();
 }
 
 // ============================================
-// SISTEMA DE SESIÓN DE USUARIO
+// BACKEND
 // ============================================
-
-// Verificar usuario al cargar la página
-document.addEventListener('DOMContentLoaded', function () {
-    checkCurrentUser();
-    refreshData();
-});
-
-function checkCurrentUser() {
-    const userJson = sessionStorage.getItem('currentUser');
-    const display = document.getElementById('current-user-display');
-
-    if (!userJson) {
-        // Redirigir al login si no hay usuario
-        window.location.href = 'login.html';
-        return;
-    }
-
-    const user = JSON.parse(userJson);
-    display.innerText = `👤 ${user.name} (${user.role})`;
-}
-
-function logout() {
-    sessionStorage.removeItem('currentUser');
-    window.location.href = 'login.html';
-}
-
-// Obtener usuario actual
-function getCurrentUser() {
-    const userJson = sessionStorage.getItem('currentUser');
-    return userJson ? JSON.parse(userJson) : null;
-}
-
-// ============================================
-// SISTEMA DE COMENTARIOS
-// ============================================
-
-let comments = [];
-
-// Cargar comentarios en refreshData
-async function refreshData() {
-    if (!WEB_APP_URL) {
-        console.warn("Falta WEB_APP_URL. Los cambios no se guardarán en Google Sheets.");
-        return;
-    }
-    showLoading(true);
-    try {
-        const response = await fetch(WEB_APP_URL);
-        const responseText = await response.text();
-
-        let data;
-        try {
-            data = JSON.parse(responseText);
-        } catch (e) {
-            console.error("Error parsing JSON:", e);
-            return;
-        }
-
-        if (data.error) {
-            console.error("Error from Apps Script:", data.error);
-            alert("Error del servidor: " + data.error);
-            return;
-        }
-
-        projects = data.projects || [];
-        availableUsers = data.users || [];
-        comments = data.comments || [];
-
-        console.log('Proyectos cargados:', projects.length);
-        console.log('Usuarios cargados:', availableUsers.length);
-        console.log('Comentarios cargados:', comments.length);
-
-        if (projects.length === 0) {
-            console.warn("No se encontraron proyectos. Verifica la estructura de la hoja de cálculo.");
-        }
-
-        updateUserSelect();
-        updateMentions();
-        renderAll();
-    } catch (error) {
-        console.error("Error al cargar datos:", error);
-    } finally {
-        showLoading(false);
-    }
-}
-
-// Función para mostrar comentarios de un proyecto
-function showProjectComments(projectId) {
-    const project = projects.find(p => p.id == projectId);
-    if (!project) return;
-
-    const projectComments = comments.filter(c => c.projectId == projectId);
-    const currentUser = getCurrentUser();
-
-    const modal = document.getElementById('comments-modal');
-    const title = document.getElementById('comments-modal-title');
-    const content = document.getElementById('comments-modal-content');
-
-    title.innerText = `Comentarios: ${project.name}`;
-
-    content.innerHTML = `
-        <div class="space-y-4">
-            <!-- Lista de comentarios -->
-            <div id="comments-list" class="space-y-3 max-h-60 overflow-y-auto p-2">
-                ${projectComments.length === 0 ?
-            '<p class="text-center text-slate-400 py-4">No hay comentarios aún</p>' :
-            projectComments.map(c => `
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                            <div class="flex justify-between items-start mb-1">
-                                <span class="font-bold text-xs text-indigo-600">${c.user}</span>
-                                <span class="text-[10px] text-slate-400">${new Date(c.date).toLocaleString()}</span>
-                            </div>
-                            <p class="text-sm text-slate-700">${c.comment}</p>
-                        </div>
-                    `).join('')
-        }
-            </div>
-            
-            <!-- Nuevo comentario -->
-            <div class="border-t border-slate-200 pt-4">
-                <textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm" placeholder="Escribe tu comentario..."></textarea>
-                <div class="flex justify-end mt-2">
-                    <button onclick="addComment('${projectId}')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
-                        Enviar comentario
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    modal.classList.remove('hidden');
-}
-
-// Añadir comentario
-// Función para añadir comentarios
-async function addComment(projectId) {
-    const commentText = document.getElementById('new-comment').value;
-    if (!commentText.trim()) return;
-
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-        alert('Debes iniciar sesión para comentar');
-        return;
-    }
-
-    const commentData = {
-        id: Date.now().toString(),
-        projectId: projectId,
-        user: currentUser.name,
-        comment: commentText,
-        date: new Date().toISOString()
-    };
-
-    showLoading(true);
-    try {
-        // Usar mode: 'no-cors' para evitar problemas de CORS
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            mode: 'no-cors', // <-- AÑADIR ESTO
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action: 'comment_add', data: commentData })
-        });
-
-        // Añadir el comentario localmente aunque la respuesta no se pueda leer
-        comments.push(commentData);
-
-        // Actualizar las vistas para mostrar el nuevo contador
-        if (currentUserFilter) {
-            filterProjects();
-        } else {
-            renderAll();
-        }
-
-        // Recargar el modal para mostrar el nuevo comentario
-        showProjectComments(projectId);
-
-    } catch (error) {
-        console.error('Error adding comment:', error);
-        alert('Error al añadir comentario. Intenta de nuevo.');
-    } finally {
-        showLoading(false);
-    }
-}
-
-// Actualiza también sendToSheets
-async function sendToSheets(proj, action) {
+async function postToBackend(action, data) {
     if (!WEB_APP_URL) return;
-    showLoading(true);
     try {
         await fetch(WEB_APP_URL, {
-            method: 'POST',
-            mode: 'no-cors', // <-- AÑADIR ESTO
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action: action, data: proj })
-        });
-
-        // Como no podemos ver la respuesta, asumimos que funcionó
-        console.log('Solicitud enviada:', action);
-
-    } catch (error) {
-        console.error('Error en sendToSheets:', error);
-    } finally {
-        showLoading(false);
-    }
-}
-
-// Actualiza updateProjectInSheets
-async function updateProjectInSheets(proj, type) {
-    if (!WEB_APP_URL) return;
-    showLoading(true);
-    try {
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            mode: 'no-cors', // <-- AÑADIR ESTO
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action: 'update', type: type, data: proj })
-        });
-
-        console.log('Actualización enviada:', proj.id);
-
-    } catch (error) {
-        console.error('Error en updateProjectInSheets:', error);
-    } finally {
-        showLoading(false);
-    }
-}
-
-// Actualiza deleteCurrentProject
-async function deleteCurrentProject() {
-    const id = document.getElementById('projId').value;
-    if (!id || !confirm('¿Estás seguro de eliminar este proyecto?')) return;
-
-    const projectToDelete = projects.find(p => p.id == id);
-
-    projects = projects.filter(p => p.id != id);
-    renderAll();
-    closeModal();
-
-    if (WEB_APP_URL) {
-        showLoading(true);
-        try {
-            await fetch(WEB_APP_URL, {
-                method: 'POST',
-                mode: 'no-cors', // <-- AÑADIR ESTO
-                body: JSON.stringify({ action: 'delete', data: { id } })
-            });
-
-            if (projectToDelete) {
-                const mensaje = formatProjectMessage('delete', projectToDelete);
-                sendWhatsAppNotification(mensaje);
-            }
-        } finally {
-            showLoading(false);
-        }
-    }
-}
-
-// Cerrar modal de comentarios
-function closeCommentsModal() {
-    document.getElementById('comments-modal').classList.add('hidden');
-}
-
-function closeCommentsModal() {
-    document.getElementById('comments-modal').classList.add('hidden');
-}
-
-// Cerrar con ESC
-document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-        closeCommentsModal();
-        closeNotesModal();
-    }
-});
-
-// ============================================
-// SISTEMA DE PRIORIDADES Y SUBPROYECTOS
-// ============================================
-
-// Función para obtener el color de prioridad
-function getPriorityColor(priority) {
-    switch (priority) {
-        case 'alta': return 'bg-red-100 text-red-600 border-red-200';
-        case 'media': return 'bg-yellow-100 text-yellow-600 border-yellow-200';
-        case 'baja': return 'bg-green-100 text-green-600 border-green-200';
-        default: return 'bg-gray-100 text-gray-600 border-gray-200';
-    }
-}
-
-// Función para obtener el icono de prioridad
-function getPriorityIcon(priority) {
-    switch (priority) {
-        case 'alta': return '🔴';
-        case 'media': return '🟡';
-        case 'baja': return '🟢';
-        default: return '⚪';
-    }
-}
-
-// Función para organizar proyectos por responsable y jerarquía
-function organizeProjectsByOwner(projectsList) {
-    const organized = {};
-
-    projectsList.forEach(proj => {
-        if (!organized[proj.owner]) {
-            organized[proj.owner] = {
-                owner: proj.owner,
-                projects: []
-            };
-        }
-
-        if (!proj.parentId) {
-            // Es proyecto padre
-            organized[proj.owner].projects.push({
-                ...proj,
-                children: projectsList.filter(p => p.parentId === proj.id)
-            });
-        }
-    });
-
-    return Object.values(organized);
-}
-
-// Función para obtener subproyectos de un proyecto
-function getProjectChildren(projectId) {
-    return projects.filter(p => p.parentId === projectId);
-}
-
-// Función para convertir en subproyecto (drag & drop)
-async function makeSubProject(childId, parentId) {
-    const child = projects.find(p => p.id == childId);
-    const parent = projects.find(p => p.id == parentId);
-
-    if (!child || !parent) return;
-
-    child.parentId = parentId;
-
-    // Actualizar en la UI
-    if (currentUserFilter) {
-        filterProjects();
-    } else {
-        renderAll();
-    }
-
-    // Guardar en Google Sheets
-    await updateProjectInSheets(child, 'full_update');
-}
-
-// Función para eliminar jerarquía (convertir en proyecto independiente)
-async function removeHierarchy(projectId) {
-    const project = projects.find(p => p.id == projectId);
-    if (!project) return;
-
-    project.parentId = null;
-
-    if (currentUserFilter) {
-        filterProjects();
-    } else {
-        renderAll();
-    }
-
-    await updateProjectInSheets(project, 'full_update');
-}
-
-// Función para cambio rápido de estado
-async function quickChangeStatus(projectId, newStatus) {
-    const project = projects.find(p => p.id == projectId);
-    if (!project) return;
-
-    const oldStatus = project.status;
-    project.status = newStatus;
-
-    if (newStatus === 'terminado' && oldStatus !== 'terminado') {
-        const today = new Date();
-        project.end = today.toISOString().split('T')[0];
-    }
-
-    if (newStatus === 'curso' && oldStatus === 'pausa') {
-        // Si se reanuda, mantener fecha de fin original
-        // No hacemos cambios en fechas
-    }
-
-    // Actualizar UI
-    if (currentUserFilter) {
-        filterProjects();
-    } else {
-        renderAll();
-    }
-
-    // Guardar en Google Sheets
-    await updateProjectInSheets(project, 'status_only');
-
-    // Notificación de cambio de estado
-    const actionMsg = newStatus === 'curso' ? 'reanudado' :
-        newStatus === 'pausa' ? 'pausado' : 'completado';
-
-    const message = `📊 *${project.name}* ha sido ${actionMsg}\n` +
-        `👤 Responsable: ${project.owner}\n` +
-        `📅 ${new Date().toLocaleString()}`;
-
-    sendWhatsAppNotification(message);
-}
-
-// Variables para el proyecto actual de notificación
-let currentProgressProject = null;
-
-// Abrir modal de notificación de avance
-function openProgressModal(projectId) {
-    const project = projects.find(p => p.id == projectId);
-    if (!project) return;
-
-    currentProgressProject = project;
-
-    const modal = document.getElementById('progress-modal');
-    const title = document.getElementById('progress-modal-title');
-    const content = document.getElementById('progress-modal-content');
-
-    title.innerText = `Notificar avance: ${project.name}`;
-
-    content.innerHTML = `
-        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
-                    </svg>
-                </div>
-                <div>
-                    <p class="font-bold text-slate-800">${project.owner}</p>
-                    <p class="text-xs text-slate-500">Responsable</p>
-                </div>
-            </div>
-            
-            <div class="mb-4">
-                <label class="block text-sm font-bold text-slate-700 mb-2">Mensaje de avance</label>
-                <textarea id="progress-message" rows="4" class="w-full px-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all resize-none" placeholder="Describe el avance realizado... (ej: 50% completado, módulo terminado, etc.)"></textarea>
-            </div>
-            
-            <div class="flex items-center gap-2 text-xs text-slate-500 mb-4 p-2 bg-white rounded-lg border border-slate-200">
-                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span>El mensaje se enviará al grupo de WhatsApp</span>
-            </div>
-            
-            <div class="flex gap-3">
-                <button onclick="closeProgressModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
-                    Cancelar
-                </button>
-                <button onclick="sendProgressNotification()" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-                    </svg>
-                    Enviar notificación
-                </button>
-            </div>
-        </div>
-    `;
-
-    modal.classList.remove('hidden');
-}
-
-// Cerrar modal de avance
-function closeProgressModal() {
-    document.getElementById('progress-modal').classList.add('hidden');
-    currentProgressProject = null;
-}
-
-// Enviar notificación de avance
-async function sendProgressNotification() {
-    const message = document.getElementById('progress-message').value;
-
-    if (!message.trim()) {
-        alert('Por favor escribe un mensaje de avance');
-        return;
-    }
-
-    if (!currentProgressProject) return;
-
-    const currentUser = getCurrentUser();
-    const project = currentProgressProject;
-
-    // Formatear mensaje de WhatsApp
-    const fechaActual = new Date().toLocaleString('es-ES', { timeZone: 'America/Asuncion' });
-
-    let whatsappMessage = `📢 *AVANCE DEL PROYECTO*\n`;
-    whatsappMessage += `━━━━━━━━━━━━━━━━\n`;
-    whatsappMessage += `📌 *${project.name}*\n`;
-    whatsappMessage += `👤 Responsable: ${project.owner}\n`;
-    whatsappMessage += `🗣 Reportado por: ${currentUser?.name || 'Sistema'}\n`;
-    whatsappMessage += `━━━━━━━━━━━━━━━━\n`;
-    whatsappMessage += `💬 *Mensaje:*\n${message}\n`;
-    whatsappMessage += `━━━━━━━━━━━━━━━━\n`;
-    whatsappMessage += `📅 ${fechaActual}\n`;
-    whatsappMessage += `🔗 Ver panel: ${PANEL_URL}`;
-
-    // Mostrar loading
-    showLoading(true);
-
-    try {
-        // Enviar notificación
-        await sendWhatsAppNotification(whatsappMessage);
-
-        // También guardar como comentario automático
-        const commentData = {
-            id: Date.now().toString(),
-            projectId: project.id,
-            user: currentUser?.name || 'Sistema',
-            comment: `📢 AVANCE: ${message}`,
-            date: new Date().toISOString()
-        };
-
-        // Guardar comentario en segundo plano
-        fetch(WEB_APP_URL, {
             method: 'POST',
             mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ action: 'comment_add', data: commentData })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action, data: data })
         });
-
-        // Añadir comentario localmente
-        comments.push(commentData);
-
-        alert('✅ Notificación enviada correctamente');
-        closeProgressModal();
-
+        console.log('Backend action:', action);
     } catch (error) {
-        console.error('Error enviando notificación:', error);
-        alert('Error al enviar la notificación. Intenta de nuevo.');
-    } finally {
-        showLoading(false);
+        console.error('Error en postToBackend:', error);
     }
 }
 
-// Actualizar el event listener de ESC para incluir el nuevo modal
+// ============================================
+// WHATSAPP
+// ============================================
+async function sendWhatsAppNotification(message) {
+    if (!WHATSAPP_NUMBER) return;
+    try {
+        fetch(WHATSAPP_BOT_URL + '?number=' + encodeURIComponent(WHATSAPP_NUMBER) + '&message=' + encodeURIComponent(message), { mode: 'no-cors' }).catch(function(){});
+    } catch (e) {
+        console.error('Error WhatsApp:', e);
+    }
+}
+
+// ============================================
+// UTILIDADES
+// ============================================
+function getPriorityColor(priority) {
+    switch (priority) {
+        case 'alta': return 'bg-red-100 text-red-600';
+        case 'media': return 'bg-yellow-100 text-yellow-600';
+        case 'baja': return 'bg-green-100 text-green-600';
+        default: return 'bg-gray-100 text-gray-600';
+    }
+}
+
+function getPriorityIcon(priority) {
+    switch (priority) {
+        case 'alta': return '\uD83D\uDD34';
+        case 'media': return '\uD83D\uDFE1';
+        case 'baja': return '\uD83D\uDFE2';
+        default: return '\u26AA';
+    }
+}
+
+function getStatusBadge(estatus) {
+    switch (estatus) {
+        case 'pendiente': return { class: 'bg-slate-100 text-slate-600', label: 'Pendiente' };
+        case 'en_curso': return { class: 'bg-blue-100 text-blue-600', label: 'En Curso' };
+        case 'en_revision': return { class: 'bg-amber-100 text-amber-600', label: 'En Revisi\u00F3n' };
+        case 'completado': return { class: 'bg-emerald-100 text-emerald-600', label: 'Completado' };
+        default: return { class: 'bg-gray-100 text-gray-600', label: estatus };
+    }
+}
+
+// ESC cierra todos los modales
 document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
+        closeProyectoModal();
+        closeSubproyectoModal();
+        closeTareaModal();
+        closeAprobacionModal();
         closeCommentsModal();
-        closeNotesModal();
-        closeProgressModal();
     }
 });
