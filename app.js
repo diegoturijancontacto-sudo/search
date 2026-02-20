@@ -227,8 +227,8 @@ function renderProyectos() {
         return;
     }
 
-    container.innerHTML = proyectos.map(function(p) {
-        const subCount = subproyectos.filter(function(s) { return s.id_proyecto === p.id; }).length;
+    container.innerHTML = proyectos.map(function (p) {
+        const subCount = subproyectos.filter(function (s) { return s.id_proyecto === p.id; }).length;
         const estadoBadge = p.estado === 'completado' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600';
         const firstChar = (p.nombre || '?').charAt(0).toUpperCase();
         const editBtn = isDirector ? '<button onclick="event.stopPropagation(); openProyectoModal(\'' + p.id + '\')" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">Editar</button>' : '';
@@ -244,19 +244,19 @@ function renderSubproyectos() {
     const container = document.getElementById('view-subproyectos');
     const user = getCurrentUser();
     const isDirector = user && user.role === 'director';
-    const subs = subproyectos.filter(function(s) { return s.id_proyecto === (currentProyecto ? currentProyecto.id : null); });
+    const subs = subproyectos.filter(function (s) { return s.id_proyecto === (currentProyecto ? currentProyecto.id : null); });
 
     if (subs.length === 0) {
         container.innerHTML = '<div class="col-span-full text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay subproyectos en este proyecto</p>' + (isDirector ? '<p class="text-sm">Haz clic en "Nuevo Subproyecto" para comenzar</p>' : '') + '</div>';
         return;
     }
 
-    container.innerHTML = subs.map(function(s) {
-        const taskCount = tareas.filter(function(t) { return t.id_subproyecto === s.id; }).length;
-        const completadoCount = tareas.filter(function(t) { return t.id_subproyecto === s.id && t.estatus === 'completado'; }).length;
-        const enRevisionCount = tareas.filter(function(t) { return t.id_subproyecto === s.id && t.estatus === 'en_revision'; }).length;
-        const enCursoCount = tareas.filter(function(t) { return t.id_subproyecto === s.id && t.estatus === 'en_curso'; }).length;
-        const pendienteCount = tareas.filter(function(t) { return t.id_subproyecto === s.id && t.estatus === 'pendiente'; }).length;
+    container.innerHTML = subs.map(function (s) {
+        const taskCount = tareas.filter(function (t) { return t.id_subproyecto === s.id; }).length;
+        const completadoCount = tareas.filter(function (t) { return t.id_subproyecto === s.id && t.estatus === 'completado'; }).length;
+        const enRevisionCount = tareas.filter(function (t) { return t.id_subproyecto === s.id && t.estatus === 'en_revision'; }).length;
+        const enCursoCount = tareas.filter(function (t) { return t.id_subproyecto === s.id && t.estatus === 'en_curso'; }).length;
+        const pendienteCount = tareas.filter(function (t) { return t.id_subproyecto === s.id && t.estatus === 'pendiente'; }).length;
         const progress = taskCount > 0 ? Math.round((completadoCount / taskCount) * 100) : 0;
         const firstChar = (s.nombre || '?').charAt(0).toUpperCase();
         const editBtn = isDirector ? '<button onclick="event.stopPropagation(); openSubproyectoModal(\'' + s.id + '\')" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">Editar</button>' : '';
@@ -276,10 +276,10 @@ function renderSubproyectos() {
 // RENDER: TAREAS (KANBAN)
 // ============================================
 function getTareasActuales() {
-    let result = tareas.filter(function(t) { return t.id_subproyecto === (currentSubproyecto ? currentSubproyecto.id : null); });
+    let result = tareas.filter(function (t) { return t.id_subproyecto === (currentSubproyecto ? currentSubproyecto.id : null); });
     if (currentUserFilter) {
-        const resp = responsables.find(function(r) { return r.nombre === currentUserFilter; });
-        if (resp) result = result.filter(function(t) { return t.id_responsable === resp.id; });
+        const resp = responsables.find(function (r) { return r.nombre === currentUserFilter; });
+        if (resp) result = result.filter(function (t) { return t.id_responsable === resp.id; });
     }
     return result;
 }
@@ -291,13 +291,13 @@ function renderTareasBoard() {
     const isSupervisor = user && user.role === 'supervisor';
     const isDirector = user && user.role === 'director';
 
-    cols.forEach(function(col) {
+    cols.forEach(function (col) {
         const container = document.getElementById('col-' + col);
         if (!container) return;
         container.innerHTML = '';
-        const filtered = tareasActuales.filter(function(t) { return t.estatus === col; });
+        const filtered = tareasActuales.filter(function (t) { return t.estatus === col; });
         document.getElementById('count-' + col).innerText = filtered.length;
-        filtered.forEach(function(tarea) {
+        filtered.forEach(function (tarea) {
             const card = createTareaCard(tarea, isSupervisor, isDirector);
             container.appendChild(card);
         });
@@ -309,13 +309,13 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
     card.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow';
     card.draggable = tarea.estatus !== 'completado';
     card.id = 'tarea-' + tarea.id;
-    card.ondragstart = function(e) { e.dataTransfer.setData('text/plain', tarea.id); };
+    card.ondragstart = function (e) { e.dataTransfer.setData('text/plain', tarea.id); };
 
-    const resp = responsables.find(function(r) { return r.id === tarea.id_responsable; });
+    const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
     const respNombre = resp ? resp.nombre : 'Sin asignar';
     const prioColor = getPriorityColor(tarea.prioridad);
     const prioIcon = getPriorityIcon(tarea.prioridad);
-    const commentCount = comentarios.filter(function(c) { return c.id_tarea === tarea.id; }).length;
+    const commentCount = comentarios.filter(function (c) { return c.id_tarea === tarea.id; }).length;
     const canEdit = isDirector || isSupervisor;
 
     const commentBtnHtml = '<button onclick="event.stopPropagation(); showTareaComments(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded relative" title="Comentarios"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' + (commentCount > 0 ? '<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">' + commentCount + '</span>' : '') + '</button>';
@@ -353,8 +353,8 @@ function renderTareasList() {
     const user = getCurrentUser();
     const canEdit = user && (user.role === 'director' || user.role === 'supervisor');
 
-    tareasActuales.forEach(function(tarea) {
-        const resp = responsables.find(function(r) { return r.id === tarea.id_responsable; });
+    tareasActuales.forEach(function (tarea) {
+        const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
         const respNombre = resp ? resp.nombre : 'Sin asignar';
         const prioColor = getPriorityColor(tarea.prioridad);
         const statusBadge = getStatusBadge(tarea.estatus);
@@ -388,15 +388,15 @@ function renderGantt() {
     gridContainer.innerHTML = '';
 
     const tareasActuales = getTareasActuales();
-    const validTareas = tareasActuales.filter(function(t) { return t.fecha_creacion && t.fecha_limite; });
+    const validTareas = tareasActuales.filter(function (t) { return t.fecha_creacion && t.fecha_limite; });
 
     if (validTareas.length === 0) {
         listContainer.innerHTML = '<div class="p-6 text-sm text-slate-400">Sin fechas definidas.</div>';
         return;
     }
 
-    let minDate = new Date(Math.min.apply(null, validTareas.map(function(t) { return new Date(t.fecha_creacion); })));
-    let maxDate = new Date(Math.max.apply(null, validTareas.map(function(t) { return new Date(t.fecha_limite); })));
+    let minDate = new Date(Math.min.apply(null, validTareas.map(function (t) { return new Date(t.fecha_creacion); })));
+    let maxDate = new Date(Math.max.apply(null, validTareas.map(function (t) { return new Date(t.fecha_limite); })));
     minDate.setDate(minDate.getDate() - 3);
     maxDate.setDate(maxDate.getDate() + 10);
 
@@ -426,13 +426,13 @@ function renderGantt() {
     const ROW_HEIGHT = 48;
     const barColors = { pendiente: 'bg-slate-400', en_curso: 'bg-blue-500', en_revision: 'bg-amber-500', completado: 'bg-emerald-500' };
 
-    validTareas.forEach(function(tarea, index) {
-        const resp = responsables.find(function(r) { return r.id === tarea.id_responsable; });
+    validTareas.forEach(function (tarea, index) {
+        const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
         const listItem = document.createElement('div');
         listItem.className = 'h-12 border-b border-slate-100 flex flex-col justify-center px-4 hover:bg-slate-50 cursor-pointer';
         const detailShort = (tarea.detalles || 'Sin detalles').substring(0, 30);
         listItem.innerHTML = '<span class="font-bold text-slate-700 text-xs truncate">' + detailShort + '...</span><span class="text-[9px] text-slate-400 font-bold uppercase">' + (resp ? resp.nombre : 'Sin asignar') + '</span>';
-        listItem.onclick = function() { openTareaModal(tarea.id); };
+        listItem.onclick = function () { openTareaModal(tarea.id); };
         listContainer.appendChild(listItem);
 
         const start = new Date(tarea.fecha_creacion);
@@ -448,7 +448,7 @@ function renderGantt() {
         bar.style.left = left + 'px';
         bar.style.width = Math.max(width, 30) + 'px';
         bar.innerText = (tarea.detalles || '').substring(0, 20);
-        bar.onclick = function() { openTareaModal(tarea.id); };
+        bar.onclick = function () { openTareaModal(tarea.id); };
         barsContainer.appendChild(bar);
     });
 
@@ -459,7 +459,7 @@ function renderGantt() {
 // SWITCH VIEW
 // ============================================
 function switchView(view) {
-    ['board', 'list', 'gantt'].forEach(function(v) {
+    ['board', 'list', 'gantt'].forEach(function (v) {
         document.getElementById('view-' + v).classList.add('hidden');
         document.getElementById('btn-' + v).className = 'view-btn px-6 py-2 rounded-lg font-medium transition-all text-slate-600 hover:text-slate-900';
     });
@@ -486,7 +486,7 @@ function dropTask(e) {
     const col = e.currentTarget;
     col.classList.remove('drag-over');
     const tareaId = e.dataTransfer.getData('text/plain');
-    const tarea = tareas.find(function(t) { return t.id === tareaId; });
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
     const colId = col.id.replace('col-', '');
     if (colId === tarea.estatus) return;
@@ -502,7 +502,7 @@ function dropTask(e) {
 // CAMBIO RÁPIDO DE ESTADO
 // ============================================
 async function quickChangeEstatus(tareaId, nuevoEstatus) {
-    const tarea = tareas.find(function(t) { return t.id === tareaId; });
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
     tarea.estatus = nuevoEstatus;
     renderTareasBoard();
@@ -520,7 +520,7 @@ function openProyectoModal(id) {
     const btnDelete = document.getElementById('btn-delete-proyecto');
     form.reset();
     if (id) {
-        const p = proyectos.find(function(x) { return x.id === id; });
+        const p = proyectos.find(function (x) { return x.id === id; });
         if (!p) return;
         title.innerText = 'Editar Proyecto';
         document.getElementById('proyectoId').value = p.id;
@@ -552,7 +552,7 @@ async function saveProyecto(e) {
     showLoading(true);
     try {
         if (id) {
-            const idx = proyectos.findIndex(function(p) { return p.id === id; });
+            const idx = proyectos.findIndex(function (p) { return p.id === id; });
             proyectos[idx] = Object.assign({}, proyectos[idx], data);
             await postToBackend('proyecto_update', data);
         } else {
@@ -570,7 +570,7 @@ async function saveProyecto(e) {
 async function deleteProyecto() {
     const id = document.getElementById('proyectoId').value;
     if (!id || !confirm('\u00BFEliminar este proyecto y todos sus subproyectos?')) return;
-    proyectos = proyectos.filter(function(p) { return p.id !== id; });
+    proyectos = proyectos.filter(function (p) { return p.id !== id; });
     closeProyectoModal();
     renderProyectos();
     await postToBackend('proyecto_delete', { id: id });
@@ -586,7 +586,7 @@ function openSubproyectoModal(id) {
     const btnDelete = document.getElementById('btn-delete-subproyecto');
     form.reset();
     if (id) {
-        const s = subproyectos.find(function(x) { return x.id === id; });
+        const s = subproyectos.find(function (x) { return x.id === id; });
         if (!s) return;
         title.innerText = 'Editar Subproyecto';
         document.getElementById('subproyectoId').value = s.id;
@@ -621,7 +621,7 @@ async function saveSubproyecto(e) {
     showLoading(true);
     try {
         if (id) {
-            const idx = subproyectos.findIndex(function(s) { return s.id === id; });
+            const idx = subproyectos.findIndex(function (s) { return s.id === id; });
             subproyectos[idx] = Object.assign({}, subproyectos[idx], data);
             await postToBackend('subproyecto_update', data);
         } else {
@@ -638,7 +638,7 @@ async function saveSubproyecto(e) {
 async function deleteSubproyecto() {
     const id = document.getElementById('subproyectoId').value;
     if (!id || !confirm('\u00BFEliminar este subproyecto y todas sus tareas?')) return;
-    subproyectos = subproyectos.filter(function(s) { return s.id !== id; });
+    subproyectos = subproyectos.filter(function (s) { return s.id !== id; });
     closeSubproyectoModal();
     renderSubproyectos();
     await postToBackend('subproyecto_delete', { id: id });
@@ -651,7 +651,7 @@ function updateResponsableSelect() {
     const select = document.getElementById('tareaResponsable');
     if (!select) return;
     select.innerHTML = '<option value="">Sin asignar</option>';
-    responsables.forEach(function(r) {
+    responsables.forEach(function (r) {
         select.innerHTML += '<option value="' + r.id + '">' + r.nombre + ' (' + (r.rol || '') + ')</option>';
     });
 }
@@ -670,7 +670,7 @@ function openTareaModal(id) {
     statusSelect.innerHTML = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisi\u00F3n</option>' + (isPrivileged ? '<option value="completado">Completado</option>' : '');
 
     if (id) {
-        const t = tareas.find(function(x) { return x.id === id; });
+        const t = tareas.find(function (x) { return x.id === id; });
         if (!t) return;
         title.innerText = 'Editar Tarea';
         document.getElementById('tareaId').value = t.id;
@@ -695,20 +695,54 @@ function closeTareaModal() {
 async function saveTarea(e) {
     e.preventDefault();
     const id = document.getElementById('tareaId').value;
+
+    // Obtener datos del formulario
+    const id_responsable = document.getElementById('tareaResponsable').value;
+    const prioridad = document.getElementById('tareaPrioridad').value;
+    const estatus = document.getElementById('tareaEstatus').value;
+    const detalles = document.getElementById('tareaDetalles').value;
+
+    // Generar ID con el formato: idproyecto.idsubproyecto.idtarea.idresponsable.prioridad.estatus.detalles
+    let nuevoId;
+    if (id) {
+        // Si es edición, mantener el mismo ID
+        nuevoId = id;
+    } else {
+        // Generar timestamp único para la tarea
+        const timestamp = Date.now();
+
+        // Limpiar detalles para el ID (eliminar caracteres especiales y espacios)
+        const detallesClean = detalles
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '_')
+            .substring(0, 20); // Limitar a 20 caracteres
+
+        nuevoId = [
+            currentProyecto ? currentProyecto.id : 'sin_proyecto',
+            currentSubproyecto ? currentSubproyecto.id : 'sin_subproyecto',
+            timestamp,
+            id_responsable || 'sin_responsable',
+            prioridad || 'media',
+            estatus || 'pendiente',
+            detallesClean || 'sin_detalles'
+        ].join('.');
+    }
+
     const data = {
-        id: id || Date.now().toString(),
+        id: nuevoId,
         id_subproyecto: currentSubproyecto ? currentSubproyecto.id : null,
-        id_responsable: document.getElementById('tareaResponsable').value,
-        prioridad: document.getElementById('tareaPrioridad').value,
-        estatus: document.getElementById('tareaEstatus').value,
-        detalles: document.getElementById('tareaDetalles').value,
+        id_responsable: id_responsable,
+        prioridad: prioridad,
+        estatus: estatus,
+        detalles: detalles,
         adjuntos: [],
         fecha_limite: document.getElementById('tareaFechaLimite').value
     };
+
     showLoading(true);
     try {
         if (id) {
-            const idx = tareas.findIndex(function(t) { return t.id === id; });
+            const idx = tareas.findIndex(function (t) { return t.id === id; });
             tareas[idx] = Object.assign({}, tareas[idx], data);
             await postToBackend('tarea_update', data);
         } else {
@@ -726,7 +760,7 @@ async function saveTarea(e) {
 async function deleteTarea() {
     const id = document.getElementById('tareaId').value;
     if (!id || !confirm('\u00BFEliminar esta tarea?')) return;
-    tareas = tareas.filter(function(t) { return t.id !== id; });
+    tareas = tareas.filter(function (t) { return t.id !== id; });
     closeTareaModal();
     renderTareasBoard();
     renderTareasList();
@@ -737,9 +771,9 @@ async function deleteTarea() {
 // MODAL DE APROBACIÓN
 // ============================================
 function openAprobacionModal(tareaId) {
-    const tarea = tareas.find(function(t) { return t.id === tareaId; });
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
-    const resp = responsables.find(function(r) { return r.id === tarea.id_responsable; });
+    const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
     document.getElementById('aprobacionTareaId').value = tareaId;
     document.getElementById('aprobacionObservaciones').value = '';
     document.getElementById('aprobacion-tarea-info').innerHTML = '<p class="font-bold mb-1">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-xs text-slate-500">Responsable: ' + (resp ? resp.nombre : 'Sin asignar') + ' \u2022 Prioridad: ' + (tarea.prioridad || 'media') + '</p>';
@@ -757,7 +791,7 @@ async function aprobarTarea() {
     showLoading(true);
     try {
         await postToBackend('tarea_aprobar', { id_tarea: tareaId, id_supervisor: user ? user.id : '', observaciones: obs });
-        const tarea = tareas.find(function(t) { return t.id === tareaId; });
+        const tarea = tareas.find(function (t) { return t.id === tareaId; });
         if (tarea) tarea.estatus = 'completado';
         closeAprobacionModal();
         renderTareasBoard();
@@ -774,7 +808,7 @@ async function rechazarTarea() {
     showLoading(true);
     try {
         await postToBackend('tarea_rechazar', { id_tarea: tareaId, id_supervisor: user ? user.id : '', observaciones: obs });
-        const tarea = tareas.find(function(t) { return t.id === tareaId; });
+        const tarea = tareas.find(function (t) { return t.id === tareaId; });
         if (tarea) tarea.estatus = 'en_curso';
         closeAprobacionModal();
         renderTareasBoard();
@@ -788,16 +822,16 @@ async function rechazarTarea() {
 // COMENTARIOS
 // ============================================
 function showTareaComments(tareaId) {
-    const tarea = tareas.find(function(t) { return t.id === tareaId; });
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
-    const tareaComments = comentarios.filter(function(c) { return c.id_tarea === tareaId; });
+    const tareaComments = comentarios.filter(function (c) { return c.id_tarea === tareaId; });
     const modal = document.getElementById('comments-modal');
     document.getElementById('comments-modal-title').innerText = 'Comentarios: ' + (tarea.detalles || '').substring(0, 40);
 
     const commentsHtml = tareaComments.length === 0
         ? '<p class="text-center text-slate-400 py-4">No hay comentarios a\u00FAn</p>'
-        : tareaComments.map(function(c) {
-            const resp = responsables.find(function(r) { return r.id === c.id_responsable; });
+        : tareaComments.map(function (c) {
+            const resp = responsables.find(function (r) { return r.id === c.id_responsable; });
             return '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><div class="flex justify-between items-start mb-1"><span class="font-bold text-xs text-indigo-600">' + (resp ? resp.nombre : c.id_responsable) + '</span><span class="text-[10px] text-slate-400">' + (c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span></div><p class="text-sm text-slate-700">' + c.comentario + '</p></div>';
         }).join('');
 
@@ -809,7 +843,7 @@ async function addTareaComment(tareaId) {
     const text = document.getElementById('new-comment').value;
     if (!text.trim()) return;
     const currentUser = getCurrentUser();
-    const resp = responsables.find(function(r) { return r.id === (currentUser ? currentUser.id : ''); });
+    const resp = responsables.find(function (r) { return r.id === (currentUser ? currentUser.id : ''); });
     const commentData = {
         id: Date.now().toString(),
         id_tarea: tareaId,
@@ -838,7 +872,7 @@ function updateUserFilterSelect() {
     const select = document.getElementById('filterUser');
     if (!select) return;
     select.innerHTML = '<option value="">Todos</option>';
-    responsables.forEach(function(r) {
+    responsables.forEach(function (r) {
         select.innerHTML += '<option value="' + r.nombre + '" ' + (currentUserFilter === r.nombre ? 'selected' : '') + '>' + r.nombre + '</option>';
     });
 }
@@ -862,13 +896,13 @@ function clearFilter() {
 async function postToBackend(action, data) {
     if (!WEB_APP_URL) return;
     try {
+        console.log('Enviando a backend:', action, data.id);
         await fetch(WEB_APP_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: action, data: data })
         });
-        console.log('Backend action:', action);
     } catch (error) {
         console.error('Error en postToBackend:', error);
     }
@@ -880,7 +914,7 @@ async function postToBackend(action, data) {
 async function sendWhatsAppNotification(message) {
     if (!WHATSAPP_NUMBER) return;
     try {
-        fetch(WHATSAPP_BOT_URL + '?number=' + encodeURIComponent(WHATSAPP_NUMBER) + '&message=' + encodeURIComponent(message), { mode: 'no-cors' }).catch(function(){});
+        fetch(WHATSAPP_BOT_URL + '?number=' + encodeURIComponent(WHATSAPP_NUMBER) + '&message=' + encodeURIComponent(message), { mode: 'no-cors' }).catch(function () { });
     } catch (e) {
         console.error('Error WhatsApp:', e);
     }
@@ -927,3 +961,40 @@ document.addEventListener('keydown', function (e) {
         closeCommentsModal();
     }
 });
+
+// Función para parsear el ID de tarea y obtener sus componentes
+function parseTareaId(tareaId) {
+    if (!tareaId) return null;
+
+    const parts = tareaId.split('.');
+    if (parts.length >= 7) {
+        return {
+            idProyecto: parts[0],
+            idSubproyecto: parts[1],
+            idTarea: parts[2],
+            idResponsable: parts[3],
+            prioridad: parts[4],
+            estatus: parts[5],
+            detallesResumen: parts.slice(6).join('.')
+        };
+    }
+    return null;
+}
+
+// Ejemplo de uso (puedes llamarla desde la consola para debug)
+function debugTareaId(tareaId) {
+    const parsed = parseTareaId(tareaId);
+    console.log('ID parseado:', parsed);
+    return parsed;
+}
+
+// Función para verificar si un ID de tarea ya existe
+function tareaIdExists(id) {
+    return tareas.some(t => t.id === id);
+}
+
+// En saveTarea, después de generar el nuevoId, añade:
+if (!id && tareaIdExists(nuevoId)) {
+    // Si por alguna razón el ID ya existe, añadir un sufijo
+    nuevoId = nuevoId + '.' + Date.now();
+}
