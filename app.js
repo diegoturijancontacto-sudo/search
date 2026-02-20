@@ -136,12 +136,22 @@ function calculateDaysElapsed(startDate, status) {
 }
 
 // --- LÓGICA KANBAN ---
-function renderBoard() {
+function renderBoard(projectsToRender = null) {
+    const projectsToUse = projectsToRender || projects;
+    console.log("Renderizando board con", projectsToUse.length, "proyectos");
+
     const columns = ['curso', 'pausa', 'terminado'];
+
     columns.forEach(col => {
         const container = document.getElementById(col);
+        if (!container) {
+            console.error(`Columna ${col} no encontrada`);
+            return;
+        }
+
         container.innerHTML = '';
-        const filtered = projects.filter(p => p.status === col);
+        const filtered = projectsToUse.filter(p => p && p.status === col);
+
         document.getElementById(`count-${col}`).innerText = filtered.length;
 
         filtered.forEach(proj => {
@@ -149,13 +159,16 @@ function renderBoard() {
             card.className = 'project-card bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow';
             card.draggable = true;
             card.id = `card-${proj.id}`;
-            card.ondragstart = (e) => e.dataTransfer.setData('text/plain', proj.id);
+            card.ondragstart = (e) => {
+                e.dataTransfer.setData('text/plain', proj.id);
+            };
 
             const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
+            const commentCount = comments.filter(c => c.projectId == proj.id).length;
 
             card.innerHTML = `
                 <div class="flex justify-between items-start">
-                    <h4 class="font-bold text-slate-800 mb-1">${proj.name}</h4>
+                    <h4 class="font-bold text-slate-800 mb-1">${proj.name || 'Sin nombre'}</h4>
                     <div class="flex gap-1">
                         ${proj.notes ?
                     `<button onclick="event.stopPropagation(); showNotes('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-1.5 rounded-lg transition-colors" title="Ver notas">
@@ -163,12 +176,14 @@ function renderBoard() {
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
                                 </svg>
                             </button>` :
-                    `<span class="text-slate-300 p-1.5" title="Sin notas">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                                </svg>
-                            </span>`
+                    ''
                 }
+                        <button onclick="event.stopPropagation(); showProjectComments('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors relative" title="Comentarios">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                            </svg>
+                            ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">${commentCount}</span>` : ''}
+                        </button>
                         <button onclick="event.stopPropagation(); editProject('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors" title="Editar">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
@@ -176,7 +191,7 @@ function renderBoard() {
                         </button>
                     </div>
                 </div>
-                <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-tight">${proj.owner}</p>
+                <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-tight">${proj.owner || 'Sin responsable'}</p>
                 <div class="flex items-center justify-between">
                     <div class="flex items-center text-[10px] font-bold text-slate-500 bg-slate-50 p-1.5 rounded-md w-fit border border-slate-100">
                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -225,7 +240,6 @@ function drop(e) {
 // --- LÓGICA LISTA ---
 function renderList(projectsToRender = null) {
     const projectsToUse = projectsToRender || projects;
-    console.log("Renderizando lista con", projectsToUse.length, "proyectos");
 
     const container = document.getElementById('list-content');
     if (!container) return;
@@ -250,6 +264,7 @@ function renderList(projectsToRender = null) {
         }
 
         const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
+        const commentCount = comments.filter(c => c.projectId == proj.id).length;
 
         tr.innerHTML = `
             <td class="p-4">
@@ -272,6 +287,12 @@ function renderList(projectsToRender = null) {
                             </svg>
                         </button>` : ''
             }
+                    <button onclick="showProjectComments('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-2 rounded-lg transition-colors relative" title="Comentarios">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                        </svg>
+                        ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">${commentCount}</span>` : ''}
+                    </button>
                     <button onclick="editProject('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Editar</button>
                 </div>
             </td>
@@ -290,101 +311,6 @@ function changeZoom(direction) {
         ganttConfig.headerStep = 7;
     }
     renderGantt();
-}
-
-function renderGantt() {
-    const listContainer = document.getElementById('gantt-project-list');
-    const headerContainer = document.getElementById('gantt-header');
-    const barsContainer = document.getElementById('gantt-bars-area');
-    const gridContainer = document.getElementById('gantt-grid-lines');
-
-    listContainer.innerHTML = '';
-    headerContainer.innerHTML = '';
-    barsContainer.innerHTML = '';
-    gridContainer.innerHTML = '';
-
-    const validProjects = projects.filter(p => p.start && p.end);
-    if (validProjects.length === 0) {
-        listContainer.innerHTML = '<div class="p-6 text-sm text-slate-400">Sin fechas definidas.</div>';
-        return;
-    }
-
-    // Cálculo de límites temporales
-    let minDate = new Date(Math.min(...validProjects.map(p => new Date(p.start))));
-    let maxDate = new Date(Math.max(...validProjects.map(p => new Date(p.end))));
-    minDate.setDate(minDate.getDate() - 5);
-    maxDate.setDate(maxDate.getDate() + 15);
-
-    const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24));
-
-    // Render de Cabecera y Grid
-    for (let i = 0; i <= totalDays; i++) {
-        const currentDate = new Date(minDate);
-        currentDate.setDate(minDate.getDate() + i);
-        const leftPos = i * ganttConfig.pxPerDay;
-
-        const line = document.createElement('div');
-        line.className = 'absolute top-0 bottom-0 border-r border-slate-100';
-        line.style.left = `${leftPos}px`;
-        line.style.width = `${ganttConfig.pxPerDay}px`;
-        const dayNum = currentDate.getDay();
-        if (dayNum === 0 || dayNum === 6) line.classList.add('bg-slate-50/50');
-        gridContainer.appendChild(line);
-
-        if (i % ganttConfig.headerStep === 0) {
-            const dateCell = document.createElement('div');
-            dateCell.className = 'absolute top-0 h-full flex items-center justify-center text-[10px] text-slate-400 border-r border-slate-200 truncate px-1 uppercase font-bold';
-            dateCell.style.left = `${leftPos}px`;
-            dateCell.style.width = `${ganttConfig.pxPerDay * ganttConfig.headerStep}px`;
-            dateCell.innerText = currentDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-            headerContainer.appendChild(dateCell);
-        }
-    }
-
-    // Render de Barras
-    const ROW_HEIGHT = 48;
-    validProjects.forEach((proj, index) => {
-        // Lista lateral
-        const listItem = document.createElement('div');
-        listItem.className = 'h-12 border-b border-slate-100 flex flex-col justify-center px-4 hover:bg-slate-50 transition cursor-pointer';
-
-        const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
-
-        listItem.innerHTML = `
-                        <span class="font-bold text-slate-700 text-xs truncate">${proj.name}</span>
-                        <span class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter flex items-center gap-1">
-                            ${proj.owner} • ${daysElapsed} días
-                        </span>
-                    `;
-        listItem.onclick = () => editProject(proj.id);
-        listContainer.appendChild(listItem);
-
-        // Cálculo de barra
-        const start = new Date(proj.start);
-        const end = new Date(proj.end);
-        const left = ((start - minDate) / (1000 * 60 * 60 * 24)) * ganttConfig.pxPerDay;
-        const duration = ((end - start) / (1000 * 60 * 60 * 24)) + 1;
-        const width = duration * ganttConfig.pxPerDay;
-
-        let barColor = 'bg-blue-500 shadow-blue-100';
-        if (proj.status === 'pausa') barColor = 'bg-amber-500 shadow-amber-100';
-        if (proj.status === 'terminado') barColor = 'bg-emerald-500 shadow-emerald-100';
-
-        const bar = document.createElement('div');
-        bar.className = `absolute h-6 rounded-md shadow-sm text-[10px] text-white flex items-center px-2 overflow-hidden whitespace-nowrap cursor-pointer hover:brightness-110 transition z-10 font-bold ${barColor}`;
-        bar.style.top = `${(index * ROW_HEIGHT) + 12}px`;
-        bar.style.left = `${left}px`;
-        bar.style.width = `${width}px`;
-        bar.innerText = `${proj.name} (${daysElapsed} días)`;
-        bar.onclick = () => editProject(proj.id);
-        barsContainer.appendChild(bar);
-
-        const rowLine = document.createElement('div');
-        rowLine.className = 'absolute w-full border-b border-slate-100 pointer-events-none';
-        rowLine.style.top = `${(index + 1) * ROW_HEIGHT}px`;
-        barsContainer.appendChild(rowLine);
-    });
-    barsContainer.style.height = `${validProjects.length * ROW_HEIGHT}px`;
 }
 
 // Sincronización scroll Gantt
@@ -831,7 +757,6 @@ function renderBoard(projectsToRender = null) {
 
         container.innerHTML = '';
         const filtered = projectsToUse.filter(p => p && p.status === col);
-        console.log(`Proyectos en ${col}:`, filtered.length);
 
         document.getElementById(`count-${col}`).innerText = filtered.length;
 
@@ -845,6 +770,7 @@ function renderBoard(projectsToRender = null) {
             };
 
             const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
+            const commentCount = comments.filter(c => c.projectId == proj.id).length;
 
             card.innerHTML = `
                 <div class="flex justify-between items-start">
@@ -858,6 +784,12 @@ function renderBoard(projectsToRender = null) {
                             </button>` :
                     ''
                 }
+                        <button onclick="event.stopPropagation(); showProjectComments('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors relative" title="Comentarios">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                            </svg>
+                            ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">${commentCount}</span>` : ''}
+                        </button>
                         <button onclick="event.stopPropagation(); editProject('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors" title="Editar">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
@@ -881,7 +813,6 @@ function renderBoard(projectsToRender = null) {
 
 function renderGantt(projectsToRender = null) {
     const projectsToUse = projectsToRender || projects;
-    console.log("Renderizando Gantt con", projectsToUse.length, "proyectos");
 
     const listContainer = document.getElementById('gantt-project-list');
     const headerContainer = document.getElementById('gantt-header');
@@ -899,7 +830,6 @@ function renderGantt(projectsToRender = null) {
     gridContainer.innerHTML = '';
 
     const validProjects = projectsToUse.filter(p => p && p.start && p.end);
-    console.log("Proyectos con fechas válidas:", validProjects.length);
 
     if (validProjects.length === 0) {
         listContainer.innerHTML = '<div class="p-6 text-sm text-slate-400">Sin fechas definidas.</div>';
@@ -946,9 +876,13 @@ function renderGantt(projectsToRender = null) {
         listItem.className = 'h-12 border-b border-slate-100 flex flex-col justify-center px-4 hover:bg-slate-50 transition cursor-pointer';
 
         const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
+        const commentCount = comments.filter(c => c.projectId == proj.id).length;
 
         listItem.innerHTML = `
-            <span class="font-bold text-slate-700 text-xs truncate">${proj.name || 'Sin nombre'}</span>
+            <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-700 text-xs truncate">${proj.name || 'Sin nombre'}</span>
+                ${commentCount > 0 ? '<span class="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 rounded-full">💬</span>' : ''}
+            </div>
             <span class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter flex items-center gap-1">
                 ${proj.owner || 'Sin responsable'} • ${daysElapsed} días
             </span>
@@ -972,7 +906,7 @@ function renderGantt(projectsToRender = null) {
         bar.style.top = `${(index * ROW_HEIGHT) + 12}px`;
         bar.style.left = `${left}px`;
         bar.style.width = `${width}px`;
-        bar.innerText = `${proj.name} (${daysElapsed} días)`;
+        bar.innerText = `${proj.name} (${daysElapsed} días)${commentCount > 0 ? ' 💬' : ''}`;
         bar.onclick = () => editProject(proj.id);
         barsContainer.appendChild(bar);
 
@@ -1039,9 +973,284 @@ async function refreshData() {
     }
 }
 
-// Agrega esto temporalmente después de refreshData
-setTimeout(() => {
-    console.log('Estado actual:');
-    console.log('- Proyectos:', projects);
-    console.log('- Usuarios:', availableUsers);
-}, 2000);
+// ============================================
+// SISTEMA DE SESIÓN DE USUARIO
+// ============================================
+
+// Verificar usuario al cargar la página
+document.addEventListener('DOMContentLoaded', function () {
+    checkCurrentUser();
+    refreshData();
+});
+
+function checkCurrentUser() {
+    const userJson = sessionStorage.getItem('currentUser');
+    const display = document.getElementById('current-user-display');
+
+    if (!userJson) {
+        // Redirigir al login si no hay usuario
+        window.location.href = 'login.html';
+        return;
+    }
+
+    const user = JSON.parse(userJson);
+    display.innerText = `👤 ${user.name} (${user.role})`;
+}
+
+function logout() {
+    sessionStorage.removeItem('currentUser');
+    window.location.href = 'login.html';
+}
+
+// Obtener usuario actual
+function getCurrentUser() {
+    const userJson = sessionStorage.getItem('currentUser');
+    return userJson ? JSON.parse(userJson) : null;
+}
+
+// ============================================
+// SISTEMA DE COMENTARIOS
+// ============================================
+
+let comments = [];
+
+// Cargar comentarios en refreshData
+async function refreshData() {
+    if (!WEB_APP_URL) {
+        console.warn("Falta WEB_APP_URL. Los cambios no se guardarán en Google Sheets.");
+        return;
+    }
+    showLoading(true);
+    try {
+        const response = await fetch(WEB_APP_URL);
+        const responseText = await response.text();
+
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            console.error("Error parsing JSON:", e);
+            return;
+        }
+
+        if (data.error) {
+            console.error("Error from Apps Script:", data.error);
+            alert("Error del servidor: " + data.error);
+            return;
+        }
+
+        projects = data.projects || [];
+        availableUsers = data.users || [];
+        comments = data.comments || [];
+
+        console.log('Proyectos cargados:', projects.length);
+        console.log('Usuarios cargados:', availableUsers.length);
+        console.log('Comentarios cargados:', comments.length);
+
+        if (projects.length === 0) {
+            console.warn("No se encontraron proyectos. Verifica la estructura de la hoja de cálculo.");
+        }
+
+        updateUserSelect();
+        updateMentions();
+        renderAll();
+    } catch (error) {
+        console.error("Error al cargar datos:", error);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Función para mostrar comentarios de un proyecto
+function showProjectComments(projectId) {
+    const project = projects.find(p => p.id == projectId);
+    if (!project) return;
+
+    const projectComments = comments.filter(c => c.projectId == projectId);
+    const currentUser = getCurrentUser();
+
+    const modal = document.getElementById('comments-modal');
+    const title = document.getElementById('comments-modal-title');
+    const content = document.getElementById('comments-modal-content');
+
+    title.innerText = `Comentarios: ${project.name}`;
+
+    content.innerHTML = `
+        <div class="space-y-4">
+            <!-- Lista de comentarios -->
+            <div id="comments-list" class="space-y-3 max-h-60 overflow-y-auto p-2">
+                ${projectComments.length === 0 ?
+            '<p class="text-center text-slate-400 py-4">No hay comentarios aún</p>' :
+            projectComments.map(c => `
+                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="font-bold text-xs text-indigo-600">${c.user}</span>
+                                <span class="text-[10px] text-slate-400">${new Date(c.date).toLocaleString()}</span>
+                            </div>
+                            <p class="text-sm text-slate-700">${c.comment}</p>
+                        </div>
+                    `).join('')
+        }
+            </div>
+            
+            <!-- Nuevo comentario -->
+            <div class="border-t border-slate-200 pt-4">
+                <textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm" placeholder="Escribe tu comentario..."></textarea>
+                <div class="flex justify-end mt-2">
+                    <button onclick="addComment('${projectId}')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
+                        Enviar comentario
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+}
+
+// Añadir comentario
+// Función para añadir comentarios
+async function addComment(projectId) {
+    const commentText = document.getElementById('new-comment').value;
+    if (!commentText.trim()) return;
+
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+        alert('Debes iniciar sesión para comentar');
+        return;
+    }
+
+    const commentData = {
+        id: Date.now().toString(),
+        projectId: projectId,
+        user: currentUser.name,
+        comment: commentText,
+        date: new Date().toISOString()
+    };
+
+    showLoading(true);
+    try {
+        // Usar mode: 'no-cors' para evitar problemas de CORS
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors', // <-- AÑADIR ESTO
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action: 'comment_add', data: commentData })
+        });
+
+        // Añadir el comentario localmente aunque la respuesta no se pueda leer
+        comments.push(commentData);
+
+        // Actualizar las vistas para mostrar el nuevo contador
+        if (currentUserFilter) {
+            filterProjects();
+        } else {
+            renderAll();
+        }
+
+        // Recargar el modal para mostrar el nuevo comentario
+        showProjectComments(projectId);
+
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        alert('Error al añadir comentario. Intenta de nuevo.');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Actualiza también sendToSheets
+async function sendToSheets(proj, action) {
+    if (!WEB_APP_URL) return;
+    showLoading(true);
+    try {
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors', // <-- AÑADIR ESTO
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action: action, data: proj })
+        });
+
+        // Como no podemos ver la respuesta, asumimos que funcionó
+        console.log('Solicitud enviada:', action);
+
+    } catch (error) {
+        console.error('Error en sendToSheets:', error);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Actualiza updateProjectInSheets
+async function updateProjectInSheets(proj, type) {
+    if (!WEB_APP_URL) return;
+    showLoading(true);
+    try {
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors', // <-- AÑADIR ESTO
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action: 'update', type: type, data: proj })
+        });
+
+        console.log('Actualización enviada:', proj.id);
+
+    } catch (error) {
+        console.error('Error en updateProjectInSheets:', error);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Actualiza deleteCurrentProject
+async function deleteCurrentProject() {
+    const id = document.getElementById('projId').value;
+    if (!id || !confirm('¿Estás seguro de eliminar este proyecto?')) return;
+
+    const projectToDelete = projects.find(p => p.id == id);
+
+    projects = projects.filter(p => p.id != id);
+    renderAll();
+    closeModal();
+
+    if (WEB_APP_URL) {
+        showLoading(true);
+        try {
+            await fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'no-cors', // <-- AÑADIR ESTO
+                body: JSON.stringify({ action: 'delete', data: { id } })
+            });
+
+            if (projectToDelete) {
+                const mensaje = formatProjectMessage('delete', projectToDelete);
+                sendWhatsAppNotification(mensaje);
+            }
+        } finally {
+            showLoading(false);
+        }
+    }
+}
+
+// Cerrar modal de comentarios
+function closeCommentsModal() {
+    document.getElementById('comments-modal').classList.add('hidden');
+}
+
+function closeCommentsModal() {
+    document.getElementById('comments-modal').classList.add('hidden');
+}
+
+// Cerrar con ESC
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        closeCommentsModal();
+        closeNotesModal();
+    }
+});
