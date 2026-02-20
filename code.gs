@@ -1,65 +1,61 @@
 /**
- * NUEVA ESTRUCTURA COMPLETA:
+ * ESTRUCTURA DE HOJAS:
  * 
- * HOJA 1: Proyectos (Creados por el Director)
- * - id_proyecto (PK)
- * - nombre
- * - descripcion
- * - fecha_creacion
- * - estado (activo/completado)
- * 
- * HOJA 2: Subproyectos (CON FECHAS)
- * - id_subproyecto (PK)
- * - id_proyecto (FK)
- * - nombre
- * - descripcion
- * - fecha_inicio
- * - fecha_fin_estimada
- * - fecha_creacion
- * 
- * HOJA 3: Tareas
- * - id_tarea (PK)
- * - id_subproyecto (FK)
- * - id_responsable (FK)
- * - prioridad (alta/media/baja)
- * - estatus (pendiente/en_curso/en_revision/completado)
- * - detalles
- * - adjuntos (URLs separadas por comas)
- * - fecha_creacion
- * - fecha_limite
- * 
- * HOJA 4: Responsables (Usuarios)
- * - id_responsable (PK)
- * - nombre
- * - departamento
- * - email
- * - rol (director/supervisor/responsable)
- * - fecha_registro
- * 
- * HOJA 5: Comentarios (por tarea)
- * - id_comentario (PK)
- * - id_tarea (FK)
- * - id_responsable (FK)
- * - comentario
- * - fecha
- * 
- * HOJA 6: Historial de Aprobaciones
- * - id_aprobacion (PK)
- * - id_tarea (FK)
- * - id_supervisor (FK)
- * - estado_anterior
- * - estado_nuevo
- * - fecha
- * - observaciones
+ * HOJA 1: Proyectos
+ * HOJA 2: Subproyectos  
+ * HOJA 3: Tareas (CON IDENTIFICADORES BASADOS EN LETRAS)
+ * HOJA 4: Responsables
+ * HOJA 5: Comentarios
+ * HOJA 6: HistorialAprobaciones
  */
+
+// Función para generar identificador a partir de un nombre
+function generarIdentificador(nombre) {
+  if (!nombre) return 'xxx';
+  
+  // Tomar primeras letras de cada palabra (máximo 3 caracteres)
+  const palabras = nombre.toLowerCase().split(' ');
+  let identificador = '';
+  
+  for (let i = 0; i < Math.min(palabras.length, 3); i++) {
+    if (palabras[i].length > 0) {
+      identificador += palabras[i][0];
+    }
+  }
+  
+  // Si el nombre es una sola palabra, tomar las primeras 3 letras
+  if (identificador.length === 1 && nombre.length >= 3) {
+    identificador = nombre.substring(0, 3).toLowerCase();
+  }
+  
+  // Asegurar que tenga al menos 1 carácter
+  return identificador || 'x';
+}
+
+// Función para generar el ID completo de una tarea
+function generarIdTarea(idProyecto, idSubproyecto, idResponsable, timestamp, idTareaNumerico) {
+  // Extraer el identificador del responsable (últimas 3 letras del ID o generarlo)
+  let respIdent = idResponsable;
+  if (idResponsable && idResponsable.includes('.')) {
+    const partes = idResponsable.split('.');
+    respIdent = partes[partes.length - 1] || 'xxx';
+  } else {
+    respIdent = idResponsable ? idResponsable.substring(0, 3) : 'xxx';
+  }
+  
+  return [
+    idProyecto,
+    idSubproyecto,
+    idTareaNumerico || timestamp,
+    respIdent
+  ].join('.');
+}
 
 function doGet() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
-    // ============================================
-    // OBTENER PROYECTOS (HOJA 1)
-    // ============================================
+    // Obtener proyectos (Hoja 1)
     const proyectosSheet = ss.getSheets()[0];
     const proyectosData = proyectosSheet.getDataRange().getValues();
     
@@ -68,12 +64,11 @@ function doGet() {
       nombre: row[1] || '',
       descripcion: row[2] || '',
       fecha_creacion: row[3] || '',
-      estado: row[4] || 'activo' // activo/completado
+      estado: row[4] || 'activo',
+      identificador: generarIdentificador(row[1] || '') // Identificador basado en nombre
     }));
     
-    // ============================================
-    // OBTENER SUBPROYECTOS (HOJA 2) - CON FECHAS
-    // ============================================
+    // Obtener subproyectos (Hoja 2)
     const subproyectosSheet = ss.getSheets()[1];
     const subproyectosData = subproyectosSheet.getDataRange().getValues();
     
@@ -82,38 +77,43 @@ function doGet() {
       id_proyecto: row[1]?.toString() || '',
       nombre: row[2] || '',
       descripcion: row[3] || '',
-      fecha_inicio: row[4] ? new Date(row[4]).toISOString().split('T')[0] : '', // NUEVA
-      fecha_fin_estimada: row[5] ? new Date(row[5]).toISOString().split('T')[0] : '', // NUEVA
-      fecha_creacion: row[6] || ''
+      fecha_inicio: row[4] ? new Date(row[4]).toISOString().split('T')[0] : '',
+      fecha_fin_estimada: row[5] ? new Date(row[5]).toISOString().split('T')[0] : '',
+      fecha_creacion: row[6] || '',
+      identificador: generarIdentificador(row[2] || '') // Identificador basado en nombre
     }));
     
-    // ============================================
-    // OBTENER TAREAS (HOJA 3)
-    // ============================================
+    // Obtener tareas (Hoja 3)
     const tareasSheet = ss.getSheets()[2];
     const tareasData = tareasSheet.getDataRange().getValues();
     
-    const tareas = tareasData.slice(1).map(row => ({
-      id: row[0]?.toString() || '',
-      id_subproyecto: row[1]?.toString() || '',
-      id_responsable: row[2]?.toString() || '',
-      prioridad: row[3] || 'media',
-      estatus: row[4] || 'pendiente',
-      detalles: row[5] || '',
-      adjuntos: row[6] ? row[6].split(',').filter(a => a) : [],
-      fecha_creacion: row[7] ? new Date(row[7]).toISOString().split('T')[0] : '',
-      fecha_limite: row[8] ? new Date(row[8]).toISOString().split('T')[0] : ''
-    }));
+    const tareas = tareasData.slice(1).map(row => {
+      const idCompleto = row[0]?.toString() || '';
+      const partes = idCompleto.split('.');
+      
+      return {
+        id: idCompleto,
+        id_proyecto: partes[0] || '',
+        id_subproyecto: partes[1] || '',
+        id_tarea_numerico: partes[2] || '',
+        id_responsable_ident: partes[3] || '',
+        id_responsable: row[2]?.toString() || '',
+        prioridad: row[3] || 'media',
+        estatus: row[4] || 'pendiente',
+        detalles: row[5] || '',
+        adjuntos: row[6] ? row[6].split(',').filter(a => a) : [],
+        fecha_creacion: row[7] ? new Date(row[7]).toISOString().split('T')[0] : '',
+        fecha_limite: row[8] ? new Date(row[8]).toISOString().split('T')[0] : ''
+      };
+    });
     
-    // ============================================
-    // OBTENER RESPONSABLES (HOJA 4)
-    // ============================================
+    // Obtener responsables (Hoja 4)
     let responsables = [];
     try {
       const responsablesSheet = ss.getSheetByName('Responsables');
       if (!responsablesSheet) {
         const newSheet = ss.insertSheet('Responsables');
-        newSheet.appendRow(['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro']);
+        newSheet.appendRow(['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro', 'Identificador']);
       }
       
       const responsablesSheet2 = ss.getSheetByName('Responsables');
@@ -124,15 +124,14 @@ function doGet() {
         departamento: row[2] || '',
         email: row[3] || '',
         rol: row[4] || 'responsable',
-        fecha_registro: row[5] || ''
+        fecha_registro: row[5] || '',
+        identificador: row[6] || generarIdentificador(row[1] || '')
       }));
     } catch (e) {
       console.log('Error cargando responsables:', e);
     }
     
-    // ============================================
-    // OBTENER COMENTARIOS (HOJA 5)
-    // ============================================
+    // Obtener comentarios (Hoja 5)
     let comentarios = [];
     try {
       const comentariosSheet = ss.getSheetByName('Comentarios');
@@ -154,9 +153,7 @@ function doGet() {
       console.log('Error cargando comentarios:', e);
     }
     
-    // ============================================
-    // OBTENER HISTORIAL DE APROBACIONES (HOJA 6)
-    // ============================================
+    // Obtener historial de aprobaciones (Hoja 6)
     let historialAprobaciones = [];
     try {
       const historialSheet = ss.getSheetByName('HistorialAprobaciones');
@@ -180,9 +177,6 @@ function doGet() {
       console.log('Error cargando historial:', e);
     }
     
-    // ============================================
-    // DEVOLVER TODOS LOS DATOS
-    // ============================================
     return ContentService.createTextOutput(JSON.stringify({
       proyectos: proyectos,
       subproyectos: subproyectos,
@@ -212,9 +206,7 @@ function doPost(e) {
     const action = body.action;
     const data = body.data;
     
-    // ============================================
-    // ACCIONES DE PROYECTOS
-    // ============================================
+    // Acciones de proyectos
     if (action === 'proyecto_add' || action === 'proyecto_update' || action === 'proyecto_delete') {
       const sheet = ss.getSheets()[0];
       
@@ -249,9 +241,7 @@ function doPost(e) {
       }
     }
     
-    // ============================================
-    // ACCIONES DE SUBPROYECTOS - CON FECHAS
-    // ============================================
+    // Acciones de subproyectos
     else if (action === 'subproyecto_add' || action === 'subproyecto_update' || action === 'subproyecto_delete') {
       const sheet = ss.getSheets()[1];
       
@@ -261,8 +251,8 @@ function doPost(e) {
           data.id_proyecto,
           data.nombre,
           data.descripcion || '',
-          data.fecha_inicio || '', // NUEVA
-          data.fecha_fin_estimada || '', // NUEVA
+          data.fecha_inicio || '',
+          data.fecha_fin_estimada || '',
           new Date().toISOString()
         ]);
       }
@@ -273,8 +263,8 @@ function doPost(e) {
             sheet.getRange(i + 1, 2).setValue(data.id_proyecto);
             sheet.getRange(i + 1, 3).setValue(data.nombre);
             sheet.getRange(i + 1, 4).setValue(data.descripcion || '');
-            sheet.getRange(i + 1, 5).setValue(data.fecha_inicio || ''); // NUEVA
-            sheet.getRange(i + 1, 6).setValue(data.fecha_fin_estimada || ''); // NUEVA
+            sheet.getRange(i + 1, 5).setValue(data.fecha_inicio || '');
+            sheet.getRange(i + 1, 6).setValue(data.fecha_fin_estimada || '');
             break;
           }
         }
@@ -290,15 +280,38 @@ function doPost(e) {
       }
     }
     
-    // ============================================
-    // ACCIONES DE TAREAS
-    // ============================================
+    // Acciones de tareas - AHORA CON GENERACIÓN DE IDENTIFICADOR
     else if (action === 'tarea_add' || action === 'tarea_update' || action === 'tarea_delete') {
       const sheet = ss.getSheets()[2];
       
       if (action === 'tarea_add') {
+        // Obtener el responsable para generar su identificador
+        let respIdent = 'xxx';
+        try {
+          const responsablesSheet = ss.getSheetByName('Responsables');
+          if (responsablesSheet) {
+            const rows = responsablesSheet.getDataRange().getValues();
+            for (let i = 1; i < rows.length; i++) {
+              if (rows[i][0].toString() === data.id_responsable) {
+                respIdent = rows[i][6] || generarIdentificador(rows[i][1] || '');
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          console.log('Error obteniendo identificador:', e);
+        }
+        
+        // Generar el ID completo: idproyecto.idsubproyecto.timestamp.identificador_responsable
+        const idCompleto = [
+          data.id_proyecto || data.id_subproyecto?.split('.')[0] || '0',
+          data.id_subproyecto || '0',
+          Date.now().toString().slice(-6), // Últimos 6 dígitos del timestamp
+          respIdent
+        ].join('.');
+        
         sheet.appendRow([
-          data.id,
+          idCompleto,
           data.id_subproyecto,
           data.id_responsable,
           data.prioridad || 'media',
@@ -335,24 +348,24 @@ function doPost(e) {
       }
     }
     
-    // ============================================
-    // ACCIONES DE RESPONSABLES
-    // ============================================
+    // Acciones de responsables - AHORA CON IDENTIFICADOR
     else if (action === 'responsable_add' || action === 'responsable_update' || action === 'responsable_delete') {
       let responsablesSheet = ss.getSheetByName('Responsables');
       if (!responsablesSheet) {
         responsablesSheet = ss.insertSheet('Responsables');
-        responsablesSheet.appendRow(['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro']);
+        responsablesSheet.appendRow(['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro', 'Identificador']);
       }
       
       if (action === 'responsable_add') {
+        const identificador = generarIdentificador(data.nombre);
         responsablesSheet.appendRow([
           data.id,
           data.nombre,
           data.departamento || '',
           data.email || '',
           data.rol || 'responsable',
-          new Date().toISOString()
+          new Date().toISOString(),
+          identificador
         ]);
       }
       else if (action === 'responsable_update') {
@@ -363,6 +376,7 @@ function doPost(e) {
             responsablesSheet.getRange(i + 1, 3).setValue(data.departamento || '');
             responsablesSheet.getRange(i + 1, 4).setValue(data.email || '');
             responsablesSheet.getRange(i + 1, 5).setValue(data.rol || 'responsable');
+            responsablesSheet.getRange(i + 1, 7).setValue(generarIdentificador(data.nombre));
             break;
           }
         }
@@ -378,9 +392,7 @@ function doPost(e) {
       }
     }
     
-    // ============================================
-    // ACCIONES DE COMENTARIOS
-    // ============================================
+    // Acciones de comentarios
     else if (action === 'comentario_add' || action === 'comentario_delete') {
       let comentariosSheet = ss.getSheetByName('Comentarios');
       if (!comentariosSheet) {
@@ -408,9 +420,7 @@ function doPost(e) {
       }
     }
     
-    // ============================================
-    // ACCIONES DE APROBACIÓN (CAMBIO DE ESTADO CON REVISIÓN)
-    // ============================================
+    // Acciones de aprobación
     else if (action === 'tarea_revisar' || action === 'tarea_aprobar' || action === 'tarea_rechazar') {
       const tareasSheet = ss.getSheets()[2];
       const rows = tareasSheet.getDataRange().getValues();
