@@ -894,13 +894,53 @@ function createProjectCard(proj, isParent = true) {
         }
             </div>
         </div>
+        
         <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-tight">${proj.owner || 'Sin responsable'}</p>
-        <div class="flex items-center justify-between">
-            <div class="flex items-center text-[10px] font-bold text-slate-500 bg-slate-50 p-1.5 rounded-md w-fit border border-slate-100">
-                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                ${daysElapsed} días
+        
+        <!-- Botones de acción rápida -->
+        <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+            <div class="flex gap-1">
+                ${proj.status === 'curso' ? `
+                    <button onclick="event.stopPropagation(); quickChangeStatus('${proj.id}', 'pausa')" class="text-xs bg-amber-100 text-amber-600 hover:bg-amber-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Pausar
+                    </button>
+                    <button onclick="event.stopPropagation(); quickChangeStatus('${proj.id}', 'terminado')" class="text-xs bg-emerald-100 text-emerald-600 hover:bg-emerald-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Terminar
+                    </button>
+                ` : proj.status === 'pausa' ? `
+                    <button onclick="event.stopPropagation(); quickChangeStatus('${proj.id}', 'curso')" class="text-xs bg-blue-100 text-blue-600 hover:bg-blue-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Reanudar
+                    </button>
+                    <button onclick="event.stopPropagation(); quickChangeStatus('${proj.id}', 'terminado')" class="text-xs bg-emerald-100 text-emerald-600 hover:bg-emerald-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Terminar
+                    </button>
+                ` : proj.status === 'terminado' ? `
+                    <span class="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md font-medium">✅ Completado</span>
+                ` : ''}
             </div>
-            ${proj.status === 'terminado' ? '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Completado</span>' : ''}
+            
+            <!-- Botón de notificar avance (solo para proyectos en curso) -->
+            ${proj.status === 'curso' ? `
+                <button onclick="event.stopPropagation(); openProgressModal('${proj.id}')" class="text-xs bg-indigo-100 text-indigo-600 hover:bg-indigo-200 px-2 py-1 rounded-md transition-colors font-medium flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                    </svg>
+                    Notificar avance
+                </button>
+            ` : ''}
         </div>
     `;
 
@@ -1439,3 +1479,184 @@ async function removeHierarchy(projectId) {
 
     await updateProjectInSheets(project, 'full_update');
 }
+
+// Función para cambio rápido de estado
+async function quickChangeStatus(projectId, newStatus) {
+    const project = projects.find(p => p.id == projectId);
+    if (!project) return;
+
+    const oldStatus = project.status;
+    project.status = newStatus;
+
+    if (newStatus === 'terminado' && oldStatus !== 'terminado') {
+        const today = new Date();
+        project.end = today.toISOString().split('T')[0];
+    }
+
+    if (newStatus === 'curso' && oldStatus === 'pausa') {
+        // Si se reanuda, mantener fecha de fin original
+        // No hacemos cambios en fechas
+    }
+
+    // Actualizar UI
+    if (currentUserFilter) {
+        filterProjects();
+    } else {
+        renderAll();
+    }
+
+    // Guardar en Google Sheets
+    await updateProjectInSheets(project, 'status_only');
+
+    // Notificación de cambio de estado
+    const actionMsg = newStatus === 'curso' ? 'reanudado' :
+        newStatus === 'pausa' ? 'pausado' : 'completado';
+
+    const message = `📊 *${project.name}* ha sido ${actionMsg}\n` +
+        `👤 Responsable: ${project.owner}\n` +
+        `📅 ${new Date().toLocaleString()}`;
+
+    sendWhatsAppNotification(message);
+}
+
+// Variables para el proyecto actual de notificación
+let currentProgressProject = null;
+
+// Abrir modal de notificación de avance
+function openProgressModal(projectId) {
+    const project = projects.find(p => p.id == projectId);
+    if (!project) return;
+
+    currentProgressProject = project;
+
+    const modal = document.getElementById('progress-modal');
+    const title = document.getElementById('progress-modal-title');
+    const content = document.getElementById('progress-modal-content');
+
+    title.innerText = `Notificar avance: ${project.name}`;
+
+    content.innerHTML = `
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="font-bold text-slate-800">${project.owner}</p>
+                    <p class="text-xs text-slate-500">Responsable</p>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-bold text-slate-700 mb-2">Mensaje de avance</label>
+                <textarea id="progress-message" rows="4" class="w-full px-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all resize-none" placeholder="Describe el avance realizado... (ej: 50% completado, módulo terminado, etc.)"></textarea>
+            </div>
+            
+            <div class="flex items-center gap-2 text-xs text-slate-500 mb-4 p-2 bg-white rounded-lg border border-slate-200">
+                <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>El mensaje se enviará al grupo de WhatsApp</span>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="closeProgressModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                    Cancelar
+                </button>
+                <button onclick="sendProgressNotification()" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                    </svg>
+                    Enviar notificación
+                </button>
+            </div>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+}
+
+// Cerrar modal de avance
+function closeProgressModal() {
+    document.getElementById('progress-modal').classList.add('hidden');
+    currentProgressProject = null;
+}
+
+// Enviar notificación de avance
+async function sendProgressNotification() {
+    const message = document.getElementById('progress-message').value;
+
+    if (!message.trim()) {
+        alert('Por favor escribe un mensaje de avance');
+        return;
+    }
+
+    if (!currentProgressProject) return;
+
+    const currentUser = getCurrentUser();
+    const project = currentProgressProject;
+
+    // Formatear mensaje de WhatsApp
+    const fechaActual = new Date().toLocaleString('es-ES', { timeZone: 'America/Asuncion' });
+
+    let whatsappMessage = `📢 *AVANCE DEL PROYECTO*\n`;
+    whatsappMessage += `━━━━━━━━━━━━━━━━\n`;
+    whatsappMessage += `📌 *${project.name}*\n`;
+    whatsappMessage += `👤 Responsable: ${project.owner}\n`;
+    whatsappMessage += `🗣 Reportado por: ${currentUser?.name || 'Sistema'}\n`;
+    whatsappMessage += `━━━━━━━━━━━━━━━━\n`;
+    whatsappMessage += `💬 *Mensaje:*\n${message}\n`;
+    whatsappMessage += `━━━━━━━━━━━━━━━━\n`;
+    whatsappMessage += `📅 ${fechaActual}\n`;
+    whatsappMessage += `🔗 Ver panel: ${PANEL_URL}`;
+
+    // Mostrar loading
+    showLoading(true);
+
+    try {
+        // Enviar notificación
+        await sendWhatsAppNotification(whatsappMessage);
+
+        // También guardar como comentario automático
+        const commentData = {
+            id: Date.now().toString(),
+            projectId: project.id,
+            user: currentUser?.name || 'Sistema',
+            comment: `📢 AVANCE: ${message}`,
+            date: new Date().toISOString()
+        };
+
+        // Guardar comentario en segundo plano
+        fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action: 'comment_add', data: commentData })
+        });
+
+        // Añadir comentario localmente
+        comments.push(commentData);
+
+        alert('✅ Notificación enviada correctamente');
+        closeProgressModal();
+
+    } catch (error) {
+        console.error('Error enviando notificación:', error);
+        alert('Error al enviar la notificación. Intenta de nuevo.');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Actualizar el event listener de ESC para incluir el nuevo modal
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        closeCommentsModal();
+        closeNotesModal();
+        closeProgressModal();
+    }
+});
