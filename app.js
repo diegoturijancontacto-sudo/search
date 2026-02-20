@@ -218,16 +218,34 @@ function drop(e) {
     e.preventDefault();
     const col = e.currentTarget;
     col.classList.remove('drag-over');
+
     const id = e.dataTransfer.getData('text/plain');
+    const type = e.dataTransfer.getData('type');
+
     const project = projects.find(p => p.id == id);
-    if (project && project.status !== col.id) {
+    if (!project) return;
+
+    // Obtener el elemento sobre el que se soltó
+    const targetCard = e.target.closest('.project-card');
+
+    if (targetCard && targetCard.id !== `card-${id}`) {
+        // Se soltó sobre otra tarjeta - convertir en subproyecto
+        const targetId = targetCard.id.replace('card-', '');
+        const targetProject = projects.find(p => p.id == targetId);
+
+        if (targetProject && targetProject.owner === project.owner) {
+            // Solo permitir subproyectos del mismo responsable
+            makeSubProject(id, targetId);
+        }
+    } else if (project.status !== col.id) {
+        // Se soltó en la columna - cambiar estado
         const oldStatus = project.status;
         project.status = col.id;
         if (col.id === 'terminado' && oldStatus !== 'terminado') {
             const today = new Date();
             project.end = today.toISOString().split('T')[0];
         }
-        // Actualizar manteniendo el filtro
+
         if (currentUserFilter) {
             filterProjects();
         } else {
@@ -355,7 +373,8 @@ function openModal(isEdit = false, proj = null) {
         document.getElementById('projName').value = proj.name;
         document.getElementById('projOwner').value = proj.owner;
         document.getElementById('projStatus').value = proj.status;
-        document.getElementById('projNotes').value = proj.notes || ''; // <-- AÑADIR ESTA LÍNEA
+        document.getElementById('projPriority').value = proj.priority || 'media'; // NUEVO
+        document.getElementById('projNotes').value = proj.notes || '';
 
         if (proj.status === 'terminado') {
             document.getElementById('days-field-container').classList.add('hidden');
@@ -373,10 +392,11 @@ function openModal(isEdit = false, proj = null) {
         title.innerText = "Nuevo Proyecto";
         document.getElementById('projId').value = "";
         document.getElementById('projStatus').value = "curso";
+        document.getElementById('projPriority').value = "media"; // NUEVO
         document.getElementById('days-field-container').classList.remove('hidden');
         document.getElementById('date-fields-container').classList.add('hidden');
         document.getElementById('projDays').value = "7";
-        document.getElementById('projNotes').value = ''; // <-- AÑADIR ESTA LÍNEA
+        document.getElementById('projNotes').value = '';
     }
     modal.classList.remove('hidden');
 }
@@ -394,18 +414,16 @@ function calculateEndDate(startDate, days) {
 async function saveProject(e) {
     e.preventDefault();
 
-    // Evitar doble clic
-    if (document.getElementById('btn-save').disabled) {
-        return;
-    }
+    if (document.getElementById('btn-save').disabled) return;
 
-    setLoading(true); // Activar estado de carga
+    setLoading(true);
 
     try {
         const id = document.getElementById('projId').value;
         const name = document.getElementById('projName').value;
         const owner = document.getElementById('projOwner').value;
         const status = document.getElementById('projStatus').value;
+        const priority = document.getElementById('projPriority').value; // NUEVO
         const notes = document.getElementById('projNotes').value;
 
         let start, end, days = null;
@@ -430,23 +448,23 @@ async function saveProject(e) {
             name,
             owner,
             status,
+            priority, // NUEVO
+            parentId: null, // NUEVO
             start,
             end,
             days: days,
             notes: notes
         };
 
-        const isNewProject = !id;
-
         if (id) {
             const idx = projects.findIndex(p => p.id == id);
+            // Mantener parentId existente
+            projData.parentId = projects[idx].parentId || null;
             projects[idx] = projData;
             await updateProjectInSheets(projData, 'full_update');
         } else {
             projects.push(projData);
             await sendToSheets(projData, 'add');
-
-            // Enviar notificación WhatsApp para nuevos proyectos
             const mensaje = formatProjectMessage('create', projData);
             sendWhatsAppNotification(mensaje);
         }
@@ -457,7 +475,7 @@ async function saveProject(e) {
         console.error('Error al guardar:', error);
         alert('Error al guardar el proyecto. Por favor intenta de nuevo.');
     } finally {
-        setLoading(false); // Desactivar estado de carga siempre
+        setLoading(false);
     }
 }
 
@@ -744,71 +762,149 @@ function filterProjects() {
 // Modificar las funciones de renderizado para aceptar proyectos filtrados
 function renderBoard(projectsToRender = null) {
     const projectsToUse = projectsToRender || projects;
-    console.log("Renderizando board con", projectsToUse.length, "proyectos");
+
+    // Organizar por responsable
+    const organizedByOwner = organizeProjectsByOwner(projectsToUse);
 
     const columns = ['curso', 'pausa', 'terminado'];
 
     columns.forEach(col => {
         const container = document.getElementById(col);
-        if (!container) {
-            console.error(`Columna ${col} no encontrada`);
-            return;
-        }
+        if (!container) return;
 
         container.innerHTML = '';
-        const filtered = projectsToUse.filter(p => p && p.status === col);
 
-        document.getElementById(`count-${col}`).innerText = filtered.length;
+        // Filtrar proyectos de esta columna
+        const columnProjects = projectsToUse.filter(p => p && p.status === col);
 
-        filtered.forEach(proj => {
-            const card = document.createElement('div');
-            card.className = 'project-card bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow';
-            card.draggable = true;
-            card.id = `card-${proj.id}`;
-            card.ondragstart = (e) => {
-                e.dataTransfer.setData('text/plain', proj.id);
-            };
+        // Organizar por responsable para esta columna
+        const ownerGroups = {};
+        columnProjects.forEach(p => {
+            if (!ownerGroups[p.owner]) {
+                ownerGroups[p.owner] = [];
+            }
+            ownerGroups[p.owner].push(p);
+        });
 
-            const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
-            const commentCount = comments.filter(c => c.projectId == proj.id).length;
+        // Mostrar conteo total
+        document.getElementById(`count-${col}`).innerText = columnProjects.length;
 
-            card.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <h4 class="font-bold text-slate-800 mb-1">${proj.name || 'Sin nombre'}</h4>
-                    <div class="flex gap-1">
-                        ${proj.notes ?
-                    `<button onclick="event.stopPropagation(); showNotes('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-1.5 rounded-lg transition-colors" title="Ver notas">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                                </svg>
-                            </button>` :
-                    ''
-                }
-                        <button onclick="event.stopPropagation(); showProjectComments('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors relative" title="Comentarios">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                            </svg>
-                            ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">${commentCount}</span>` : ''}
-                        </button>
-                        <button onclick="event.stopPropagation(); editProject('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors" title="Editar">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
-                            </svg>
-                        </button>
+        // Renderizar por grupo de responsable
+        Object.keys(ownerGroups).sort().forEach(owner => {
+            const ownerProjects = ownerGroups[owner];
+
+            // Separar padres e hijos
+            const parents = ownerProjects.filter(p => !p.parentId);
+            const children = ownerProjects.filter(p => p.parentId);
+
+            // Crear contenedor del grupo
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'mb-4';
+            groupDiv.innerHTML = `
+                <div class="flex items-center gap-2 mb-2 px-2">
+                    <div class="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold">
+                        ${owner.charAt(0).toUpperCase()}
                     </div>
+                    <h4 class="font-bold text-sm text-slate-600">${owner}</h4>
+                    <span class="ml-auto text-xs bg-slate-200 px-2 py-0.5 rounded-full">${ownerProjects.length}</span>
                 </div>
-                <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-tight">${proj.owner || 'Sin responsable'}</p>
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center text-[10px] font-bold text-slate-500 bg-slate-50 p-1.5 rounded-md w-fit border border-slate-100">
-                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        ${daysElapsed} días
-                    </div>
-                    ${proj.status === 'terminado' ? '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Completado</span>' : ''}
+                <div class="space-y-2" id="group-${col}-${owner.replace(/\s/g, '')}">
                 </div>
             `;
-            container.appendChild(card);
+
+            container.appendChild(groupDiv);
+            const groupContainer = groupDiv.querySelector(`[id^="group-"]`);
+
+            // Renderizar proyectos padre
+            parents.sort((a, b) => {
+                const priorityOrder = { 'alta': 0, 'media': 1, 'baja': 2 };
+                return (priorityOrder[a.priority] || 1) - (priorityOrder[b.priority] || 1);
+            }).forEach(parent => {
+                const parentCard = createProjectCard(parent, true);
+                groupContainer.appendChild(parentCard);
+
+                // Renderizar hijos
+                const projectChildren = children.filter(c => c.parentId === parent.id);
+                projectChildren.sort((a, b) => a.name.localeCompare(b.name)).forEach(child => {
+                    const childCard = createProjectCard(child, false);
+                    childCard.classList.add('ml-6', 'border-l-4', 'border-indigo-200', 'bg-indigo-50/30');
+                    groupContainer.appendChild(childCard);
+                });
+            });
         });
     });
+}
+
+// Función auxiliar para crear tarjetas de proyecto
+function createProjectCard(proj, isParent = true) {
+    const card = document.createElement('div');
+    card.className = `project-card bg-white p-4 rounded-xl shadow-sm border ${isParent ? 'border-slate-200' : 'border-indigo-100'} mb-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow`;
+    card.draggable = true;
+    card.id = `card-${proj.id}`;
+    card.setAttribute('data-owner', proj.owner);
+    card.setAttribute('data-priority', proj.priority);
+    card.setAttribute('data-parent', proj.parentId || '');
+
+    card.ondragstart = (e) => {
+        e.dataTransfer.setData('text/plain', proj.id);
+        e.dataTransfer.setData('type', 'project');
+    };
+
+    const daysElapsed = calculateDaysElapsed(proj.start, proj.status);
+    const commentCount = comments.filter(c => c.projectId == proj.id).length;
+    const priorityColor = getPriorityColor(proj.priority);
+    const priorityIcon = getPriorityIcon(proj.priority);
+
+    card.innerHTML = `
+        <div class="flex justify-between items-start">
+            <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-xs font-bold px-2 py-0.5 rounded-full ${priorityColor}">
+                        ${priorityIcon} ${proj.priority}
+                    </span>
+                    ${!isParent ? '<span class="text-xs text-indigo-400">⊢ subproyecto</span>' : ''}
+                </div>
+                <h4 class="font-bold text-slate-800 mb-1">${proj.name || 'Sin nombre'}</h4>
+            </div>
+            <div class="flex gap-1">
+                ${proj.notes ?
+            `<button onclick="event.stopPropagation(); showNotes('${proj.id}')" class="text-indigo-500 hover:bg-indigo-50 p-1.5 rounded-lg transition-colors" title="Ver notas">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                        </svg>
+                    </button>` : ''
+        }
+                <button onclick="event.stopPropagation(); showProjectComments('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors relative" title="Comentarios">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                    ${commentCount > 0 ? `<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">${commentCount}</span>` : ''}
+                </button>
+                <button onclick="event.stopPropagation(); editProject('${proj.id}')" class="text-slate-400 hover:bg-slate-100 p-1.5 rounded-lg transition-colors" title="Editar">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                    </svg>
+                </button>
+                ${proj.parentId ?
+            `<button onclick="event.stopPropagation(); removeHierarchy('${proj.id}')" class="text-amber-500 hover:bg-amber-50 p-1.5 rounded-lg transition-colors" title="Convertir en proyecto independiente">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </button>` : ''
+        }
+            </div>
+        </div>
+        <p class="text-xs text-slate-400 mb-3 font-medium uppercase tracking-tight">${proj.owner || 'Sin responsable'}</p>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center text-[10px] font-bold text-slate-500 bg-slate-50 p-1.5 rounded-md w-fit border border-slate-100">
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                ${daysElapsed} días
+            </div>
+            ${proj.status === 'terminado' ? '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Completado</span>' : ''}
+        </div>
+    `;
+
+    return card;
 }
 
 function renderGantt(projectsToRender = null) {
@@ -1254,3 +1350,92 @@ document.addEventListener('keydown', function (e) {
         closeNotesModal();
     }
 });
+
+// ============================================
+// SISTEMA DE PRIORIDADES Y SUBPROYECTOS
+// ============================================
+
+// Función para obtener el color de prioridad
+function getPriorityColor(priority) {
+    switch (priority) {
+        case 'alta': return 'bg-red-100 text-red-600 border-red-200';
+        case 'media': return 'bg-yellow-100 text-yellow-600 border-yellow-200';
+        case 'baja': return 'bg-green-100 text-green-600 border-green-200';
+        default: return 'bg-gray-100 text-gray-600 border-gray-200';
+    }
+}
+
+// Función para obtener el icono de prioridad
+function getPriorityIcon(priority) {
+    switch (priority) {
+        case 'alta': return '🔴';
+        case 'media': return '🟡';
+        case 'baja': return '🟢';
+        default: return '⚪';
+    }
+}
+
+// Función para organizar proyectos por responsable y jerarquía
+function organizeProjectsByOwner(projectsList) {
+    const organized = {};
+
+    projectsList.forEach(proj => {
+        if (!organized[proj.owner]) {
+            organized[proj.owner] = {
+                owner: proj.owner,
+                projects: []
+            };
+        }
+
+        if (!proj.parentId) {
+            // Es proyecto padre
+            organized[proj.owner].projects.push({
+                ...proj,
+                children: projectsList.filter(p => p.parentId === proj.id)
+            });
+        }
+    });
+
+    return Object.values(organized);
+}
+
+// Función para obtener subproyectos de un proyecto
+function getProjectChildren(projectId) {
+    return projects.filter(p => p.parentId === projectId);
+}
+
+// Función para convertir en subproyecto (drag & drop)
+async function makeSubProject(childId, parentId) {
+    const child = projects.find(p => p.id == childId);
+    const parent = projects.find(p => p.id == parentId);
+
+    if (!child || !parent) return;
+
+    child.parentId = parentId;
+
+    // Actualizar en la UI
+    if (currentUserFilter) {
+        filterProjects();
+    } else {
+        renderAll();
+    }
+
+    // Guardar en Google Sheets
+    await updateProjectInSheets(child, 'full_update');
+}
+
+// Función para eliminar jerarquía (convertir en proyecto independiente)
+async function removeHierarchy(projectId) {
+    const project = projects.find(p => p.id == projectId);
+    if (!project) return;
+
+    project.parentId = null;
+
+    if (currentUserFilter) {
+        filterProjects();
+    } else {
+        renderAll();
+    }
+
+    await updateProjectInSheets(project, 'full_update');
+}
