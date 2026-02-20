@@ -269,6 +269,25 @@
         </div>
     </div>
 
+    <!-- MODAL DE NOTIFICACIÓN DE AVANCE -->
+    <div id="progress-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="progress-modal-title" class="text-xl font-bold text-slate-800">Notificar avance</h3>
+                <button onclick="closeProgressModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div id="progress-modal-content" class="space-y-4">
+                    <!-- El contenido se llenará dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
