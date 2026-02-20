@@ -338,7 +338,7 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
 
     const fechaHtml = tarea.fecha_limite ? '<p class="text-xs text-slate-400 mt-1">\uD83D\uDCC5 ' + tarea.fecha_limite + '</p>' : '';
 
-    card.innerHTML = '<div class="flex items-start justify-between mb-2"><span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span><div class="flex gap-1">' + commentBtnHtml + editBtnHtml + '</div></div><p class="text-sm text-slate-700 mb-2 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-xs text-slate-400 font-medium">' + respNombre + '</p>' + fechaHtml + '<div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100">' + actionBtns + '</div>';
+    card.innerHTML = '<div class="flex items-start justify-between mb-2"><span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span><div class="flex gap-1">' + commentBtnHtml + editBtnHtml + '</div></div><p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-[10px] text-slate-400 font-mono mb-2">' + (tarea.id || '') + '</p><p class="text-xs text-slate-400 font-medium">' + respNombre + '</p>' + fechaHtml + '<div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100">' + actionBtns + '</div>';
     return card;
 }
 
@@ -361,7 +361,7 @@ function renderTareasList() {
         const tr = document.createElement('tr');
         tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
         const editBtn = canEdit ? '<button onclick="openTareaModal(\'' + tarea.id + '\')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg text-xs font-bold uppercase">Editar</button>' : '';
-        tr.innerHTML = '<td class="p-4 text-slate-700 max-w-xs"><p class="text-sm leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p></td><td class="p-4 text-center text-slate-500 text-sm">' + respNombre + '</td><td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + getPriorityIcon(tarea.prioridad) + ' ' + (tarea.prioridad || 'media') + '</span></td><td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td><td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '-') + '</td><td class="p-4 text-right"><div class="flex gap-1 justify-end">' + editBtn + '</div></td>';
+        tr.innerHTML = '<td class="p-4 text-slate-700 max-w-xs"><p class="text-sm leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-[10px] text-slate-400 font-mono mt-0.5">' + (tarea.id || '') + '</p></td><td class="p-4 text-center text-slate-500 text-sm">' + respNombre + '</td><td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + getPriorityIcon(tarea.prioridad) + ' ' + (tarea.prioridad || 'media') + '</span></td><td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td><td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '-') + '</td><td class="p-4 text-right"><div class="flex gap-1 justify-end">' + editBtn + '</div></td>';
         container.appendChild(tr);
     });
 }
