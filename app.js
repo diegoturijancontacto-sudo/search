@@ -232,8 +232,23 @@ function renderProyectos() {
         const estadoBadge = p.estado === 'completado' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600';
         const firstChar = (p.nombre || '?').charAt(0).toUpperCase();
         const editBtn = isDirector ? '<button onclick="event.stopPropagation(); openProyectoModal(\'' + p.id + '\')" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">Editar</button>' : '';
+        const asignHtml = p.asignacion ? '<p class="text-[11px] text-slate-400 font-mono mt-1">#' + p.asignacion + '</p>' : '';
         const descHtml = p.descripcion ? '<p class="text-sm text-slate-500 mb-3 line-clamp-2">' + p.descripcion + '</p>' : '';
-        return '<div onclick="selectProyecto(\'' + p.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"><div class="flex items-start justify-between mb-3"><div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg group-hover:bg-indigo-200 transition-colors">' + firstChar + '</div><span class="text-xs px-2 py-1 rounded-full font-bold ' + estadoBadge + '">' + (p.estado || 'activo') + '</span></div><h3 class="font-bold text-slate-800 text-lg mb-1">' + (p.nombre || 'Sin nombre') + '</h3>' + descHtml + '<div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100"><span class="text-xs text-slate-400 font-medium">' + subCount + ' subproyecto' + (subCount !== 1 ? 's' : '') + '</span>' + editBtn + '</div></div>';
+
+        // ✅ IMPORTANTE: asignHtml ahora se inserta debajo del nombre
+        return '<div onclick="selectProyecto(\'' + p.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group">' +
+            '<div class="flex items-start justify-between mb-3">' +
+            '<div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg group-hover:bg-indigo-200 transition-colors">' + firstChar + '</div>' +
+            '<span class="text-xs px-2 py-1 rounded-full font-bold ' + estadoBadge + '">' + (p.estado || 'activo') + '</span>' +
+            '</div>' +
+            '<h3 class="font-bold text-slate-800 text-lg mb-1">' + (p.nombre || 'Sin nombre') + '</h3>' +
+            asignHtml +
+            descHtml +
+            '<div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">' +
+            '<span class="text-xs text-slate-400 font-medium">' + subCount + ' subproyecto' + (subCount !== 1 ? 's' : '') + '</span>' +
+            editBtn +
+            '</div>' +
+            '</div>';
     }).join('');
 }
 
@@ -259,6 +274,7 @@ function renderSubproyectos() {
         const pendienteCount = tareas.filter(function (t) { return t.id_subproyecto === s.id && t.estatus === 'pendiente'; }).length;
         const progress = taskCount > 0 ? Math.round((completadoCount / taskCount) * 100) : 0;
         const firstChar = (s.nombre || '?').charAt(0).toUpperCase();
+        const asignHtml = s.asignacion ? '<p class="text-[11px] text-slate-400 font-mono mt-1">#' + s.asignacion + '</p>' : '';
         const editBtn = isDirector ? '<button onclick="event.stopPropagation(); openSubproyectoModal(\'' + s.id + '\')" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">Editar</button>' : '';
         const descHtml = s.descripcion ? '<p class="text-sm text-slate-500 mb-2 line-clamp-2">' + s.descripcion + '</p>' : '';
         const fechasHtml = (s.fecha_inicio || s.fecha_fin_estimada) ? '<div class="flex gap-2 text-xs text-slate-400 mb-3">' + (s.fecha_inicio ? '<span>\uD83D\uDCC5 ' + s.fecha_inicio + '</span>' : '') + (s.fecha_fin_estimada ? '<span>\uD83C\uDFC1 ' + s.fecha_fin_estimada + '</span>' : '') + '</div>' : '';
@@ -268,7 +284,21 @@ function renderSubproyectos() {
             (enRevisionCount > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-bold">' + enRevisionCount + ' en revisi\u00F3n</span>' : '') +
             (completadoCount > 0 ? '<span class="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold">' + completadoCount + ' completado</span>' : '') +
             '</div>';
-        return '<div onclick="selectSubproyecto(\'' + s.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group"><div class="flex items-start justify-between mb-3"><div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-lg group-hover:bg-violet-200 transition-colors">' + firstChar + '</div><span class="text-xs text-slate-400 font-medium">' + taskCount + ' tarea' + (taskCount !== 1 ? 's' : '') + '</span></div><h3 class="font-bold text-slate-800 text-lg mb-1">' + (s.nombre || 'Sin nombre') + '</h3>' + descHtml + fechasHtml + countersHtml + '<div class="w-full bg-slate-100 rounded-full h-1.5 mb-3"><div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width:' + progress + '%"></div></div><div class="flex items-center justify-between pt-2 border-t border-slate-100"><span class="text-xs text-slate-400">' + progress + '% completado</span>' + editBtn + '</div></div>';
+
+        // ✅ IMPORTANTE: asignHtml ahora se inserta debajo del nombre
+        return '<div onclick="selectSubproyecto(\'' + s.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group">' +
+            '<div class="flex items-start justify-between mb-3">' +
+            '<div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-lg group-hover:bg-violet-200 transition-colors">' + firstChar + '</div>' +
+            '<span class="text-xs text-slate-400 font-medium">' + taskCount + ' tarea' + (taskCount !== 1 ? 's' : '') + '</span>' +
+            '</div>' +
+            '<h3 class="font-bold text-slate-800 text-lg mb-1">' + (s.nombre || 'Sin nombre') + '</h3>' +
+            asignHtml +
+            descHtml +
+            fechasHtml +
+            countersHtml +
+            '<div class="w-full bg-slate-100 rounded-full h-1.5 mb-3"><div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width:' + progress + '%"></div></div>' +
+            '<div class="flex items-center justify-between pt-2 border-t border-slate-100"><span class="text-xs text-slate-400">' + progress + '% completado</span>' + editBtn + '</div>' +
+            '</div>';
     }).join('');
 }
 
@@ -313,6 +343,11 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
 
     const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
     const respNombre = resp ? resp.nombre : 'Sin asignar';
+
+    const asignacionHtml = tarea.asignacion
+        ? '<p class="text-[10px] text-slate-400 font-mono mt-1">#' + tarea.asignacion + '</p>'
+        : '';
+
     const prioColor = getPriorityColor(tarea.prioridad);
     const prioIcon = getPriorityIcon(tarea.prioridad);
     const commentCount = comentarios.filter(function (c) { return c.id_tarea === tarea.id; }).length;
@@ -338,7 +373,19 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
 
     const fechaHtml = tarea.fecha_limite ? '<p class="text-xs text-slate-400 mt-1">\uD83D\uDCC5 ' + tarea.fecha_limite + '</p>' : '';
 
-    card.innerHTML = '<div class="flex items-start justify-between mb-2"><span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span><div class="flex gap-1">' + commentBtnHtml + editBtnHtml + '</div></div><p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-xs text-slate-400 font-medium mb-1">' + respNombre + '</p><p class="text-[10px] text-slate-400 font-mono mb-2">' + (tarea.id || '') + '</p>' + fechaHtml + '<div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100">' + actionBtns + '</div>';
+    // ✅ IMPORTANTE: asignacionHtml ahora se inserta debajo del texto de la tarea
+    card.innerHTML =
+        '<div class="flex items-start justify-between mb-2">' +
+        '<span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span>' +
+        '<div class="flex gap-1">' + commentBtnHtml + editBtnHtml + '</div>' +
+        '</div>' +
+        '<p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p>' +
+        asignacionHtml +
+        '<p class="text-[10px] text-slate-400 font-mono mb-2">' + (tarea.id || '') + '</p>' +
+        '<p class="text-xs text-slate-400 font-medium">' + respNombre + '</p>' +
+        fechaHtml +
+        '<div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100">' + actionBtns + '</div>';
+
     return card;
 }
 
@@ -361,7 +408,24 @@ function renderTareasList() {
         const tr = document.createElement('tr');
         tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
         const editBtn = canEdit ? '<button onclick="openTareaModal(\'' + tarea.id + '\')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg text-xs font-bold uppercase">Editar</button>' : '';
-        tr.innerHTML = '<td class="p-4 text-slate-700 max-w-xs"><p class="text-sm leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-[10px] text-slate-400 font-mono mt-0.5">' + (tarea.id || '') + '</p></td><td class="p-4 text-center text-slate-500 text-sm">' + respNombre + '</td><td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + getPriorityIcon(tarea.prioridad) + ' ' + (tarea.prioridad || 'media') + '</span></td><td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td><td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '-') + '</td><td class="p-4 text-right"><div class="flex gap-1 justify-end">' + editBtn + '</div></td>';
+
+        const asignacionHtml = tarea.asignacion
+            ? '<p class="text-[10px] text-slate-400 font-mono mt-1">#' + tarea.asignacion + '</p>'
+            : '';
+
+        // ✅ IMPORTANTE: en lista ahora se inserta asignacionHtml debajo de detalles
+        tr.innerHTML =
+            '<td class="p-4 text-slate-700 max-w-xs">' +
+            '<p class="text-sm leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p>' +
+            asignacionHtml +
+            '<p class="text-[10px] text-slate-400 font-mono mt-0.5">' + (tarea.id || '') + '</p>' +
+            '</td>' +
+            '<td class="p-4 text-center text-slate-500 text-sm">' + respNombre + '</td>' +
+            '<td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + getPriorityIcon(tarea.prioridad) + ' ' + (tarea.prioridad || 'media') + '</span></td>' +
+            '<td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td>' +
+            '<td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '-') + '</td>' +
+            '<td class="p-4 text-right"><div class="flex gap-1 justify-end">' + editBtn + '</div></td>';
+
         container.appendChild(tr);
     });
 }
@@ -702,20 +766,16 @@ async function saveTarea(e) {
     const estatus = document.getElementById('tareaEstatus').value;
     const detalles = document.getElementById('tareaDetalles').value;
 
-    // Generar ID con el formato: idproyecto.idsubproyecto.idtarea.idresponsable.prioridad.estatus.detalles
+    // Generar ID interno (estable)
     let nuevoId;
     if (id) {
-        // Si es edición, mantener el mismo ID
         nuevoId = id;
     } else {
-        // Generar timestamp único para la tarea
         const timestamp = Date.now();
-
-        // Limpiar detalles para el ID (eliminar caracteres especiales y espacios)
         const detallesClean = detalles
             .toLowerCase()
             .replace(/[^a-z0-9]/g, '_')
-            .substring(0, 20); // Limitar a 20 caracteres
+            .substring(0, 20);
 
         nuevoId = [
             currentProyecto ? currentProyecto.id : 'sin_proyecto',
@@ -726,6 +786,10 @@ async function saveTarea(e) {
             estatus || 'pendiente',
             detallesClean || 'sin_detalles'
         ].join('.');
+
+        if (tareaIdExists(nuevoId)) {
+            nuevoId = nuevoId + '.' + Date.now();
+        }
     }
 
     const data = {
@@ -991,10 +1055,4 @@ function debugTareaId(tareaId) {
 // Función para verificar si un ID de tarea ya existe
 function tareaIdExists(id) {
     return tareas.some(t => t.id === id);
-}
-
-// En saveTarea, después de generar el nuevoId, añade:
-if (!id && tareaIdExists(nuevoId)) {
-    // Si por alguna razón el ID ya existe, añadir un sufijo
-    nuevoId = nuevoId + '.' + Date.now();
 }
