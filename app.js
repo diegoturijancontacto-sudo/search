@@ -338,7 +338,7 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
 
     const fechaHtml = tarea.fecha_limite ? '<p class="text-xs text-slate-400 mt-1">\uD83D\uDCC5 ' + tarea.fecha_limite + '</p>' : '';
 
-    card.innerHTML = '<div class="flex items-start justify-between mb-2"><span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span><div class="flex gap-1">' + commentBtnHtml + editBtnHtml + '</div></div><p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-[10px] text-slate-400 font-mono mb-2">' + (tarea.id || '') + '</p><p class="text-xs text-slate-400 font-medium">' + respNombre + '</p>' + fechaHtml + '<div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100">' + actionBtns + '</div>';
+    card.innerHTML = '<div class="flex items-start justify-between mb-2"><span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span><div class="flex gap-1">' + commentBtnHtml + editBtnHtml + '</div></div><p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-xs text-slate-400 font-medium mb-1">' + respNombre + '</p><p class="text-[10px] text-slate-400 font-mono mb-2">' + (tarea.id || '') + '</p>' + fechaHtml + '<div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100">' + actionBtns + '</div>';
     return card;
 }
 
