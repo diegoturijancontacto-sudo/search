@@ -1,7 +1,7 @@
 // ============================================
 // CONFIGURACIÓN
 // ============================================
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxJpPgkX8dUfMkZBgrNTnMqJMJRyjwz82jA2Ho05yvahbrRfyZagoHMnbQo7Qch8CT9lw/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxmPBIboe_Evn45ZHjtkjydbmlPRMuSax_sEiTc2iN8cqqi2i4-Pf_lOd6875cQXEd_yg/exec';
 const WHATSAPP_BOT_URL = 'https://bot-yy1q.onrender.com/send';
 const WHATSAPP_NUMBER = '120363406622431210@g.us';
 const PANEL_URL = 'https://diegoturijancontacto-sudo.github.io/search/panel.html';
