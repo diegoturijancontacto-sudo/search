@@ -1,18 +1,24 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Gestor de Usuarios</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin - Responsables</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .loader {
             border-top-color: #4f46e5;
             animation: spinner 0.6s linear infinite;
         }
+
         @keyframes spinner {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -27,15 +33,17 @@
         <!-- Header -->
         <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div>
-                <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">👥 Administración de Usuarios</h1>
-                <p class="text-slate-500">Gestiona los usuarios del sistema</p>
+                <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">👥 Administración de Responsables</h1>
+                <p class="text-slate-500">Gestiona responsables (usuarios operativos) del sistema</p>
             </div>
             <div class="flex gap-2">
-                <button onclick="openUserModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2">
+                <button onclick="openRespModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z">
+                        </path>
                     </svg>
-                    Nuevo Usuario
+                    Nuevo Responsable
                 </button>
                 <a href="panel.html" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-5 py-2.5 rounded-lg font-medium shadow-sm transition-all">
                     Volver al Panel
@@ -43,55 +51,87 @@
             </div>
         </header>
 
-        <!-- Tabla de Usuarios -->
+        <!-- Tabla -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <table class="w-full text-left border-collapse">
                 <thead class="bg-slate-50 border-b border-slate-200">
                     <tr>
                         <th class="p-4 font-semibold text-slate-600">Nombre</th>
                         <th class="p-4 font-semibold text-slate-600">Email</th>
+                        <th class="p-4 font-semibold text-slate-600">Departamento</th>
                         <th class="p-4 font-semibold text-slate-600">Rol</th>
-                        <th class="p-4 font-semibold text-slate-600">Fecha Creación</th>
+                        <th class="p-4 font-semibold text-slate-600">Identificador</th>
                         <th class="p-4 font-semibold text-slate-600 text-right">Acciones</th>
                     </tr>
                 </thead>
-                <tbody id="users-table-body"></tbody>
+                <tbody id="resp-table-body"></tbody>
             </table>
         </div>
     </div>
 
-    <!-- MODAL DE USUARIO -->
-    <div id="userModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <!-- MODAL -->
+    <div id="respModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
         <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
             <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 id="modal-title" class="text-xl font-bold text-slate-800">Nuevo Usuario</h3>
-                <button onclick="closeUserModal()" class="text-slate-400 hover:text-slate-600">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800">Nuevo Responsable</h3>
+                <button onclick="closeRespModal()" class="text-slate-400 hover:text-slate-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
-            <form id="userForm" class="p-6 space-y-4" onsubmit="saveUser(event)">
-                <input type="hidden" id="userId">
+
+            <form id="respForm" class="p-6 space-y-4" onsubmit="saveResp(event)">
+                <input type="hidden" id="respId" />
+
                 <div>
                     <label class="block text-sm font-bold text-slate-700 mb-1">Nombre Completo</label>
-                    <input type="text" id="userName" required class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <input type="text" id="respNombre" required
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
                 </div>
+
                 <div>
                     <label class="block text-sm font-bold text-slate-700 mb-1">Email</label>
-                    <input type="email" id="userEmail" required class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <input type="email" id="respEmail"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
                 </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Departamento</label>
+                    <input type="text" id="respDepto"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
                 <div>
                     <label class="block text-sm font-bold text-slate-700 mb-1">Rol</label>
-                    <select id="userRole" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                    <select id="respRol"
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
                         <option value="responsable">Responsable</option>
-                        <option value="director">Director</option>
                         <option value="supervisor">Supervisor</option>
+                        <option value="director">Director</option>
                     </select>
+                    <p class="text-xs text-slate-400 mt-1">
+                        Nota: este rol es el que usa el panel para permisos (crear/editar/aprobar).
+                    </p>
                 </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Identificador (iniciales)</label>
+                    <input type="text" id="respIdentificador" placeholder="Ej: DT"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    <p class="text-xs text-slate-400 mt-1">
+                        Si lo dejas vacío, el backend lo genera automáticamente.
+                    </p>
+                </div>
+
                 <div class="flex gap-3 pt-4">
-                    <button type="button" onclick="closeUserModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>
-                    <button type="submit" id="btn-save" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                    <button type="button" onclick="closeRespModal()"
+                            class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                        Cancelar
+                    </button>
+
+                    <button type="submit" id="btn-save"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
                         <span id="btn-save-text">Guardar</span>
                         <span id="btn-save-spinner" class="hidden">
                             <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
@@ -101,102 +141,32 @@
                         </span>
                     </button>
                 </div>
-                <button type="button" id="btn-delete" onclick="deleteCurrentUser()" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">Eliminar Usuario</button>
+
+                <button type="button" id="btn-delete"
+                        onclick="deleteCurrentResp()"
+                        class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">
+                    Eliminar Responsable
+                </button>
             </form>
         </div>
     </div>
 
-    <script>
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxJpPgkX8dUfMkZBgrNTnMqJMJRyjwz82jA2Ho05yvahbrRfyZagoHMnbQo7Qch8CT9lw/exec'; // Misma URL que en panel.html
-        let users = [];
+    <script>// IMPORTANTE: pon aquí la URL del NUEVO deploy del backend limpio (Code.gs)
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxmPBIboe_Evn45ZHjtkjydbmlPRMuSax_sEiTc2iN8cqqi2i4-Pf_lOd6875cQXEd_yg/exec';
 
-        document.addEventListener('DOMContentLoaded', loadUsers);
+        let responsables = [];
+
+        document.addEventListener('DOMContentLoaded', loadResponsables);
 
         function showLoading(show) {
             document.getElementById('loading').classList.toggle('hidden', !show);
-        }
-
-        async function loadUsers() {
-            showLoading(true);
-            try {
-                const response = await fetch(WEB_APP_URL);
-                const data = await response.json();
-                users = (data.responsables || []).map(r => ({
-                    id: r.id,
-                    name: r.nombre,
-                    email: r.email,
-                    role: r.rol,
-                    createdAt: r.fecha_registro
-                }));
-                renderUsers();
-            } catch (error) {
-                console.error('Error cargando usuarios:', error);
-                alert('Error al cargar usuarios');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        function renderUsers() {
-            const tbody = document.getElementById('users-table-body');
-            tbody.innerHTML = '';
-
-            users.forEach(user => {
-                const tr = document.createElement('tr');
-                tr.className = 'border-b border-slate-100 hover:bg-slate-50';
-
-                let roleBadge = 'bg-gray-100 text-gray-600';
-                if (user.role === 'director') roleBadge = 'bg-purple-100 text-purple-600';
-                if (user.role === 'supervisor') roleBadge = 'bg-blue-100 text-blue-600';
-
-                tr.innerHTML = `
-                    <td class="p-4 font-medium">${user.name}</td>
-                    <td class="p-4 text-slate-600">${user.email}</td>
-                    <td class="p-4">
-                        <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${roleBadge}">${user.role}</span>
-                    </td>
-                    <td class="p-4 text-slate-500 text-sm">${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}</td>
-                    <td class="p-4 text-right">
-                        <button onclick="editUser('${user.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-2">Editar</button>
-                        <button onclick="deleteUser('${user.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function openUserModal(user = null) {
-            const modal = document.getElementById('userModal');
-            const title = document.getElementById('modal-title');
-            const btnDelete = document.getElementById('btn-delete');
-            
-            document.getElementById('userForm').reset();
-            
-            if (user) {
-                title.innerText = 'Editar Usuario';
-                document.getElementById('userId').value = user.id;
-                document.getElementById('userName').value = user.name;
-                document.getElementById('userEmail').value = user.email;
-                document.getElementById('userRole').value = user.role;
-                btnDelete.classList.remove('hidden');
-            } else {
-                title.innerText = 'Nuevo Usuario';
-                document.getElementById('userId').value = '';
-                btnDelete.classList.add('hidden');
-            }
-            
-            modal.classList.remove('hidden');
-        }
-
-        function closeUserModal() {
-            document.getElementById('userModal').classList.add('hidden');
         }
 
         function setLoading(loading) {
             const btn = document.getElementById('btn-save');
             const btnText = document.getElementById('btn-save-text');
             const btnSpinner = document.getElementById('btn-save-spinner');
-            
+
             btn.disabled = loading;
             btn.classList.toggle('opacity-75', loading);
             btn.classList.toggle('cursor-not-allowed', loading);
@@ -204,67 +174,163 @@
             btnSpinner.classList.toggle('hidden', !loading);
         }
 
-        async function saveUser(e) {
-            e.preventDefault();
-            
-            if (document.getElementById('btn-save').disabled) return;
-            
-            setLoading(true);
-            
+        async function loadResponsables() {
+            showLoading(true);
             try {
-                const id = document.getElementById('userId').value;
-                const userData = {
+                const response = await fetch(WEB_APP_URL);
+                const data = await response.json();
+
+                responsables = data.responsables || [];
+
+                // Orden: por nombre
+                responsables.sort((a, b) => (a.nombre || '').localeCompare((b.nombre || ''), 'es'));
+
+                renderResponsables();
+            } catch (error) {
+                console.error('Error cargando responsables:', error);
+                alert('Error al cargar responsables');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function roleBadgeClass(role) {
+            if (role === 'director') return 'bg-purple-100 text-purple-600';
+            if (role === 'supervisor') return 'bg-blue-100 text-blue-600';
+            return 'bg-gray-100 text-gray-600';
+        }
+
+        function renderResponsables() {
+            const tbody = document.getElementById('resp-table-body');
+            tbody.innerHTML = '';
+
+            responsables.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50';
+
+                const ident = (r.identificador || '').toString();
+
+                tr.innerHTML = `
+              <td class="p-4 font-medium">${escapeHtml(r.nombre || '')}</td>
+              <td class="p-4 text-slate-600">${escapeHtml(r.email || '-')}</td>
+              <td class="p-4 text-slate-600">${escapeHtml(r.departamento || '-')}</td>
+              <td class="p-4">
+                <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${roleBadgeClass(r.rol)}">
+                  ${escapeHtml(r.rol || 'responsable')}
+                </span>
+              </td>
+              <td class="p-4">
+                <span class="font-mono text-xs px-2 py-1 rounded bg-slate-100 text-slate-600">${escapeHtml(ident || '-')}</span>
+              </td>
+              <td class="p-4 text-right">
+                <button onclick="editResp('${r.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-2">Editar</button>
+                <button onclick="deleteResp('${r.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
+              </td>
+            `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openRespModal(resp = null) {
+            const modal = document.getElementById('respModal');
+            const title = document.getElementById('modal-title');
+            const btnDelete = document.getElementById('btn-delete');
+
+            document.getElementById('respForm').reset();
+
+            if (resp) {
+                title.innerText = 'Editar Responsable';
+                document.getElementById('respId').value = resp.id;
+                document.getElementById('respNombre').value = resp.nombre || '';
+                document.getElementById('respEmail').value = resp.email || '';
+                document.getElementById('respDepto').value = resp.departamento || '';
+                document.getElementById('respRol').value = resp.rol || 'responsable';
+                document.getElementById('respIdentificador').value = resp.identificador || '';
+                btnDelete.classList.remove('hidden');
+            } else {
+                title.innerText = 'Nuevo Responsable';
+                document.getElementById('respId').value = '';
+                btnDelete.classList.add('hidden');
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeRespModal() {
+            document.getElementById('respModal').classList.add('hidden');
+        }
+
+        async function saveResp(e) {
+            e.preventDefault();
+            if (document.getElementById('btn-save').disabled) return;
+
+            setLoading(true);
+            try {
+                const id = document.getElementById('respId').value;
+
+                const payload = {
                     id: id || Date.now().toString(),
-                    nombre: document.getElementById('userName').value,
-                    email: document.getElementById('userEmail').value,
-                    rol: document.getElementById('userRole').value
+                    nombre: document.getElementById('respNombre').value.trim(),
+                    email: document.getElementById('respEmail').value.trim(),
+                    departamento: document.getElementById('respDepto').value.trim(),
+                    rol: document.getElementById('respRol').value,
+                    identificador: document.getElementById('respIdentificador').value.trim()
                 };
 
                 const action = id ? 'responsable_update' : 'responsable_add';
-                
+
                 await fetch(WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ action, data: userData })
+                    body: JSON.stringify({ action, data: payload })
                 });
-                
-                await loadUsers();
-                closeUserModal();
+
+                await loadResponsables();
+                closeRespModal();
             } catch (error) {
-                console.error('Error guardando usuario:', error);
-                alert('Error al guardar usuario');
+                console.error('Error guardando responsable:', error);
+                alert('Error al guardar responsable');
             } finally {
                 setLoading(false);
             }
         }
 
-        function editUser(id) {
-            const user = users.find(u => u.id === id);
-            if (user) openUserModal(user);
+        function editResp(id) {
+            const r = responsables.find(x => x.id === id);
+            if (r) openRespModal(r);
         }
 
-        async function deleteUser(id) {
-            if (!confirm('¿Estás seguro de eliminar este usuario?')) return;
-            
+        async function deleteResp(id) {
+            if (!confirm('¿Estás seguro de eliminar este responsable?')) return;
+
             showLoading(true);
             try {
                 await fetch(WEB_APP_URL, {
                     method: 'POST',
                     body: JSON.stringify({ action: 'responsable_delete', data: { id } })
                 });
-                await loadUsers();
+                await loadResponsables();
             } catch (error) {
-                console.error('Error eliminando usuario:', error);
-                alert('Error al eliminar usuario');
+                console.error('Error eliminando responsable:', error);
+                alert('Error al eliminar responsable');
             } finally {
                 showLoading(false);
             }
         }
 
-        async function deleteCurrentUser() {
-            const id = document.getElementById('userId').value;
-            await deleteUser(id);
-            closeUserModal();
+        async function deleteCurrentResp() {
+            const id = document.getElementById('respId').value;
+            if (!id) return;
+            await deleteResp(id);
+            closeRespModal();
         }
-    </script>
+
+        function escapeHtml(str) {
+            return (str || '').toString()
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }</script>
 </body>
 </html>
