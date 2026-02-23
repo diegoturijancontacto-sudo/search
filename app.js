@@ -19,7 +19,8 @@ let historial = [];
 // Navegación jerárquica
 let currentProyecto = null;
 let currentSubproyecto = null;
-let currentNavLevel = 'home'; // 'home' | 'proyecto' | 'subproyecto'
+let currentTarea = null;
+let currentNavLevel = 'home'; // 'home' | 'proyecto' | 'subproyecto' | 'tarea_detail'
 
 let ganttConfig = { pxPerDay: 50, headerStep: 1 };
 let currentUserFilter = '';
@@ -120,10 +121,15 @@ function navigateTo(level) {
     if (level === 'home') {
         currentProyecto = null;
         currentSubproyecto = null;
+        currentTarea = null;
         currentNavLevel = 'home';
     } else if (level === 'proyecto') {
         currentSubproyecto = null;
+        currentTarea = null;
         currentNavLevel = 'proyecto';
+    } else if (level === 'subproyecto') {
+        currentTarea = null;
+        currentNavLevel = 'subproyecto';
     }
     renderCurrentLevel();
 }
@@ -145,14 +151,16 @@ function renderCurrentLevel() {
     updateBreadcrumb();
     updateHeaderActions();
     updateFilterBar();
+    renderSidebar();
 
-    document.getElementById('view-proyectos').classList.add('hidden');
+    document.getElementById('view-global-tasks').classList.add('hidden');
     document.getElementById('view-subproyectos').classList.add('hidden');
     document.getElementById('view-tareas').classList.add('hidden');
+    document.getElementById('view-tarea-detalle').classList.add('hidden');
 
     if (currentNavLevel === 'home') {
-        document.getElementById('view-proyectos').classList.remove('hidden');
-        renderProyectos();
+        document.getElementById('view-global-tasks').classList.remove('hidden');
+        renderGlobalTasksList();
     } else if (currentNavLevel === 'proyecto') {
         document.getElementById('view-subproyectos').classList.remove('hidden');
         renderSubproyectos();
@@ -160,30 +168,47 @@ function renderCurrentLevel() {
         document.getElementById('view-tareas').classList.remove('hidden');
         renderTareasBoard();
         renderTareasList();
+    } else if (currentNavLevel === 'tarea_detail') {
+        document.getElementById('view-tarea-detalle').classList.remove('hidden');
+        renderTareaDetalle();
     }
 }
 
 function updateBreadcrumb() {
     const elProyecto = document.getElementById('breadcrumb-proyecto');
     const elSubproyecto = document.getElementById('breadcrumb-subproyecto');
+    const elTarea = document.getElementById('breadcrumb-tarea');
     const elProyectoBtn = document.getElementById('breadcrumb-proyecto-btn');
-    const elSubproyectoName = document.getElementById('breadcrumb-subproyecto-name');
+    const elSubproyectoBtn = document.getElementById('breadcrumb-subproyecto-btn');
+    const elTareaName = document.getElementById('breadcrumb-tarea-name');
 
-    if (currentNavLevel === 'home') {
-        elProyecto.classList.add('hidden');
-        elSubproyecto.classList.add('hidden');
-    } else if (currentNavLevel === 'proyecto') {
+    elProyecto.classList.add('hidden');
+    elSubproyecto.classList.add('hidden');
+    if (elTarea) elTarea.classList.add('hidden');
+
+    if (currentNavLevel === 'proyecto') {
         elProyecto.classList.remove('hidden');
         elProyecto.style.display = 'inline-flex';
         elProyectoBtn.innerText = currentProyecto ? currentProyecto.nombre : '';
-        elSubproyecto.classList.add('hidden');
     } else if (currentNavLevel === 'subproyecto') {
         elProyecto.classList.remove('hidden');
         elProyecto.style.display = 'inline-flex';
         elProyectoBtn.innerText = currentProyecto ? currentProyecto.nombre : '';
         elSubproyecto.classList.remove('hidden');
         elSubproyecto.style.display = 'inline-flex';
-        elSubproyectoName.innerText = currentSubproyecto ? currentSubproyecto.nombre : '';
+        if (elSubproyectoBtn) elSubproyectoBtn.innerText = currentSubproyecto ? currentSubproyecto.nombre : '';
+    } else if (currentNavLevel === 'tarea_detail') {
+        elProyecto.classList.remove('hidden');
+        elProyecto.style.display = 'inline-flex';
+        elProyectoBtn.innerText = currentProyecto ? currentProyecto.nombre : '';
+        elSubproyecto.classList.remove('hidden');
+        elSubproyecto.style.display = 'inline-flex';
+        if (elSubproyectoBtn) elSubproyectoBtn.innerText = currentSubproyecto ? currentSubproyecto.nombre : '';
+        if (elTarea && currentTarea) {
+            elTarea.classList.remove('hidden');
+            elTarea.style.display = 'inline-flex';
+            elTareaName.innerText = (currentTarea.detalles || '').substring(0, 40) + (currentTarea.detalles && currentTarea.detalles.length > 40 ? '…' : '');
+        }
     }
 }
 
@@ -193,66 +218,250 @@ function updateHeaderActions() {
     const container = document.getElementById('header-actions');
     let extraBtns = '';
 
-    if (currentNavLevel === 'home' && isDirector) {
-        extraBtns = '<button onclick="openProyectoModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nuevo Proyecto</button>';
-    } else if (currentNavLevel === 'proyecto' && isDirector) {
-        extraBtns = '<button onclick="openSubproyectoModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nuevo Subproyecto</button>';
-    } else if (currentNavLevel === 'subproyecto' && isDirector) {
-        extraBtns = '<button onclick="openTareaModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nueva Tarea</button>';
+    if (currentNavLevel === 'proyecto' && isDirector) {
+        extraBtns = '<button onclick="openSubproyectoModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nuevo Programa</button>';
+    } else if ((currentNavLevel === 'subproyecto' || currentNavLevel === 'tarea_detail') && isDirector) {
+        extraBtns = '<button onclick="openTareaModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nueva Tarea</button>';
     }
 
-    container.innerHTML = extraBtns + '<button onclick="refreshData()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2.5 rounded-lg font-medium shadow-sm transition-all">Actualizar</button><a href="admin.html" class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2.5 rounded-lg font-medium transition-all flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Usuarios</a>';
+    container.innerHTML = extraBtns + '<button onclick="refreshData()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-medium shadow-sm transition-all text-sm">Actualizar</button><a href="admin.html" class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Usuarios</a>';
 }
 
 function updateFilterBar() {
     const bar = document.getElementById('filter-bar');
-    if (currentNavLevel === 'subproyecto') {
+    if (currentNavLevel === 'subproyecto' || currentNavLevel === 'tarea_detail') {
         bar.classList.remove('hidden');
-        bar.style.display = 'flex';
+        bar.style.display = 'block';
     } else {
         bar.classList.add('hidden');
     }
 }
 
 // ============================================
-// RENDER: PROYECTOS
+// SIDEBAR
 // ============================================
-function renderProyectos() {
-    const container = document.getElementById('view-proyectos');
+function renderSidebar() {
+    const cuentasPanel = document.getElementById('sidebar-cuentas');
+    const tareasPanel = document.getElementById('sidebar-tareas');
+
+    // Show "Nueva Cuenta" button only for directors
     const user = getCurrentUser();
-    const isDirector = user && user.role === 'director';
+    const btnNuevaCuenta = document.getElementById('btn-nueva-cuenta');
+    if (btnNuevaCuenta) btnNuevaCuenta.classList.toggle('hidden', !(user && user.role === 'director'));
+
+    if (currentNavLevel === 'home' || currentNavLevel === 'proyecto') {
+        cuentasPanel.classList.remove('hidden');
+        cuentasPanel.style.display = 'flex';
+        tareasPanel.classList.add('hidden');
+        renderSidebarCuentas();
+    } else {
+        cuentasPanel.classList.add('hidden');
+        tareasPanel.classList.remove('hidden');
+        tareasPanel.style.display = 'flex';
+        renderSidebarTareas();
+    }
+}
+
+function renderSidebarCuentas() {
+    const container = document.getElementById('sidebar-cuentas-list');
+    if (!container) return;
 
     if (proyectos.length === 0) {
-        container.innerHTML = '<div class="col-span-full text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay proyectos aún</p>' + (isDirector ? '<p class="text-sm">Haz clic en "Nuevo Proyecto" para comenzar</p>' : '') + '</div>';
+        container.innerHTML = '<p class="text-center text-slate-400 text-sm py-6">No hay cuentas</p>';
         return;
     }
 
     container.innerHTML = proyectos.map(function (p) {
-        const subCount = subproyectos.filter(function (s) { return s.id_proyecto === p.id; }).length;
-        const estadoBadge = p.estado === 'completado' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600';
+        const isActive = currentProyecto && currentProyecto.id === p.id;
         const firstChar = (p.nombre || '?').charAt(0).toUpperCase();
-        const editBtn = isDirector ? '<button onclick="event.stopPropagation(); openProyectoModal(\'' + p.id + '\')" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">Editar</button>' : '';
-        const asignHtml = p.asignacion ? '<p class="text-[11px] text-slate-400 font-mono mt-1">#' + p.asignacion + '</p>' : '';
-        const descHtml = p.descripcion ? '<p class="text-sm text-slate-500 mb-3 line-clamp-2">' + p.descripcion + '</p>' : '';
+        const progCount = subproyectos.filter(function (s) { return s.id_proyecto === p.id; }).length;
+        const activeClass = isActive
+            ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+            : 'border-transparent hover:bg-slate-50 text-slate-700';
+        const editBtn = (getCurrentUser() && getCurrentUser().role === 'director')
+            ? '<button onclick="event.stopPropagation(); openProyectoModal(\'' + p.id + '\')" class="ml-auto text-slate-400 hover:text-indigo-600 flex-shrink-0 p-1 rounded" title="Editar"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>'
+            : '';
 
-        return '<div onclick="selectProyecto(\'' + p.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group">' +
-            '<div class="flex items-start justify-between mb-3">' +
-            '<div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg group-hover:bg-indigo-200 transition-colors">' + firstChar + '</div>' +
-            '<span class="text-xs px-2 py-1 rounded-full font-bold ' + estadoBadge + '">' + (p.estado || 'activo') + '</span>' +
+        return '<div onclick="selectProyecto(\'' + p.id + '\')" class="w-full flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer text-left transition-all ' + activeClass + '">' +
+            '<div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm flex-shrink-0">' + firstChar + '</div>' +
+            '<div class="min-w-0 flex-1">' +
+            '<p class="font-semibold text-sm truncate">' + (p.nombre || 'Sin nombre') + '</p>' +
+            '<p class="text-xs text-slate-400">' + progCount + ' programa' + (progCount !== 1 ? 's' : '') + '</p>' +
             '</div>' +
-            '<h3 class="font-bold text-slate-800 text-lg mb-1">' + (p.nombre || 'Sin nombre') + '</h3>' +
-            asignHtml +
-            descHtml +
-            '<div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">' +
-            '<span class="text-xs text-slate-400 font-medium">' + subCount + ' subproyecto' + (subCount !== 1 ? 's' : '') + '</span>' +
             editBtn +
+            '</div>';
+    }).join('');
+}
+
+function renderSidebarTareas() {
+    const container = document.getElementById('sidebar-tareas-list');
+    const programaLabel = document.getElementById('sidebar-tareas-programa');
+    if (!container) return;
+
+    if (programaLabel && currentSubproyecto) {
+        programaLabel.textContent = currentSubproyecto.nombre || '';
+    }
+
+    const tareasActuales = getTareasActuales();
+
+    if (tareasActuales.length === 0) {
+        container.innerHTML = '<p class="text-center text-slate-400 text-sm py-6">No hay tareas</p>';
+        return;
+    }
+
+    container.innerHTML = tareasActuales.map(function (t) {
+        const isActive = currentTarea && currentTarea.id === t.id;
+        const prioColor = getPriorityColor(t.prioridad);
+        const prioIcon = getPriorityIcon(t.prioridad);
+        const statusBadge = getStatusBadge(t.estatus);
+        const activeClass = isActive
+            ? 'bg-indigo-50 border-indigo-200'
+            : 'border-transparent hover:bg-slate-50';
+
+        return '<div onclick="selectTareaDetalle(\'' + t.id + '\')" class="w-full flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer text-left transition-all ' + activeClass + '">' +
+            '<span class="text-xs font-bold px-1.5 py-0.5 rounded-full mt-0.5 flex-shrink-0 ' + prioColor + '">' + prioIcon + '</span>' +
+            '<div class="min-w-0">' +
+            '<p class="text-sm text-slate-700 leading-snug line-clamp-2">' + (t.detalles || 'Sin detalles') + '</p>' +
+            '<p class="text-[10px] text-slate-400 mt-0.5 font-medium">' + statusBadge.label + '</p>' +
             '</div>' +
             '</div>';
     }).join('');
 }
 
 // ============================================
-// RENDER: SUBPROYECTOS
+// RENDER: CUENTAS (sidebar, antes PROYECTOS)
+// ============================================
+function renderProyectos() {
+    renderSidebarCuentas();
+}
+
+// ============================================
+// RENDER: TAREAS GLOBALES (home level)
+// ============================================
+function renderGlobalTasksList() {
+    const container = document.getElementById('view-global-tasks');
+    if (!container) return;
+
+    if (tareas.length === 0) {
+        container.innerHTML = '<div class="text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay tareas aún</p><p class="text-sm">Selecciona una cuenta y abre un programa para empezar</p></div>';
+        return;
+    }
+
+    container.innerHTML =
+        '<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">' +
+        '<div class="p-4 border-b border-slate-200 flex items-center justify-between">' +
+        '<div><h2 class="font-bold text-slate-700 text-lg">Todas las Tareas</h2>' +
+        '<p class="text-sm text-slate-400 mt-0.5">' + tareas.length + ' tarea' + (tareas.length !== 1 ? 's' : '') + ' en total</p></div>' +
+        '</div>' +
+        '<div class="overflow-x-auto">' +
+        '<table class="w-full text-left border-collapse">' +
+        '<thead class="bg-slate-50 border-b border-slate-200"><tr>' +
+        '<th class="p-4 font-semibold text-slate-600">Tarea</th>' +
+        '<th class="p-4 font-semibold text-slate-600">Cuenta / Programa</th>' +
+        '<th class="p-4 font-semibold text-slate-600 text-center">Prioridad</th>' +
+        '<th class="p-4 font-semibold text-slate-600 text-center">Estado</th>' +
+        '<th class="p-4 font-semibold text-slate-600 text-center">Responsable</th>' +
+        '<th class="p-4 font-semibold text-slate-600 text-center">Vencimiento</th>' +
+        '</tr></thead>' +
+        '<tbody id="global-tasks-content"></tbody>' +
+        '</table></div></div>';
+
+    const tbody = document.getElementById('global-tasks-content');
+    tareas.forEach(function (tarea) {
+        const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
+        const respNombre = resp ? resp.nombre : 'Sin asignar';
+        const prioColor = getPriorityColor(tarea.prioridad);
+        const prioIcon = getPriorityIcon(tarea.prioridad);
+        const statusBadge = getStatusBadge(tarea.estatus);
+
+        const sub = subproyectos.find(function (s) { return s.id === tarea.id_subproyecto; });
+        const proy = sub ? proyectos.find(function (p) { return p.id === sub.id_proyecto; }) : null;
+        const locationHtml = (proy && sub)
+            ? '<span class="font-medium text-slate-700">' + proy.nombre + '</span>' +
+              '<span class="text-slate-400"> / ' + sub.nombre + '</span>'
+            : '<span class="text-slate-400">—</span>';
+
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer';
+        tr.onclick = function () {
+            if (sub && proy) {
+                currentProyecto = proy;
+                currentSubproyecto = sub;
+                currentTarea = tarea;
+                currentNavLevel = 'tarea_detail';
+                renderCurrentLevel();
+            }
+        };
+
+        tr.innerHTML =
+            '<td class="p-4 text-slate-700 max-w-xs"><p class="text-sm leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p></td>' +
+            '<td class="p-4 text-sm">' + locationHtml + '</td>' +
+            '<td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span></td>' +
+            '<td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td>' +
+            '<td class="p-4 text-center text-slate-500 text-sm">' + respNombre + '</td>' +
+            '<td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '—') + '</td>';
+
+        tbody.appendChild(tr);
+    });
+}
+
+// ============================================
+// NAVEGACIÓN: TAREA DETALLE
+// ============================================
+function selectTareaDetalle(tareaId) {
+    currentTarea = tareas.find(function (t) { return t.id === tareaId; });
+    currentNavLevel = 'tarea_detail';
+    renderCurrentLevel();
+}
+
+function renderTareaDetalle() {
+    const container = document.getElementById('tarea-detalle-content');
+    if (!container) return;
+    if (!currentTarea) {
+        container.innerHTML = '<p class="text-slate-400">Selecciona una tarea en la barra lateral</p>';
+        return;
+    }
+
+    const t = currentTarea;
+    const resp = responsables.find(function (r) { return r.id === t.id_responsable; });
+    const respNombre = resp ? resp.nombre : 'Sin asignar';
+    const prioColor = getPriorityColor(t.prioridad);
+    const prioIcon = getPriorityIcon(t.prioridad);
+    const statusBadge = getStatusBadge(t.estatus);
+    const user = getCurrentUser();
+    const canEdit = user && (user.role === 'director' || user.role === 'supervisor');
+    const editBtn = canEdit
+        ? '<button onclick="openTareaModal(\'' + t.id + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">Editar</button>'
+        : '';
+    const commentCount = comentarios.filter(function (c) { return c.id_tarea === t.id; }).length;
+
+    container.innerHTML =
+        '<div class="flex items-start justify-between mb-6">' +
+        '<div>' +
+        '<h2 class="text-2xl font-bold text-slate-800">' + (t.detalles || 'Sin título') + '</h2>' +
+        (t.asignacion ? '<p class="text-xs text-slate-400 font-mono mt-1">#' + t.asignacion + '</p>' : '') +
+        '</div>' +
+        '<div class="flex gap-2">' + editBtn + '</div>' +
+        '</div>' +
+        '<div class="flex flex-wrap gap-3 mb-6">' +
+        '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Prioridad</span><span class="text-xs px-2 py-0.5 rounded-full font-bold ' + prioColor + '">' + prioIcon + ' ' + (t.prioridad || 'media') + '</span></div>' +
+        '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Estado</span><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></div>' +
+        '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Responsable</span><span class="text-sm text-slate-700 font-medium">' + respNombre + '</span></div>' +
+        (t.fecha_limite ? '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Vencimiento</span><span class="text-sm text-slate-700">📅 ' + t.fecha_limite + '</span></div>' : '') +
+        '</div>' +
+        (t.descripcion ? '<div class="bg-slate-50 rounded-xl p-4 mb-6"><h3 class="font-semibold text-slate-700 mb-2 text-sm uppercase tracking-wider">Descripción</h3><p class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">' + t.descripcion + '</p></div>' : '') +
+        '<div class="pt-4 border-t border-slate-200">' +
+        '<button onclick="showTareaComments(\'' + t.id + '\')" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' +
+        'Ver Comentarios (' + commentCount + ')' +
+        '</button>' +
+        '</div>';
+}
+
+
+
+// ============================================
+// RENDER: PROGRAMAS (antes SUBPROYECTOS)
 // ============================================
 function renderSubproyectos() {
     const container = document.getElementById('view-subproyectos');
@@ -261,7 +470,7 @@ function renderSubproyectos() {
     const subs = subproyectos.filter(function (s) { return s.id_proyecto === (currentProyecto ? currentProyecto.id : null); });
 
     if (subs.length === 0) {
-        container.innerHTML = '<div class="col-span-full text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay subproyectos en este proyecto</p>' + (isDirector ? '<p class="text-sm">Haz clic en "Nuevo Subproyecto" para comenzar</p>' : '') + '</div>';
+        container.innerHTML = '<div class="col-span-full text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay programas en esta cuenta</p>' + (isDirector ? '<p class="text-sm">Haz clic en "Nuevo Programa" para comenzar</p>' : '') + '</div>';
         return;
     }
 
@@ -330,6 +539,7 @@ function renderTareasBoard() {
             container.appendChild(card);
         });
     });
+    renderSidebarTareas();
 }
 
 function createTareaCard(tarea, isSupervisor, isDirector) {
@@ -600,14 +810,14 @@ function openProyectoModal(id) {
     if (id) {
         const p = proyectos.find(function (x) { return x.id === id; });
         if (!p) return;
-        title.innerText = 'Editar Proyecto';
+        title.innerText = 'Editar Cuenta';
         document.getElementById('proyectoId').value = p.id;
         document.getElementById('proyectoNombre').value = p.nombre || '';
         document.getElementById('proyectoDesc').value = p.descripcion || '';
         document.getElementById('proyectoEstado').value = p.estado || 'activo';
         btnDelete.classList.remove('hidden');
     } else {
-        title.innerText = 'Nuevo Proyecto';
+        title.innerText = 'Nueva Cuenta';
         document.getElementById('proyectoId').value = '';
         btnDelete.classList.add('hidden');
     }
@@ -636,7 +846,7 @@ async function saveProyecto(e) {
         } else {
             proyectos.push(data);
             await postToBackend('proyecto_add', data);
-            sendWhatsAppNotification('🟢 NUEVO PROYECTO: *' + data.nombre + '*\n📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
+            sendWhatsAppNotification('🟢 NUEVA CUENTA: *' + data.nombre + '*\n📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
         }
         closeProyectoModal();
         renderProyectos();
@@ -647,7 +857,7 @@ async function saveProyecto(e) {
 
 async function deleteProyecto() {
     const id = document.getElementById('proyectoId').value;
-    if (!id || !confirm('¿Eliminar este proyecto y todos sus subproyectos?')) return;
+    if (!id || !confirm('¿Eliminar esta cuenta y todos sus programas?')) return;
     proyectos = proyectos.filter(function (p) { return p.id !== id; });
     closeProyectoModal();
     renderProyectos();
@@ -666,7 +876,7 @@ function openSubproyectoModal(id) {
     if (id) {
         const s = subproyectos.find(function (x) { return x.id === id; });
         if (!s) return;
-        title.innerText = 'Editar Subproyecto';
+        title.innerText = 'Editar Programa';
         document.getElementById('subproyectoId').value = s.id;
         document.getElementById('subproyectoNombre').value = s.nombre || '';
         document.getElementById('subproyectoDesc').value = s.descripcion || '';
@@ -674,7 +884,7 @@ function openSubproyectoModal(id) {
         document.getElementById('subproyectoFechaFin').value = s.fecha_fin_estimada || '';
         btnDelete.classList.remove('hidden');
     } else {
-        title.innerText = 'Nuevo Subproyecto';
+        title.innerText = 'Nuevo Programa';
         document.getElementById('subproyectoId').value = '';
         btnDelete.classList.add('hidden');
     }
@@ -715,7 +925,7 @@ async function saveSubproyecto(e) {
 
 async function deleteSubproyecto() {
     const id = document.getElementById('subproyectoId').value;
-    if (!id || !confirm('¿Eliminar este subproyecto y todas sus tareas?')) return;
+    if (!id || !confirm('¿Eliminar este programa y todas sus tareas?')) return;
     subproyectos = subproyectos.filter(function (s) { return s.id !== id; });
     closeSubproyectoModal();
     renderSubproyectos();
@@ -836,6 +1046,11 @@ async function saveTarea(e) {
         closeTareaModal();
         renderTareasBoard();
         renderTareasList();
+        // If viewing task detail, refresh the view
+        if (currentNavLevel === 'tarea_detail' && currentTarea && data.id === currentTarea.id) {
+            currentTarea = tareas.find(function (t) { return t.id === data.id; });
+            renderTareaDetalle();
+        }
     } finally {
         showLoading(false);
     }
@@ -844,10 +1059,16 @@ async function saveTarea(e) {
 async function deleteTarea() {
     const id = document.getElementById('tareaId').value;
     if (!id || !confirm('¿Eliminar esta tarea?')) return;
+    const wasCurrentTarea = currentTarea && currentTarea.id === id;
     tareas = tareas.filter(function (t) { return t.id !== id; });
     closeTareaModal();
+    if (wasCurrentTarea) {
+        currentTarea = null;
+        currentNavLevel = 'subproyecto';
+    }
     renderTareasBoard();
     renderTareasList();
+    if (wasCurrentTarea) renderCurrentLevel();
     await postToBackend('tarea_delete', { id: id });
 }
 
