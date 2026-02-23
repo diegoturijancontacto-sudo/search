@@ -198,7 +198,7 @@ function updateHeaderActions() {
     } else if (currentNavLevel === 'proyecto' && isDirector) {
         extraBtns = '<button onclick="openSubproyectoModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nuevo Subproyecto</button>';
     } else if (currentNavLevel === 'subproyecto' && isDirector) {
-        extraBtns = '<button onclick="openTareaModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nueva Tarea</button>';
+        extraBtns = '<button onclick="openTareaModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nueva Tarea</button>';
     }
 
     container.innerHTML = extraBtns + '<button onclick="refreshData()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2.5 rounded-lg font-medium shadow-sm transition-all">Actualizar</button><a href="admin.html" class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2.5 rounded-lg font-medium transition-all flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Usuarios</a>';
@@ -235,7 +235,6 @@ function renderProyectos() {
         const asignHtml = p.asignacion ? '<p class="text-[11px] text-slate-400 font-mono mt-1">#' + p.asignacion + '</p>' : '';
         const descHtml = p.descripcion ? '<p class="text-sm text-slate-500 mb-3 line-clamp-2">' + p.descripcion + '</p>' : '';
 
-        // ✅ IMPORTANTE: asignHtml ahora se inserta debajo del nombre
         return '<div onclick="selectProyecto(\'' + p.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group">' +
             '<div class="flex items-start justify-between mb-3">' +
             '<div class="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg group-hover:bg-indigo-200 transition-colors">' + firstChar + '</div>' +
@@ -277,15 +276,14 @@ function renderSubproyectos() {
         const asignHtml = s.asignacion ? '<p class="text-[11px] text-slate-400 font-mono mt-1">#' + s.asignacion + '</p>' : '';
         const editBtn = isDirector ? '<button onclick="event.stopPropagation(); openSubproyectoModal(\'' + s.id + '\')" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">Editar</button>' : '';
         const descHtml = s.descripcion ? '<p class="text-sm text-slate-500 mb-2 line-clamp-2">' + s.descripcion + '</p>' : '';
-        const fechasHtml = (s.fecha_inicio || s.fecha_fin_estimada) ? '<div class="flex gap-2 text-xs text-slate-400 mb-3">' + (s.fecha_inicio ? '<span>\uD83D\uDCC5 ' + s.fecha_inicio + '</span>' : '') + (s.fecha_fin_estimada ? '<span>\uD83C\uDFC1 ' + s.fecha_fin_estimada + '</span>' : '') + '</div>' : '';
+        const fechasHtml = (s.fecha_inicio || s.fecha_fin_estimada) ? '<div class="flex gap-2 text-xs text-slate-400 mb-3">' + (s.fecha_inicio ? '<span>📅 ' + s.fecha_inicio + '</span>' : '') + (s.fecha_fin_estimada ? '<span>🏁 ' + s.fecha_fin_estimada + '</span>' : '') + '</div>' : '';
         const countersHtml = '<div class="flex gap-1 mb-3 flex-wrap">' +
             (pendienteCount > 0 ? '<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold">' + pendienteCount + ' pendiente</span>' : '') +
             (enCursoCount > 0 ? '<span class="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-bold">' + enCursoCount + ' en curso</span>' : '') +
-            (enRevisionCount > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-bold">' + enRevisionCount + ' en revisi\u00F3n</span>' : '') +
+            (enRevisionCount > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-bold">' + enRevisionCount + ' en revisión</span>' : '') +
             (completadoCount > 0 ? '<span class="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold">' + completadoCount + ' completado</span>' : '') +
             '</div>';
 
-        // ✅ IMPORTANTE: asignHtml ahora se inserta debajo del nombre
         return '<div onclick="selectSubproyecto(\'' + s.id + '\')" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group">' +
             '<div class="flex items-start justify-between mb-3">' +
             '<div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-lg group-hover:bg-violet-200 transition-colors">' + firstChar + '</div>' +
@@ -353,35 +351,44 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
     const commentCount = comentarios.filter(function (c) { return c.id_tarea === tarea.id; }).length;
     const canEdit = isDirector || isSupervisor;
 
+    // NUEVO: botón de descripción
+    const hasDesc = (tarea.descripcion || '').trim().length > 0;
+    const descBtnHtml = hasDesc
+        ? '<button onclick="event.stopPropagation(); showTareaDescripcion(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded" title="Descripción">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path>' +
+        '</svg>' +
+        '</button>'
+        : '';
+
     const commentBtnHtml = '<button onclick="event.stopPropagation(); showTareaComments(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded relative" title="Comentarios"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' + (commentCount > 0 ? '<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">' + commentCount + '</span>' : '') + '</button>';
     const editBtnHtml = canEdit ? '<button onclick="event.stopPropagation(); openTareaModal(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded" title="Editar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>' : '';
 
     let actionBtns = '';
     if (tarea.estatus === 'pendiente') {
-        actionBtns = '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'en_curso\')" class="text-xs bg-blue-100 text-blue-600 hover:bg-blue-200 px-2 py-1 rounded-md font-medium">\u25B6 Iniciar</button>';
+        actionBtns = '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'en_curso\')" class="text-xs bg-blue-100 text-blue-600 hover:bg-blue-200 px-2 py-1 rounded-md font-medium">▶ Iniciar</button>';
     } else if (tarea.estatus === 'en_curso') {
-        actionBtns = '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'pendiente\')" class="text-xs bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded-md font-medium">\u23F8 Pausar</button><button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'en_revision\')" class="text-xs bg-amber-100 text-amber-600 hover:bg-amber-200 px-2 py-1 rounded-md font-medium">\uD83D\uDD0D Enviar a revisi\u00F3n</button>';
+        actionBtns = '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'pendiente\')" class="text-xs bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded-md font-medium">⏸ Pausar</button>' +
+            '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'en_revision\')" class="text-xs bg-amber-100 text-amber-600 hover:bg-amber-200 px-2 py-1 rounded-md font-medium">🔍 Enviar a revisión</button>';
     } else if (tarea.estatus === 'en_revision') {
         if (isSupervisor || isDirector) {
-            actionBtns = '<button onclick="event.stopPropagation(); openAprobacionModal(\'' + tarea.id + '\')" class="text-xs bg-emerald-100 text-emerald-600 hover:bg-emerald-200 px-2 py-1 rounded-md font-medium">\u2705 Aprobar / Rechazar</button>';
+            actionBtns = '<button onclick="event.stopPropagation(); openAprobacionModal(\'' + tarea.id + '\')" class="text-xs bg-emerald-100 text-emerald-600 hover:bg-emerald-200 px-2 py-1 rounded-md font-medium">✅ Aprobar / Rechazar</button>';
         } else {
-            actionBtns = '<span class="text-xs text-amber-500 font-medium">\u23F3 Esperando aprobaci\u00F3n</span>';
+            actionBtns = '<span class="text-xs text-amber-500 font-medium">⏳ Esperando aprobación</span>';
         }
     } else {
-        actionBtns = '<span class="text-xs text-emerald-600 font-medium">\u2705 Completado</span>';
+        actionBtns = '<span class="text-xs text-emerald-600 font-medium">✅ Completado</span>';
     }
 
-    const fechaHtml = tarea.fecha_limite ? '<p class="text-xs text-slate-400 mt-1">\uD83D\uDCC5 ' + tarea.fecha_limite + '</p>' : '';
+    const fechaHtml = tarea.fecha_limite ? '<p class="text-xs text-slate-400 mt-1">📅 ' + tarea.fecha_limite + '</p>' : '';
 
-    // ✅ IMPORTANTE: asignacionHtml ahora se inserta debajo del texto de la tarea
     card.innerHTML =
         '<div class="flex items-start justify-between mb-2">' +
         '<span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span>' +
-        '<div class="flex gap-1">' + commentBtnHtml + editBtnHtml + '</div>' +
+        '<div class="flex gap-1">' + descBtnHtml + commentBtnHtml + editBtnHtml + '</div>' +
         '</div>' +
         '<p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p>' +
         asignacionHtml +
-        '<p class="text-[10px] text-slate-400 font-mono mb-2">' + (tarea.id || '') + '</p>' +
         '<p class="text-xs text-slate-400 font-medium">' + respNombre + '</p>' +
         fechaHtml +
         '<div class="flex flex-wrap gap-1 mt-3 pt-2 border-t border-slate-100">' + actionBtns + '</div>';
@@ -407,13 +414,20 @@ function renderTareasList() {
         const statusBadge = getStatusBadge(tarea.estatus);
         const tr = document.createElement('tr');
         tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
-        const editBtn = canEdit ? '<button onclick="openTareaModal(\'' + tarea.id + '\')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg text-xs font-bold uppercase">Editar</button>' : '';
+
+        const editBtn = canEdit
+            ? '<button onclick="openTareaModal(\'' + tarea.id + '\')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg text-xs font-bold uppercase">Editar</button>'
+            : '';
+
+        const hasDesc = (tarea.descripcion || '').trim().length > 0;
+        const descBtn = hasDesc
+            ? '<button onclick="showTareaDescripcion(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-2 rounded-lg" title="Ver descripción">📝</button>'
+            : '';
 
         const asignacionHtml = tarea.asignacion
             ? '<p class="text-[10px] text-slate-400 font-mono mt-1">#' + tarea.asignacion + '</p>'
             : '';
 
-        // ✅ IMPORTANTE: en lista ahora se inserta asignacionHtml debajo de detalles
         tr.innerHTML =
             '<td class="p-4 text-slate-700 max-w-xs">' +
             '<p class="text-sm leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p>' +
@@ -424,7 +438,7 @@ function renderTareasList() {
             '<td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + getPriorityIcon(tarea.prioridad) + ' ' + (tarea.prioridad || 'media') + '</span></td>' +
             '<td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td>' +
             '<td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '-') + '</td>' +
-            '<td class="p-4 text-right"><div class="flex gap-1 justify-end">' + editBtn + '</div></td>';
+            '<td class="p-4 text-right"><div class="flex gap-1 justify-end">' + descBtn + editBtn + '</div></td>';
 
         container.appendChild(tr);
     });
@@ -622,7 +636,7 @@ async function saveProyecto(e) {
         } else {
             proyectos.push(data);
             await postToBackend('proyecto_add', data);
-            sendWhatsAppNotification('\uD83D\uDFE2 NUEVO PROYECTO: *' + data.nombre + '*\n\uD83D\uDCC5 ' + new Date().toLocaleString('es-ES') + '\n\uD83D\uDD17 ' + PANEL_URL);
+            sendWhatsAppNotification('🟢 NUEVO PROYECTO: *' + data.nombre + '*\n📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
         }
         closeProyectoModal();
         renderProyectos();
@@ -633,7 +647,7 @@ async function saveProyecto(e) {
 
 async function deleteProyecto() {
     const id = document.getElementById('proyectoId').value;
-    if (!id || !confirm('\u00BFEliminar este proyecto y todos sus subproyectos?')) return;
+    if (!id || !confirm('¿Eliminar este proyecto y todos sus subproyectos?')) return;
     proyectos = proyectos.filter(function (p) { return p.id !== id; });
     closeProyectoModal();
     renderProyectos();
@@ -701,7 +715,7 @@ async function saveSubproyecto(e) {
 
 async function deleteSubproyecto() {
     const id = document.getElementById('subproyectoId').value;
-    if (!id || !confirm('\u00BFEliminar este subproyecto y todas sus tareas?')) return;
+    if (!id || !confirm('¿Eliminar este subproyecto y todas sus tareas?')) return;
     subproyectos = subproyectos.filter(function (s) { return s.id !== id; });
     closeSubproyectoModal();
     renderSubproyectos();
@@ -730,8 +744,11 @@ function openTareaModal(id) {
     form.reset();
     updateResponsableSelect();
 
+    const descEl = document.getElementById('tareaDescripcion');
+    if (descEl) descEl.value = '';
+
     const isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
-    statusSelect.innerHTML = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisi\u00F3n</option>' + (isPrivileged ? '<option value="completado">Completado</option>' : '');
+    statusSelect.innerHTML = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisión</option>' + (isPrivileged ? '<option value="completado">Completado</option>' : '');
 
     if (id) {
         const t = tareas.find(function (x) { return x.id === id; });
@@ -739,6 +756,7 @@ function openTareaModal(id) {
         title.innerText = 'Editar Tarea';
         document.getElementById('tareaId').value = t.id;
         document.getElementById('tareaDetalles').value = t.detalles || '';
+        if (descEl) descEl.value = t.descripcion || '';
         document.getElementById('tareaResponsable').value = t.id_responsable || '';
         document.getElementById('tareaPrioridad').value = t.prioridad || 'media';
         document.getElementById('tareaEstatus').value = t.estatus || 'pendiente';
@@ -760,13 +778,14 @@ async function saveTarea(e) {
     e.preventDefault();
     const id = document.getElementById('tareaId').value;
 
-    // Obtener datos del formulario
     const id_responsable = document.getElementById('tareaResponsable').value;
     const prioridad = document.getElementById('tareaPrioridad').value;
     const estatus = document.getElementById('tareaEstatus').value;
     const detalles = document.getElementById('tareaDetalles').value;
 
-    // Generar ID interno (estable)
+    const descEl = document.getElementById('tareaDescripcion');
+    const descripcion = descEl ? descEl.value : '';
+
     let nuevoId;
     if (id) {
         nuevoId = id;
@@ -799,6 +818,7 @@ async function saveTarea(e) {
         prioridad: prioridad,
         estatus: estatus,
         detalles: detalles,
+        descripcion: descripcion, // NUEVO
         adjuntos: [],
         fecha_limite: document.getElementById('tareaFechaLimite').value
     };
@@ -823,7 +843,7 @@ async function saveTarea(e) {
 
 async function deleteTarea() {
     const id = document.getElementById('tareaId').value;
-    if (!id || !confirm('\u00BFEliminar esta tarea?')) return;
+    if (!id || !confirm('¿Eliminar esta tarea?')) return;
     tareas = tareas.filter(function (t) { return t.id !== id; });
     closeTareaModal();
     renderTareasBoard();
@@ -832,54 +852,53 @@ async function deleteTarea() {
 }
 
 // ============================================
-// MODAL DE APROBACIÓN
+// MODAL: DESCRIPCIÓN (POPUP)
 // ============================================
-function openAprobacionModal(tareaId) {
+function ensureDescripcionModal_() {
+    if (document.getElementById('descripcion-modal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'descripcion-modal';
+    modal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden p-4 flex items-center justify-center';
+
+    modal.innerHTML =
+        '<div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden">' +
+        '<div class="p-4 border-b border-slate-100 flex items-center justify-between">' +
+        '<h3 id="descripcion-modal-title" class="text-base font-bold text-slate-800">Descripción</h3>' +
+        '<button onclick="closeDescripcionModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded">' +
+        '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>' +
+        '</svg>' +
+        '</button>' +
+        '</div>' +
+        '<div class="p-4">' +
+        '<div id="descripcion-modal-content" class="text-sm text-slate-700 whitespace-pre-wrap"></div>' +
+        '</div>' +
+        '<div class="p-4 border-t border-slate-100 flex justify-end">' +
+        '<button onclick="closeDescripcionModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Cerrar</button>' +
+        '</div>' +
+        '</div>';
+
+    document.body.appendChild(modal);
+}
+
+function showTareaDescripcion(tareaId) {
+    ensureDescripcionModal_();
     const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
-    const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
-    document.getElementById('aprobacionTareaId').value = tareaId;
-    document.getElementById('aprobacionObservaciones').value = '';
-    document.getElementById('aprobacion-tarea-info').innerHTML = '<p class="font-bold mb-1">' + (tarea.detalles || 'Sin detalles') + '</p><p class="text-xs text-slate-500">Responsable: ' + (resp ? resp.nombre : 'Sin asignar') + ' \u2022 Prioridad: ' + (tarea.prioridad || 'media') + '</p>';
-    document.getElementById('modal-aprobacion').classList.remove('hidden');
+
+    document.getElementById('descripcion-modal-title').innerText =
+        'Descripción: ' + ((tarea.detalles || 'Tarea').toString().substring(0, 60));
+
+    document.getElementById('descripcion-modal-content').textContent =
+        (tarea.descripcion || '').trim() || 'Sin descripción.';
+
+    document.getElementById('descripcion-modal').classList.remove('hidden');
 }
 
-function closeAprobacionModal() {
-    document.getElementById('modal-aprobacion').classList.add('hidden');
-}
-
-async function aprobarTarea() {
-    const tareaId = document.getElementById('aprobacionTareaId').value;
-    const obs = document.getElementById('aprobacionObservaciones').value;
-    const user = getCurrentUser();
-    showLoading(true);
-    try {
-        await postToBackend('tarea_aprobar', { id_tarea: tareaId, id_supervisor: user ? user.id : '', observaciones: obs });
-        const tarea = tareas.find(function (t) { return t.id === tareaId; });
-        if (tarea) tarea.estatus = 'completado';
-        closeAprobacionModal();
-        renderTareasBoard();
-        renderTareasList();
-    } finally {
-        showLoading(false);
-    }
-}
-
-async function rechazarTarea() {
-    const tareaId = document.getElementById('aprobacionTareaId').value;
-    const obs = document.getElementById('aprobacionObservaciones').value;
-    const user = getCurrentUser();
-    showLoading(true);
-    try {
-        await postToBackend('tarea_rechazar', { id_tarea: tareaId, id_supervisor: user ? user.id : '', observaciones: obs });
-        const tarea = tareas.find(function (t) { return t.id === tareaId; });
-        if (tarea) tarea.estatus = 'en_curso';
-        closeAprobacionModal();
-        renderTareasBoard();
-        renderTareasList();
-    } finally {
-        showLoading(false);
-    }
+function closeDescripcionModal() {
+    const modal = document.getElementById('descripcion-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
 // ============================================
@@ -893,13 +912,23 @@ function showTareaComments(tareaId) {
     document.getElementById('comments-modal-title').innerText = 'Comentarios: ' + (tarea.detalles || '').substring(0, 40);
 
     const commentsHtml = tareaComments.length === 0
-        ? '<p class="text-center text-slate-400 py-4">No hay comentarios a\u00FAn</p>'
+        ? '<p class="text-center text-slate-400 py-4">No hay comentarios aún</p>'
         : tareaComments.map(function (c) {
             const resp = responsables.find(function (r) { return r.id === c.id_responsable; });
             return '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><div class="flex justify-between items-start mb-1"><span class="font-bold text-xs text-indigo-600">' + (resp ? resp.nombre : c.id_responsable) + '</span><span class="text-[10px] text-slate-400">' + (c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span></div><p class="text-sm text-slate-700">' + c.comentario + '</p></div>';
         }).join('');
 
-    document.getElementById('comments-modal-content').innerHTML = '<div class="space-y-4"><div class="space-y-3 max-h-60 overflow-y-auto">' + commentsHtml + '</div><div class="border-t border-slate-200 pt-4"><textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm" placeholder="Escribe tu comentario..."></textarea><div class="flex justify-end mt-2"><button onclick="addTareaComment(\'' + tareaId + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Enviar</button></div></div></div>';
+    document.getElementById('comments-modal-content').innerHTML =
+        '<div class="space-y-4">' +
+        '<div class="space-y-3 max-h-60 overflow-y-auto">' + commentsHtml + '</div>' +
+        '<div class="border-t border-slate-200 pt-4">' +
+        '<textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm" placeholder="Escribe tu comentario..."></textarea>' +
+        '<div class="flex justify-end mt-2">' +
+        '<button onclick="addTareaComment(\'' + tareaId + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Enviar</button>' +
+        '</div>' +
+        '</div>' +
+        '</div>';
+
     modal.classList.remove('hidden');
 }
 
@@ -998,10 +1027,10 @@ function getPriorityColor(priority) {
 
 function getPriorityIcon(priority) {
     switch (priority) {
-        case 'alta': return '\uD83D\uDD34';
-        case 'media': return '\uD83D\uDFE1';
-        case 'baja': return '\uD83D\uDFE2';
-        default: return '\u26AA';
+        case 'alta': return '🔴';
+        case 'media': return '🟡';
+        case 'baja': return '🟢';
+        default: return '⚪';
     }
 }
 
@@ -1009,13 +1038,13 @@ function getStatusBadge(estatus) {
     switch (estatus) {
         case 'pendiente': return { class: 'bg-slate-100 text-slate-600', label: 'Pendiente' };
         case 'en_curso': return { class: 'bg-blue-100 text-blue-600', label: 'En Curso' };
-        case 'en_revision': return { class: 'bg-amber-100 text-amber-600', label: 'En Revisi\u00F3n' };
+        case 'en_revision': return { class: 'bg-amber-100 text-amber-600', label: 'En Revisión' };
         case 'completado': return { class: 'bg-emerald-100 text-emerald-600', label: 'Completado' };
         default: return { class: 'bg-gray-100 text-gray-600', label: estatus };
     }
 }
 
-// ESC cierra todos los modales
+// ESC cierra todos los modales (incluye el de descripción)
 document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         closeProyectoModal();
@@ -1023,6 +1052,7 @@ document.addEventListener('keydown', function (e) {
         closeTareaModal();
         closeAprobacionModal();
         closeCommentsModal();
+        closeDescripcionModal();
     }
 });
 
