@@ -915,6 +915,7 @@ async function saveSubproyecto(e) {
         } else {
             subproyectos.push(data);
             await postToBackend('subproyecto_add', data);
+            sendWhatsAppNotification('📂 NUEVO PROGRAMA: *' + data.nombre + '*\n' + (currentProyecto ? '🏢 Cuenta: ' + currentProyecto.nombre + '\n' : '') + '📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
         }
         closeSubproyectoModal();
         renderSubproyectos();
@@ -1037,11 +1038,16 @@ async function saveTarea(e) {
     try {
         if (id) {
             const idx = tareas.findIndex(function (t) { return t.id === id; });
+            const estatusAnterior = tareas[idx] ? tareas[idx].estatus : null;
             tareas[idx] = Object.assign({}, tareas[idx], data);
             await postToBackend('tarea_update', data);
+            if (estatusAnterior && estatusAnterior !== estatus) {
+                sendWhatsAppNotification('🔄 TAREA ACTUALIZADA: *' + (detalles || id) + '*\n📊 Estado: ' + estatusAnterior + ' → ' + estatus + '\n📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
+            }
         } else {
             tareas.push(data);
             await postToBackend('tarea_add', data);
+            sendWhatsAppNotification('📋 NUEVA TAREA: *' + (detalles || id) + '*\n' + (currentSubproyecto ? '📁 Programa: ' + currentSubproyecto.nombre + '\n' : '') + '📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
         }
         closeTareaModal();
         renderTareasBoard();
