@@ -1,191 +1,362 @@
 /**
- * ESTRUCTURA DE HOJAS:
- * 
- * HOJA 1: Proyectos
- * HOJA 2: Subproyectos  
- * HOJA 3: Tareas (CON IDENTIFICADORES BASADOS EN LETRAS)
- * HOJA 4: Responsables
- * HOJA 5: Comentarios
- * HOJA 6: HistorialAprobaciones
+ * Backend para Google Sheets (DB)
+ *
+ * Hojas (nombres exactos):
+ * - Proyectos
+ * - Subproyectos
+ * - Tareas
+ * - Responsables
+ * - Comentarios
+ * - HistorialAprobaciones
+ *
+ * Asignación consecutiva:
+ * - Proyecto: 1,2,3...        (Proyectos!F)
+ * - Subproyecto: 1.1, 1.2...  (Subproyectos!H) según proyecto
+ * - Tarea: 1.1.1DT            (Tareas!K) según subproyecto + iniciales Responsable (Responsables!G)
+ *   donde DT sale de Responsables!Identificador (col G) en MAYÚSCULAS.
+ * - En tarea_update: si cambia responsable, se actualiza sufijo sin cambiar consecutivo.
+ *
+ * NUEVO:
+ * - Tareas incluye columna "Descripción" (col G)
+ *   Estructura Tareas:
+ *   A ID
+ *   B ID Subproyecto
+ *   C ID Responsable
+ *   D Prioridad
+ *   E Estatus
+ *   F Detalles
+ *   G Descripción
+ *   H Adjuntos
+ *   I Fecha Creación
+ *   J Fecha Límite
+ *   K asignacion
+ *
+ * + NUEVO (BLOQUEADAS):
+ * - Estado adicional de tarea: "bloqueada"
+ * - Solo el supervisor puede bloquear/desbloquear
+ * - Acciones nuevas:
+ *    - tarea_bloquear  => set estatus = "bloqueada" + historial
+ *    - tarea_desbloquear => set estatus = "en_curso" + historial
  */
 
-// Función para generar identificador a partir de un nombre
+const SHEET_PROYECTOS = 'Proyectos';
+const SHEET_SUBPROYECTOS = 'Subproyectos';
+const SHEET_TAREAS = 'Tareas';
+const SHEET_RESPONSABLES = 'Responsables';
+const SHEET_COMENTARIOS = 'Comentarios';
+const SHEET_HISTORIAL = 'HistorialAprobaciones';
+
+// ======================================================
+// INIT / VALIDACIÓN DE ESQUEMA
+// ======================================================
+function ensureSchema_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  getOrCreateSheet_(ss, SHEET_PROYECTOS, ['ID', 'Nombre', 'Descripción', 'Fecha Creación', 'Estado', 'asignacion']);
+  getOrCreateSheet_(ss, SHEET_SUBPROYECTOS, ['ID', 'ID Proyecto', 'Nombre', 'Descripción', 'Fecha Inicio', 'Fecha Fin Estimada', 'Fecha Creación', 'asignacion']);
+  getOrCreateSheet_(ss, SHEET_TAREAS, [
+    'ID', 'ID Subproyecto', 'ID Responsable', 'Prioridad', 'Estatus',
+    'Detalles', 'Descripción', 'Adjuntos', 'Fecha Creación', 'Fecha Límite', 'asignacion'
+  ]);
+  getOrCreateSheet_(ss, SHEET_RESPONSABLES, ['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro', 'Identificador']);
+  getOrCreateSheet_(ss, SHEET_COMENTARIOS, ['ID', 'ID Tarea', 'ID Responsable', 'Comentario', 'Fecha']);
+  getOrCreateSheet_(ss, SHEET_HISTORIAL, ['ID', 'ID Tarea', 'ID Supervisor', 'Estado Anterior', 'Estado Nuevo', 'Fecha', 'Observaciones']);
+
+  // Asegurar columna Identificador en Responsables y rellenar vacíos
+  const shR = ss.getSheetByName(SHEET_RESPONSABLES);
+  const colIdent = ensureColumnWithHeader_(shR, 'Identificador');
+
+  const lastRow = shR.getLastRow();
+  if (lastRow > 1) {
+    const values = shR.getRange(2, 1, lastRow - 1, Math.max(shR.getLastColumn(), colIdent)).getValues();
+    for (let i = 0; i < values.length; i++) {
+      const nombre = (values[i][1] || '').toString();
+      const ident = (values[i][colIdent - 1] || '').toString().trim();
+      if (!ident && nombre) {
+        shR.getRange(i + 2, colIdent).setValue(generarIdentificador(nombre));
+      }
+    }
+  }
+
+  // Forzar columnas asignacion como TEXTO (evita 1.1 => 1/1/26)
+  forceTextColumn_(ss.getSheetByName(SHEET_PROYECTOS), 6);     // F
+  forceTextColumn_(ss.getSheetByName(SHEET_SUBPROYECTOS), 8);  // H
+  forceTextColumn_(ss.getSheetByName(SHEET_TAREAS), 11);       // K
+}
+
+function getOrCreateSheet_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.appendRow(headers);
+    return sh;
+  }
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(headers);
+    return sh;
+  }
+  const a1 = (sh.getRange(1, 1).getValue() || '').toString().trim().toLowerCase();
+  if (a1 !== 'id') {
+    sh.insertRowBefore(1);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  return sh;
+}
+
+function ensureColumnWithHeader_(sh, headerName) {
+  const lastCol = Math.max(sh.getLastColumn(), 1);
+  const row1 = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || '').toString().trim());
+  let idx = row1.findIndex(h => h.toLowerCase() === headerName.toLowerCase());
+  if (idx === -1) {
+    const newCol = lastCol + 1;
+    sh.getRange(1, newCol).setValue(headerName);
+    idx = newCol - 1;
+  }
+  return idx + 1;
+}
+
+function forceTextColumn_(sh, colIndex) {
+  if (!sh) return;
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return;
+  sh.getRange(2, colIndex, lastRow - 1, 1).setNumberFormat('@STRING@');
+}
+
+// ======================================================
+// UTILIDADES
+// ======================================================
 function generarIdentificador(nombre) {
   if (!nombre) return 'xxx';
-  
-  // Tomar primeras letras de cada palabra (máximo 3 caracteres)
   const palabras = nombre.toLowerCase().split(' ');
-  let identificador = '';
-  
+  let ident = '';
   for (let i = 0; i < Math.min(palabras.length, 3); i++) {
-    if (palabras[i].length > 0) {
-      identificador += palabras[i][0];
+    if (palabras[i]) ident += palabras[i][0];
+  }
+  if (ident.length === 1 && nombre.length >= 3) ident = nombre.substring(0, 3).toLowerCase();
+  return ident || 'x';
+}
+
+function toIntSafe(v) {
+  const n = parseInt(v, 10);
+  return isNaN(n) ? 0 : n;
+}
+
+function normalizeAsignacion_(v) {
+  if (!v) return '';
+  if (v instanceof Date) return '';
+  const s = String(v).trim();
+  if (!s) return '';
+  if (s.includes('GMT')) return '';
+  return s;
+}
+
+// ======================================================
+// SEGURIDAD / ROLES (para bloquear)
+// ======================================================
+function getResponsableRolById_(ss, responsableId) {
+  if (!responsableId) return '';
+  const sh = ss.getSheetByName(SHEET_RESPONSABLES);
+  if (!sh) return '';
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if ((rows[i][0] || '').toString() === responsableId.toString()) {
+      return (rows[i][4] || '').toString(); // col E = Rol
     }
   }
-  
-  // Si el nombre es una sola palabra, tomar las primeras 3 letras
-  if (identificador.length === 1 && nombre.length >= 3) {
-    identificador = nombre.substring(0, 3).toLowerCase();
-  }
-  
-  // Asegurar que tenga al menos 1 carácter
-  return identificador || 'x';
+  return '';
 }
 
-// Función para generar el ID completo de una tarea
-function generarIdTarea(idProyecto, idSubproyecto, idResponsable, timestamp, idTareaNumerico) {
-  // Extraer el identificador del responsable (últimas 3 letras del ID o generarlo)
-  let respIdent = idResponsable;
-  if (idResponsable && idResponsable.includes('.')) {
-    const partes = idResponsable.split('.');
-    respIdent = partes[partes.length - 1] || 'xxx';
-  } else {
-    respIdent = idResponsable ? idResponsable.substring(0, 3) : 'xxx';
+function assertSupervisor_(ss, actorId) {
+  const rol = getResponsableRolById_(ss, actorId);
+  if (rol !== 'supervisor') {
+    throw new Error('No autorizado: solo supervisor puede realizar esta acción.');
   }
-  
-  return [
-    idProyecto,
-    idSubproyecto,
-    idTareaNumerico || timestamp,
-    respIdent
-  ].join('.');
 }
 
+// ======================================================
+// ASIGNACIONES
+// ======================================================
+function getResponsableInicialesById_(ss, responsableId) {
+  if (!responsableId) return '';
+  const sh = ss.getSheetByName(SHEET_RESPONSABLES);
+  if (!sh) return '';
+
+  const colIdent = ensureColumnWithHeader_(sh, 'Identificador');
+  const rows = sh.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toString() === responsableId.toString()) {
+      const ident = (rows[i][colIdent - 1] || '').toString();
+      return ident ? ident.toUpperCase() : '';
+    }
+  }
+  return '';
+}
+
+function getNextProyectoAsignacion_(ss) {
+  const sh = ss.getSheetByName(SHEET_PROYECTOS);
+  const rows = sh.getDataRange().getValues();
+  let maxA = 0;
+  for (let i = 1; i < rows.length; i++) maxA = Math.max(maxA, toIntSafe(rows[i][5])); // F
+  return (maxA + 1).toString();
+}
+
+function getProyectoAsignacionById_(ss, proyectoId) {
+  const sh = ss.getSheetByName(SHEET_PROYECTOS);
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toString() === proyectoId.toString()) return normalizeAsignacion_(rows[i][5]); // F
+  }
+  return '';
+}
+
+function getNextSubproyectoAsignacion_(ss, proyectoId) {
+  const proyectoAsign = getProyectoAsignacionById_(ss, proyectoId);
+  if (!proyectoAsign) return '';
+
+  const sh = ss.getSheetByName(SHEET_SUBPROYECTOS);
+  const rows = sh.getDataRange().getValues();
+
+  let maxSub = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][1]?.toString() === proyectoId.toString()) {
+      const asign = normalizeAsignacion_(rows[i][7]); // H
+      const parts = asign.split('.');
+      if (parts.length === 2 && parts[0] === proyectoAsign) {
+        maxSub = Math.max(maxSub, toIntSafe(parts[1]));
+      }
+    }
+  }
+  return `${proyectoAsign}.${maxSub + 1}`;
+}
+
+function getSubproyectoAsignacionById_(ss, subproyectoId) {
+  const sh = ss.getSheetByName(SHEET_SUBPROYECTOS);
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0]?.toString() === subproyectoId.toString()) return normalizeAsignacion_(rows[i][7]); // H
+  }
+  return '';
+}
+
+function getNextTareaAsignacion_(ss, subproyectoId, responsableId) {
+  const subAsign = normalizeAsignacion_(getSubproyectoAsignacionById_(ss, subproyectoId)); // "1.1"
+  if (!subAsign) return '';
+
+  const sh = ss.getSheetByName(SHEET_TAREAS);
+  const rows = sh.getDataRange().getValues();
+
+  let maxT = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if ((rows[i][1] || '').toString() === subproyectoId.toString()) { // B = ID Subproyecto
+      const asign = normalizeAsignacion_(rows[i][10]); // K = asignacion
+      const m = asign.match(/^(\d+)\.(\d+)\.(\d+)([A-Z]*)$/);
+      if (m) {
+        const prefix = `${m[1]}.${m[2]}`;
+        if (prefix === subAsign) maxT = Math.max(maxT, toIntSafe(m[3]));
+      }
+    }
+  }
+
+  const ini = getResponsableInicialesById_(ss, responsableId);
+  return `${subAsign}.${maxT + 1}${ini}`;
+}
+
+// ======================================================
+// GET
+// ======================================================
 function doGet() {
   try {
+    ensureSchema_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // Obtener proyectos (Hoja 1)
-    const proyectosSheet = ss.getSheets()[0];
-    const proyectosData = proyectosSheet.getDataRange().getValues();
-    
-    const proyectos = proyectosData.slice(1).map(row => ({
-      id: row[0]?.toString() || '',
-      nombre: row[1] || '',
-      descripcion: row[2] || '',
-      fecha_creacion: row[3] || '',
-      estado: row[4] || 'activo',
-      identificador: generarIdentificador(row[1] || '') // Identificador basado en nombre
+
+    // Proyectos
+    const shP = ss.getSheetByName(SHEET_PROYECTOS);
+    const proyectosData = shP.getDataRange().getValues();
+    const proyectos = proyectosData.slice(1).map(r => ({
+      id: r[0]?.toString() || '',
+      nombre: r[1] || '',
+      descripcion: r[2] || '',
+      fecha_creacion: r[3] || '',
+      estado: r[4] || 'activo',
+      identificador: generarIdentificador(r[1] || ''),
+      asignacion: normalizeAsignacion_(r[5])
     }));
-    
-    // Obtener subproyectos (Hoja 2)
-    const subproyectosSheet = ss.getSheets()[1];
-    const subproyectosData = subproyectosSheet.getDataRange().getValues();
-    
-    const subproyectos = subproyectosData.slice(1).map(row => ({
-      id: row[0]?.toString() || '',
-      id_proyecto: row[1]?.toString() || '',
-      nombre: row[2] || '',
-      descripcion: row[3] || '',
-      fecha_inicio: row[4] ? new Date(row[4]).toISOString().split('T')[0] : '',
-      fecha_fin_estimada: row[5] ? new Date(row[5]).toISOString().split('T')[0] : '',
-      fecha_creacion: row[6] || '',
-      identificador: generarIdentificador(row[2] || '') // Identificador basado en nombre
+
+    // Subproyectos
+    const shS = ss.getSheetByName(SHEET_SUBPROYECTOS);
+    const subData = shS.getDataRange().getValues();
+    const subproyectos = subData.slice(1).map(r => ({
+      id: r[0]?.toString() || '',
+      id_proyecto: r[1]?.toString() || '',
+      nombre: r[2] || '',
+      descripcion: r[3] || '',
+      fecha_inicio: r[4] ? new Date(r[4]).toISOString().split('T')[0] : '',
+      fecha_fin_estimada: r[5] ? new Date(r[5]).toISOString().split('T')[0] : '',
+      fecha_creacion: r[6] || '',
+      identificador: generarIdentificador(r[2] || ''),
+      asignacion: normalizeAsignacion_(r[7])
     }));
-    
-    // Obtener tareas (Hoja 3)
-    const tareasSheet = ss.getSheets()[2];
-    const tareasData = tareasSheet.getDataRange().getValues();
-    
-    const tareas = tareasData.slice(1).map(row => {
-      const idCompleto = row[0]?.toString() || '';
-      const partes = idCompleto.split('.');
-      
-      return {
-        id: idCompleto,
-        id_proyecto: partes[0] || '',
-        id_subproyecto: partes[1] || '',
-        id_tarea_numerico: partes[2] || '',
-        id_responsable_ident: partes[3] || '',
-        id_responsable: row[2]?.toString() || '',
-        prioridad: row[3] || 'media',
-        estatus: row[4] || 'pendiente',
-        detalles: row[5] || '',
-        adjuntos: row[6] ? row[6].split(',').filter(a => a) : [],
-        fecha_creacion: row[7] ? new Date(row[7]).toISOString().split('T')[0] : '',
-        fecha_limite: row[8] ? new Date(row[8]).toISOString().split('T')[0] : ''
-      };
-    });
-    
-    // Obtener responsables (Hoja 4)
-    let responsables = [];
-    try {
-      const responsablesSheet = ss.getSheetByName('Responsables');
-      if (!responsablesSheet) {
-        const newSheet = ss.insertSheet('Responsables');
-        newSheet.appendRow(['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro', 'Identificador']);
-      }
-      
-      const responsablesSheet2 = ss.getSheetByName('Responsables');
-      const responsablesData = responsablesSheet2.getDataRange().getValues();
-      responsables = responsablesData.slice(1).map(row => ({
-        id: row[0]?.toString() || '',
-        nombre: row[1] || '',
-        departamento: row[2] || '',
-        email: row[3] || '',
-        rol: row[4] || 'responsable',
-        fecha_registro: row[5] || '',
-        identificador: row[6] || generarIdentificador(row[1] || '')
-      }));
-    } catch (e) {
-      console.log('Error cargando responsables:', e);
-    }
-    
-    // Obtener comentarios (Hoja 5)
-    let comentarios = [];
-    try {
-      const comentariosSheet = ss.getSheetByName('Comentarios');
-      if (!comentariosSheet) {
-        const newSheet = ss.insertSheet('Comentarios');
-        newSheet.appendRow(['ID', 'ID Tarea', 'ID Responsable', 'Comentario', 'Fecha']);
-      }
-      
-      const comentariosSheet2 = ss.getSheetByName('Comentarios');
-      const comentariosData = comentariosSheet2.getDataRange().getValues();
-      comentarios = comentariosData.slice(1).map(row => ({
-        id: row[0]?.toString() || '',
-        id_tarea: row[1]?.toString() || '',
-        id_responsable: row[2]?.toString() || '',
-        comentario: row[3] || '',
-        fecha: row[4] || ''
-      }));
-    } catch (e) {
-      console.log('Error cargando comentarios:', e);
-    }
-    
-    // Obtener historial de aprobaciones (Hoja 6)
-    let historialAprobaciones = [];
-    try {
-      const historialSheet = ss.getSheetByName('HistorialAprobaciones');
-      if (!historialSheet) {
-        const newSheet = ss.insertSheet('HistorialAprobaciones');
-        newSheet.appendRow(['ID', 'ID Tarea', 'ID Supervisor', 'Estado Anterior', 'Estado Nuevo', 'Fecha', 'Observaciones']);
-      }
-      
-      const historialSheet2 = ss.getSheetByName('HistorialAprobaciones');
-      const historialData = historialSheet2.getDataRange().getValues();
-      historialAprobaciones = historialData.slice(1).map(row => ({
-        id: row[0]?.toString() || '',
-        id_tarea: row[1]?.toString() || '',
-        id_supervisor: row[2]?.toString() || '',
-        estado_anterior: row[3] || '',
-        estado_nuevo: row[4] || '',
-        fecha: row[5] || '',
-        observaciones: row[6] || ''
-      }));
-    } catch (e) {
-      console.log('Error cargando historial:', e);
-    }
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      proyectos: proyectos,
-      subproyectos: subproyectos,
-      tareas: tareas,
-      responsables: responsables,
-      comentarios: comentarios,
-      historial: historialAprobaciones
-    })).setMimeType(ContentService.MimeType.JSON);
-    
+
+    // Tareas
+    const shT = ss.getSheetByName(SHEET_TAREAS);
+    const tareasData = shT.getDataRange().getValues();
+    const tareas = tareasData.slice(1).map(r => ({
+      id: (r[0] || '').toString(),
+      id_subproyecto: (r[1] || '').toString(),
+      id_responsable: (r[2] || '').toString(),
+      prioridad: r[3] || 'media',
+      estatus: r[4] || 'pendiente',
+      detalles: r[5] || '',
+      descripcion: r[6] || '',
+      adjuntos: r[7] ? r[7].toString().split(',').filter(a => a) : [],
+      fecha_creacion: r[8] ? new Date(r[8]).toISOString().split('T')[0] : '',
+      fecha_limite: r[9] ? new Date(r[9]).toISOString().split('T')[0] : '',
+      asignacion: normalizeAsignacion_(r[10])
+    }));
+
+    // Responsables
+    const shR = ss.getSheetByName(SHEET_RESPONSABLES);
+    const colIdent = ensureColumnWithHeader_(shR, 'Identificador');
+    const respData = shR.getDataRange().getValues();
+    const responsables = respData.slice(1).map(r => ({
+      id: (r[0] || '').toString(),
+      nombre: r[1] || '',
+      departamento: r[2] || '',
+      email: r[3] || '',
+      rol: r[4] || 'responsable',
+      fecha_registro: r[5] || '',
+      identificador: (r[colIdent - 1] || '').toString() || generarIdentificador(r[1] || '')
+    }));
+
+    // Comentarios
+    const shC = ss.getSheetByName(SHEET_COMENTARIOS);
+    const comData = shC.getDataRange().getValues();
+    const comentarios = comData.slice(1).map(r => ({
+      id: (r[0] || '').toString(),
+      id_tarea: (r[1] || '').toString(),
+      id_responsable: (r[2] || '').toString(),
+      comentario: r[3] || '',
+      fecha: r[4] || ''
+    }));
+
+    // Historial
+    const shH = ss.getSheetByName(SHEET_HISTORIAL);
+    const histData = shH.getDataRange().getValues();
+    const historial = histData.slice(1).map(r => ({
+      id: (r[0] || '').toString(),
+      id_tarea: (r[1] || '').toString(),
+      id_supervisor: (r[2] || '').toString(),
+      estado_anterior: r[3] || '',
+      estado_nuevo: r[4] || '',
+      fecha: r[5] || '',
+      observaciones: r[6] || ''
+    }));
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ proyectos, subproyectos, tareas, responsables, comentarios, historial }))
+      .setMimeType(ContentService.MimeType.JSON);
+
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({
       error: error.toString(),
@@ -199,274 +370,262 @@ function doGet() {
   }
 }
 
+// ======================================================
+// POST
+// ======================================================
 function doPost(e) {
   try {
+    ensureSchema_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const body = JSON.parse(e.postData.contents);
     const action = body.action;
     const data = body.data;
-    
-    // Acciones de proyectos
+
+    // PROYECTOS
     if (action === 'proyecto_add' || action === 'proyecto_update' || action === 'proyecto_delete') {
-      const sheet = ss.getSheets()[0];
-      
+      const sh = ss.getSheetByName(SHEET_PROYECTOS);
+
       if (action === 'proyecto_add') {
-        sheet.appendRow([
-          data.id,
-          data.nombre,
-          data.descripcion || '',
-          new Date().toISOString(),
-          data.estado || 'activo'
-        ]);
-      } 
-      else if (action === 'proyecto_update') {
-        const rows = sheet.getDataRange().getValues();
+        const asignacion = getNextProyectoAsignacion_(ss);
+        sh.appendRow([data.id, data.nombre, data.descripcion || '', new Date().toISOString(), data.estado || 'activo', '']);
+        const lastRow = sh.getLastRow();
+        sh.getRange(lastRow, 6).setNumberFormat('@STRING@');
+        sh.getRange(lastRow, 6).setValue(String(asignacion));
+      } else if (action === 'proyecto_update') {
+        const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if (rows[i][0].toString() === data.id.toString()) {
-            sheet.getRange(i + 1, 2).setValue(data.nombre);
-            sheet.getRange(i + 1, 3).setValue(data.descripcion || '');
-            sheet.getRange(i + 1, 5).setValue(data.estado || 'activo');
+            sh.getRange(i + 1, 2).setValue(data.nombre);
+            sh.getRange(i + 1, 3).setValue(data.descripcion || '');
+            sh.getRange(i + 1, 5).setValue(data.estado || 'activo');
             break;
           }
         }
-      }
-      else if (action === 'proyecto_delete') {
-        const rows = sheet.getDataRange().getValues();
+      } else if (action === 'proyecto_delete') {
+        const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if (rows[i][0].toString() === data.id.toString()) {
-            sheet.deleteRow(i + 1);
+            sh.deleteRow(i + 1);
             break;
           }
         }
       }
     }
-    
-    // Acciones de subproyectos
+
+    // SUBPROYECTOS
     else if (action === 'subproyecto_add' || action === 'subproyecto_update' || action === 'subproyecto_delete') {
-      const sheet = ss.getSheets()[1];
-      
+      const sh = ss.getSheetByName(SHEET_SUBPROYECTOS);
+
       if (action === 'subproyecto_add') {
-        sheet.appendRow([
+        const asignacion = getNextSubproyectoAsignacion_(ss, data.id_proyecto);
+
+        sh.appendRow([
           data.id,
           data.id_proyecto,
           data.nombre,
           data.descripcion || '',
           data.fecha_inicio || '',
           data.fecha_fin_estimada || '',
-          new Date().toISOString()
+          new Date().toISOString(),
+          '' // asignacion (H)
         ]);
+
+        const lastRow = sh.getLastRow();
+        sh.getRange(lastRow, 8).setNumberFormat('@STRING@'); // H
+        sh.getRange(lastRow, 8).setValue(String(asignacion || ''));
       }
       else if (action === 'subproyecto_update') {
-        const rows = sheet.getDataRange().getValues();
+        const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if (rows[i][0].toString() === data.id.toString()) {
-            sheet.getRange(i + 1, 2).setValue(data.id_proyecto);
-            sheet.getRange(i + 1, 3).setValue(data.nombre);
-            sheet.getRange(i + 1, 4).setValue(data.descripcion || '');
-            sheet.getRange(i + 1, 5).setValue(data.fecha_inicio || '');
-            sheet.getRange(i + 1, 6).setValue(data.fecha_fin_estimada || '');
+            sh.getRange(i + 1, 2).setValue(data.id_proyecto);
+            sh.getRange(i + 1, 3).setValue(data.nombre);
+            sh.getRange(i + 1, 4).setValue(data.descripcion || '');
+            sh.getRange(i + 1, 5).setValue(data.fecha_inicio || '');
+            sh.getRange(i + 1, 6).setValue(data.fecha_fin_estimada || '');
             break;
           }
         }
       }
       else if (action === 'subproyecto_delete') {
-        const rows = sheet.getDataRange().getValues();
+        const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if (rows[i][0].toString() === data.id.toString()) {
-            sheet.deleteRow(i + 1);
+            sh.deleteRow(i + 1);
             break;
           }
         }
       }
     }
-    
-    // Acciones de tareas - AHORA CON GENERACIÓN DE IDENTIFICADOR
+
+    // TAREAS (CRUD normal)
     else if (action === 'tarea_add' || action === 'tarea_update' || action === 'tarea_delete') {
-      const sheet = ss.getSheets()[2];
-      
+      const sh = ss.getSheetByName(SHEET_TAREAS);
+
       if (action === 'tarea_add') {
-        // Obtener el responsable para generar su identificador
-        let respIdent = 'xxx';
-        try {
-          const responsablesSheet = ss.getSheetByName('Responsables');
-          if (responsablesSheet) {
-            const rows = responsablesSheet.getDataRange().getValues();
-            for (let i = 1; i < rows.length; i++) {
-              if (rows[i][0].toString() === data.id_responsable) {
-                respIdent = rows[i][6] || generarIdentificador(rows[i][1] || '');
-                break;
-              }
-            }
-          }
-        } catch (e) {
-          console.log('Error obteniendo identificador:', e);
-        }
-        
-        // Generar el ID completo: idproyecto.idsubproyecto.timestamp.identificador_responsable
-        const idCompleto = [
-          data.id_proyecto || data.id_subproyecto?.split('.')[0] || '0',
-          data.id_subproyecto || '0',
-          Date.now().toString().slice(-6), // Últimos 6 dígitos del timestamp
-          respIdent
-        ].join('.');
-        
-        sheet.appendRow([
-          idCompleto,
+        const asignacion = getNextTareaAsignacion_(ss, data.id_subproyecto, data.id_responsable);
+
+        sh.appendRow([
+          data.id,
           data.id_subproyecto,
           data.id_responsable,
           data.prioridad || 'media',
           data.estatus || 'pendiente',
           data.detalles || '',
+          data.descripcion || '',
           data.adjuntos ? data.adjuntos.join(',') : '',
           new Date().toISOString(),
-          data.fecha_limite || ''
+          data.fecha_limite || '',
+          '' // asignacion (K)
         ]);
+
+        const lastRow = sh.getLastRow();
+        sh.getRange(lastRow, 11).setNumberFormat('@STRING@'); // K
+        sh.getRange(lastRow, 11).setValue(String(asignacion || ''));
       }
       else if (action === 'tarea_update') {
-        const rows = sheet.getDataRange().getValues();
+        const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if (rows[i][0].toString() === data.id.toString()) {
-            sheet.getRange(i + 1, 2).setValue(data.id_subproyecto);
-            sheet.getRange(i + 1, 3).setValue(data.id_responsable);
-            sheet.getRange(i + 1, 4).setValue(data.prioridad || 'media');
-            sheet.getRange(i + 1, 5).setValue(data.estatus || 'pendiente');
-            sheet.getRange(i + 1, 6).setValue(data.detalles || '');
-            sheet.getRange(i + 1, 7).setValue(data.adjuntos ? data.adjuntos.join(',') : '');
-            sheet.getRange(i + 1, 9).setValue(data.fecha_limite || '');
+            sh.getRange(i + 1, 2).setValue(data.id_subproyecto);
+            sh.getRange(i + 1, 3).setValue(data.id_responsable);
+            sh.getRange(i + 1, 4).setValue(data.prioridad || 'media');
+            sh.getRange(i + 1, 5).setValue(data.estatus || 'pendiente');
+            sh.getRange(i + 1, 6).setValue(data.detalles || '');
+            sh.getRange(i + 1, 7).setValue(data.descripcion || '');
+            sh.getRange(i + 1, 8).setValue(data.adjuntos ? data.adjuntos.join(',') : '');
+            sh.getRange(i + 1, 10).setValue(data.fecha_limite || '');
+
+            // actualizar sufijo de asignacion según responsable (sin cambiar 1.1.3)
+            const prevAsign = normalizeAsignacion_(rows[i][10]); // K
+            const ini = getResponsableInicialesById_(ss, data.id_responsable);
+            const m = prevAsign.match(/^(\d+\.\d+\.\d+)([A-Z]*)$/);
+            const newAsign = m ? `${m[1]}${ini}` : getNextTareaAsignacion_(ss, data.id_subproyecto, data.id_responsable);
+
+            sh.getRange(i + 1, 11).setNumberFormat('@STRING@'); // K
+            sh.getRange(i + 1, 11).setValue(String(newAsign || ''));
             break;
           }
         }
       }
       else if (action === 'tarea_delete') {
-        const rows = sheet.getDataRange().getValues();
+        const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if (rows[i][0].toString() === data.id.toString()) {
-            sheet.deleteRow(i + 1);
+            sh.deleteRow(i + 1);
             break;
           }
         }
       }
     }
-    
-    // Acciones de responsables - AHORA CON IDENTIFICADOR
+
+    // RESPONSABLES
     else if (action === 'responsable_add' || action === 'responsable_update' || action === 'responsable_delete') {
-      let responsablesSheet = ss.getSheetByName('Responsables');
-      if (!responsablesSheet) {
-        responsablesSheet = ss.insertSheet('Responsables');
-        responsablesSheet.appendRow(['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro', 'Identificador']);
-      }
-      
+      const sh = ss.getSheetByName(SHEET_RESPONSABLES);
+      const colIdent = ensureColumnWithHeader_(sh, 'Identificador');
+
       if (action === 'responsable_add') {
-        const identificador = generarIdentificador(data.nombre);
-        responsablesSheet.appendRow([
+        const ident = (data.identificador || '').toString().trim() || generarIdentificador(data.nombre);
+        const row = [
           data.id,
           data.nombre,
           data.departamento || '',
           data.email || '',
           data.rol || 'responsable',
-          new Date().toISOString(),
-          identificador
-        ]);
-      }
-      else if (action === 'responsable_update') {
-        const rows = responsablesSheet.getDataRange().getValues();
-        for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
-            responsablesSheet.getRange(i + 1, 2).setValue(data.nombre);
-            responsablesSheet.getRange(i + 1, 3).setValue(data.departamento || '');
-            responsablesSheet.getRange(i + 1, 4).setValue(data.email || '');
-            responsablesSheet.getRange(i + 1, 5).setValue(data.rol || 'responsable');
-            responsablesSheet.getRange(i + 1, 7).setValue(generarIdentificador(data.nombre));
-            break;
-          }
-        }
-      }
-      else if (action === 'responsable_delete') {
-        const rows = responsablesSheet.getDataRange().getValues();
-        for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
-            responsablesSheet.deleteRow(i + 1);
-            break;
-          }
-        }
-      }
-    }
-    
-    // Acciones de comentarios
-    else if (action === 'comentario_add' || action === 'comentario_delete') {
-      let comentariosSheet = ss.getSheetByName('Comentarios');
-      if (!comentariosSheet) {
-        comentariosSheet = ss.insertSheet('Comentarios');
-        comentariosSheet.appendRow(['ID', 'ID Tarea', 'ID Responsable', 'Comentario', 'Fecha']);
-      }
-      
-      if (action === 'comentario_add') {
-        comentariosSheet.appendRow([
-          data.id,
-          data.id_tarea,
-          data.id_responsable,
-          data.comentario,
           new Date().toISOString()
-        ]);
-      }
-      else if (action === 'comentario_delete') {
-        const rows = comentariosSheet.getDataRange().getValues();
+        ];
+        while (row.length < colIdent) row.push('');
+        row[colIdent - 1] = ident;
+        sh.appendRow(row);
+      } else if (action === 'responsable_update') {
+        const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if (rows[i][0].toString() === data.id.toString()) {
-            comentariosSheet.deleteRow(i + 1);
+            sh.getRange(i + 1, 2).setValue(data.nombre);
+            sh.getRange(i + 1, 3).setValue(data.departamento || '');
+            sh.getRange(i + 1, 4).setValue(data.email || '');
+            sh.getRange(i + 1, 5).setValue(data.rol || 'responsable');
+            sh.getRange(i + 1, colIdent).setValue((data.identificador || '').toString().trim() || generarIdentificador(data.nombre));
+            break;
+          }
+        }
+      } else if (action === 'responsable_delete') {
+        const rows = sh.getDataRange().getValues();
+        for (let i = 1; i < rows.length; i++) {
+          if (rows[i][0].toString() === data.id.toString()) {
+            sh.deleteRow(i + 1);
             break;
           }
         }
       }
     }
-    
-    // Acciones de aprobación
-    else if (action === 'tarea_revisar' || action === 'tarea_aprobar' || action === 'tarea_rechazar') {
-      const tareasSheet = ss.getSheets()[2];
-      const rows = tareasSheet.getDataRange().getValues();
-      
+
+    // COMENTARIOS
+    else if (action === 'comentario_add' || action === 'comentario_delete') {
+      const sh = ss.getSheetByName(SHEET_COMENTARIOS);
+
+      if (action === 'comentario_add') {
+        sh.appendRow([data.id, data.id_tarea, data.id_responsable, data.comentario, new Date().toISOString()]);
+      } else if (action === 'comentario_delete') {
+        const rows = sh.getDataRange().getValues();
+        for (let i = 1; i < rows.length; i++) {
+          if (rows[i][0].toString() === data.id.toString()) {
+            sh.deleteRow(i + 1);
+            break;
+          }
+        }
+      }
+    }
+
+    // APROBACIONES + HISTORIAL (+ BLOQUEAR/DESBLOQUEAR)
+    else if (
+      action === 'tarea_revisar' ||
+      action === 'tarea_aprobar' ||
+      action === 'tarea_rechazar' ||
+      action === 'tarea_bloquear' ||
+      action === 'tarea_desbloquear'
+    ) {
+      const shT = ss.getSheetByName(SHEET_TAREAS);
+      const shH = ss.getSheetByName(SHEET_HISTORIAL);
+
+      const rows = shT.getDataRange().getValues();
       let nuevoEstado = '';
+
       if (action === 'tarea_revisar') nuevoEstado = 'en_revision';
       else if (action === 'tarea_aprobar') nuevoEstado = 'completado';
       else if (action === 'tarea_rechazar') nuevoEstado = 'en_curso';
-      
+      else if (action === 'tarea_bloquear') nuevoEstado = 'bloqueada';
+      else if (action === 'tarea_desbloquear') nuevoEstado = 'en_curso';
+
+      // Seguridad: solo supervisor puede bloquear/desbloquear
+      if (action === 'tarea_bloquear' || action === 'tarea_desbloquear') {
+        assertSupervisor_(ss, data.id_actor || data.id_supervisor);
+      }
+
       for (let i = 1; i < rows.length; i++) {
         if (rows[i][0].toString() === data.id_tarea.toString()) {
-          const estadoAnterior = rows[i][4];
-          
-          tareasSheet.getRange(i + 1, 5).setValue(nuevoEstado);
-          
-          // Registrar en historial
-          let historialSheet = ss.getSheetByName('HistorialAprobaciones');
-          if (!historialSheet) {
-            historialSheet = ss.insertSheet('HistorialAprobaciones');
-            historialSheet.appendRow(['ID', 'ID Tarea', 'ID Supervisor', 'Estado Anterior', 'Estado Nuevo', 'Fecha', 'Observaciones']);
-          }
-          
-          historialSheet.appendRow([
+          const estadoAnterior = rows[i][4]; // Col E = Estatus
+          shT.getRange(i + 1, 5).setValue(nuevoEstado);
+
+          shH.appendRow([
             Date.now().toString(),
             data.id_tarea,
-            data.id_supervisor,
+            data.id_supervisor || data.id_actor || '',
             estadoAnterior,
             nuevoEstado,
             new Date().toISOString(),
-            data.observaciones || ''
+            data.observaciones || data.motivo || ''
           ]);
-          
           break;
         }
       }
     }
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      result: 'success',
-      message: 'Operación completada'
-    })).setMimeType(ContentService.MimeType.JSON);
-    
+
+    return ContentService.createTextOutput(JSON.stringify({ result: 'success', message: 'Operación completada' }))
+      .setMimeType(ContentService.MimeType.JSON);
+
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      result: 'error',
-      message: error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ result: 'error', message: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
