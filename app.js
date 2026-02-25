@@ -572,7 +572,7 @@ function getTareasActuales() {
 }
 
 function renderTareasBoard() {
-    const cols = ['pendiente', 'en_curso', 'en_revision', 'completado'];
+    const cols = ['pendiente', 'en_curso', 'en_revision', 'completado', 'bloqueada'];
     const tareasActuales = getTareasActuales();
     const user = getCurrentUser();
     const isSupervisor = user && user.role === 'supervisor';
@@ -594,9 +594,10 @@ function renderTareasBoard() {
 
 function createTareaCard(tarea, isSupervisor, isDirector) {
     const card = document.createElement('div');
-    card.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-2 cursor-pointer hover:shadow-md transition-shadow';
-    card.style.borderLeft = '4px solid ' + getStatusColor(tarea.estatus);
-    card.draggable = tarea.estatus !== 'completado';
+    const isLocked = tarea.estatus === 'bloqueada';
+    card.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md transition-shadow' + (isLocked ? ' opacity-75' : '');
+    card.style.borderLeft = '4px solid ' + getPriorityBorderColor(tarea.prioridad);
+    card.draggable = !isLocked && tarea.estatus !== 'completado';
     card.id = 'tarea-' + tarea.id;
     card.ondragstart = function (e) { e.dataTransfer.setData('text/plain', tarea.id); };
     card.addEventListener('click', function () { selectTareaDetalle(tarea.id); });
@@ -611,7 +612,8 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
     const prioColor = getPriorityColor(tarea.prioridad);
     const prioIcon = getPriorityIcon(tarea.prioridad);
     const commentCount = comentarios.filter(function (c) { return c.id_tarea === tarea.id; }).length;
-    const canEdit = isDirector || isSupervisor;
+    const isSupervisorOrDirector = isSupervisor || isDirector;
+    const canEdit = isSupervisorOrDirector && !isLocked;
 
     // NUEVO: botón de descripción
     const hasDesc = (tarea.descripcion || '').trim().length > 0;
@@ -625,9 +627,13 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
 
     const commentBtnHtml = '<button onclick="event.stopPropagation(); showTareaComments(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded relative" title="Comentarios"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' + (commentCount > 0 ? '<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">' + commentCount + '</span>' : '') + '</button>';
     const editBtnHtml = canEdit ? '<button onclick="event.stopPropagation(); openTareaModal(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded" title="Editar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>' : '';
+    const lockBtnHtml = isSupervisorOrDirector && !isLocked ? '<button onclick="event.stopPropagation(); bloquearTarea(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-red-100 hover:text-red-600 p-1 rounded" title="Bloquear">🔒</button>' : '';
+    const unlockBtnHtml = isSupervisorOrDirector && isLocked ? '<button onclick="event.stopPropagation(); desbloquearTarea(\'' + tarea.id + '\')" class="text-red-400 hover:bg-green-100 hover:text-green-600 p-1 rounded" title="Desbloquear">🔓</button>' : '';
 
     let actionBtns = '';
-    if (tarea.estatus === 'pendiente') {
+    if (isLocked) {
+        actionBtns = '<span class="text-xs text-red-500 font-medium">🔒 Tarea bloqueada</span>';
+    } else if (tarea.estatus === 'pendiente') {
         actionBtns = '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'en_curso\')" class="text-xs bg-blue-100 text-blue-600 hover:bg-blue-200 px-2 py-1 rounded-md font-medium">▶ Iniciar</button>';
     } else if (tarea.estatus === 'en_curso') {
         actionBtns = '<button onclick="event.stopPropagation(); quickChangeEstatus(\'' + tarea.id + '\', \'pendiente\')" class="text-xs bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-1 rounded-md font-medium">⏸ Pausar</button>' +
@@ -643,7 +649,7 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
     card.innerHTML =
         '<div class="flex items-start justify-between mb-2">' +
         '<span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span>' +
-        '<div class="flex gap-1">' + descBtnHtml + commentBtnHtml + editBtnHtml + '</div>' +
+        '<div class="flex gap-1">' + descBtnHtml + commentBtnHtml + lockBtnHtml + unlockBtnHtml + editBtnHtml + '</div>' +
         '</div>' +
         '<p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p>' +
         asignacionHtml +
@@ -828,6 +834,10 @@ function dropTask(e) {
     const colId = col.id.replace('col-', '');
     if (colId === tarea.estatus) return;
     const user = getCurrentUser();
+    if (tarea.estatus === 'bloqueada') {
+        alert('Esta tarea está bloqueada. Solo el supervisor puede modificarla.');
+        return;
+    }
     if (colId === 'completado' && user && user.role !== 'supervisor' && user.role !== 'director') {
         alert('Solo el supervisor puede mover tareas a Completado.');
         return;
@@ -841,10 +851,68 @@ function dropTask(e) {
 async function quickChangeEstatus(tareaId, nuevoEstatus) {
     const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
+    if (tarea.estatus === 'bloqueada') {
+        const user = getCurrentUser();
+        if (!user || (user.role !== 'supervisor' && user.role !== 'director')) {
+            alert('Esta tarea está bloqueada. Solo el supervisor puede modificarla.');
+            return;
+        }
+    }
     tarea.estatus = nuevoEstatus;
     renderTareasBoard();
     renderTareasList();
     await postToBackend('tarea_update', tarea);
+}
+
+// ============================================
+// BLOQUEAR / DESBLOQUEAR TAREAS
+// ============================================
+async function bloquearTarea(tareaId) {
+    const user = getCurrentUser();
+    if (!user || (user.role !== 'supervisor' && user.role !== 'director')) {
+        alert('Solo el supervisor puede bloquear tareas.');
+        return;
+    }
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
+    if (!tarea) return;
+    const motivo = prompt('Motivo del bloqueo (opcional):') || '';
+    const resp = responsables.find(function (r) { return r.id === (user ? user.id : ''); });
+    showLoading(true);
+    try {
+        tarea.estatus = 'bloqueada';
+        await postToBackend('tarea_bloquear', {
+            id_tarea: tareaId,
+            id_actor: resp ? resp.id : (user ? user.id : ''),
+            motivo: motivo
+        });
+        renderTareasBoard();
+        renderTareasList();
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function desbloquearTarea(tareaId) {
+    const user = getCurrentUser();
+    if (!user || (user.role !== 'supervisor' && user.role !== 'director')) {
+        alert('Solo el supervisor puede desbloquear tareas.');
+        return;
+    }
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
+    if (!tarea) return;
+    const resp = responsables.find(function (r) { return r.id === (user ? user.id : ''); });
+    showLoading(true);
+    try {
+        tarea.estatus = 'en_curso';
+        await postToBackend('tarea_desbloquear', {
+            id_tarea: tareaId,
+            id_actor: resp ? resp.id : (user ? user.id : '')
+        });
+        renderTareasBoard();
+        renderTareasList();
+    } finally {
+        showLoading(false);
+    }
 }
 
 // ============================================
@@ -887,6 +955,7 @@ async function saveProyecto(e) {
         estado: document.getElementById('proyectoEstado').value
     };
     showLoading(true);
+    setButtonLoading('btn-save-proyecto', true);
     try {
         if (id) {
             const idx = proyectos.findIndex(function (p) { return p.id === id; });
@@ -901,6 +970,7 @@ async function saveProyecto(e) {
         renderProyectos();
     } finally {
         showLoading(false);
+        setButtonLoading('btn-save-proyecto', false);
     }
 }
 
@@ -956,6 +1026,7 @@ async function saveSubproyecto(e) {
         fecha_fin_estimada: document.getElementById('subproyectoFechaFin').value
     };
     showLoading(true);
+    setButtonLoading('btn-save-subproyecto', true);
     try {
         if (id) {
             const idx = subproyectos.findIndex(function (s) { return s.id === id; });
@@ -970,6 +1041,7 @@ async function saveSubproyecto(e) {
         renderSubproyectos();
     } finally {
         showLoading(false);
+        setButtonLoading('btn-save-subproyecto', false);
     }
 }
 
@@ -1008,11 +1080,15 @@ function openTareaModal(id) {
     if (descEl) descEl.value = '';
 
     const isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
-    statusSelect.innerHTML = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisión</option>' + (isPrivileged ? '<option value="completado">Completado</option>' : '');
+    statusSelect.innerHTML = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisión</option>' + (isPrivileged ? '<option value="completado">Completado</option><option value="bloqueada">🔒 Bloqueada</option>' : '');
 
     if (id) {
         const t = tareas.find(function (x) { return x.id === id; });
         if (!t) return;
+        if (t.estatus === 'bloqueada' && !isPrivileged) {
+            alert('Esta tarea está bloqueada y no puede ser modificada.');
+            return;
+        }
         title.innerText = 'Editar Tarea';
         document.getElementById('tareaId').value = t.id;
         document.getElementById('tareaDetalles').value = t.detalles || '';
@@ -1084,6 +1160,7 @@ async function saveTarea(e) {
     };
 
     showLoading(true);
+    setButtonLoading('btn-save-tarea', true);
     try {
         if (id) {
             const idx = tareas.findIndex(function (t) { return t.id === id; });
@@ -1108,6 +1185,7 @@ async function saveTarea(e) {
         }
     } finally {
         showLoading(false);
+        setButtonLoading('btn-save-tarea', false);
     }
 }
 
@@ -1292,6 +1370,19 @@ async function sendWhatsAppNotification(message) {
 // ============================================
 // UTILIDADES
 // ============================================
+function setButtonLoading(btnId, isLoading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    if (isLoading) {
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Guardando...</span>';
+    } else {
+        btn.disabled = false;
+        if (btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+    }
+}
+
 function getStatusColor(estatus) {
     switch (estatus) {
         case 'pendiente': return '#94a3b8';
@@ -1320,12 +1411,22 @@ function getPriorityIcon(priority) {
     }
 }
 
+function getPriorityBorderColor(priority) {
+    switch (priority) {
+        case 'alta': return '#ef4444';
+        case 'media': return '#f59e0b';
+        case 'baja': return '#22c55e';
+        default: return '#e2e8f0';
+    }
+}
+
 function getStatusBadge(estatus) {
     switch (estatus) {
         case 'pendiente': return { class: 'bg-slate-100 text-slate-600', label: 'Pendiente' };
         case 'en_curso': return { class: 'bg-blue-100 text-blue-600', label: 'En Curso' };
         case 'en_revision': return { class: 'bg-amber-100 text-amber-600', label: 'En Revisión' };
         case 'completado': return { class: 'bg-emerald-100 text-emerald-600', label: 'Completado' };
+        case 'bloqueada': return { class: 'bg-red-100 text-red-600', label: '🔒 Bloqueada' };
         default: return { class: 'bg-gray-100 text-gray-600', label: estatus };
     }
 }
