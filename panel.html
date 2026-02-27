@@ -126,10 +126,24 @@
                         <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
                         </svg>
-                        <span class="font-bold text-slate-700">Filtrar por responsable:</span>
+                        <span class="font-bold text-slate-700 text-sm">Filtrar:</span>
                     </div>
-                    <select id="filterUser" onchange="applyUserFilter()" class="px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white min-w-[200px]">
-                        <option value="">Todos</option>
+                    <select id="filterUser" onchange="applyFilters()" class="px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white text-sm min-w-[160px]">
+                        <option value="">Todos los responsables</option>
+                    </select>
+                    <select id="filterPriority" onchange="applyFilters()" class="px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white text-sm">
+                        <option value="">Todas las prioridades</option>
+                        <option value="alta">🔴 Alta</option>
+                        <option value="media">🟡 Media</option>
+                        <option value="baja">🟢 Baja</option>
+                    </select>
+                    <select id="filterStatus" onchange="applyFilters()" class="px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white text-sm">
+                        <option value="">Todos los estados</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="en_curso">En Curso</option>
+                        <option value="en_revision">En Revisión</option>
+                        <option value="completado">Completado</option>
+                        <option value="bloqueada">🔒 Bloqueada</option>
                     </select>
                     <button onclick="clearFilter()" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">Limpiar</button>
                 </div>
@@ -244,6 +258,11 @@
             </div>
 
         </main>
+    </div>
+
+    <!-- Attribution -->
+    <div class="flex-shrink-0 text-center py-2 text-xs text-slate-400 border-t border-slate-100 bg-white">
+        OPCore v1.2.0 &mdash; Desarrollado por Diego Turiján
     </div>
 
     <!-- MODAL DE CUENTA (antes Proyecto) -->
