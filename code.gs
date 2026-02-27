@@ -45,6 +45,7 @@ const SHEET_TAREAS = 'Tareas';
 const SHEET_RESPONSABLES = 'Responsables';
 const SHEET_COMENTARIOS = 'Comentarios';
 const SHEET_HISTORIAL = 'HistorialAprobaciones';
+const DRIVE_ATTACHMENTS_FOLDER_ID = '1IKdpJc0ezb6ZwtUzXJm6I91WZIO3s7FS';
 
 // ======================================================
 // INIT / VALIDACIÓN DE ESQUEMA
@@ -518,6 +519,64 @@ function doPost(e) {
         }
       }
     }
+else if (action === 'tarea_upload_adjunto') {
+  // data esperado:
+  // {
+  //   id_tarea: "....",
+  //   filename: "archivo.png",
+  //   mimeType: "image/png",
+  //   base64: "...." (sin el prefijo "data:...;base64,")
+  //   id_actor: "..." (opcional para auditoría)
+  // }
+
+  const folder = getAttachmentsFolder_();
+
+  const idTarea = (data.id_tarea || '').toString().trim();
+  const filename = (data.filename || 'adjunto').toString();
+  const mimeType = (data.mimeType || 'application/octet-stream').toString();
+  const base64 = (data.base64 || '').toString();
+
+  if (!idTarea) throw new Error('Falta data.id_tarea');
+  if (!base64) throw new Error('Falta data.base64');
+
+  const bytes = Utilities.base64Decode(base64);
+  const blob = Utilities.newBlob(bytes, mimeType, filename);
+
+  // Guardar con prefijo del id_tarea para orden
+  const finalName = `${idTarea}__${filename}`;
+  const file = folder.createFile(blob).setName(finalName);
+
+  // Hacerlo accesible por link (si quieres)
+  ensureFileIsShareable_(file);
+
+  const fileUrl = file.getUrl();
+  const fileId = file.getId();
+
+  // Guardar en hoja Tareas, col H = Adjuntos (índice 8)
+  // Tu schema:
+  // A ID
+  // ...
+  // H Adjuntos (col 8)
+  const shT = ss.getSheetByName(SHEET_TAREAS);
+  const rows = shT.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if ((rows[i][0] || '').toString() === idTarea) {
+      const prev = (rows[i][7] || '').toString().trim(); // col H en array => index 7
+      const updated = prev ? (prev + ',' + fileUrl) : fileUrl;
+      shT.getRange(i + 1, 8).setValue(updated);
+      break;
+    }
+  }
+
+  // Respuesta específica (IMPORTANTE: return aquí)
+  return ContentService
+    .createTextOutput(JSON.stringify({
+      result: 'success',
+      fileId,
+      url: fileUrl
+    }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
     // RESPONSABLES
     else if (action === 'responsable_add' || action === 'responsable_update' || action === 'responsable_delete') {
@@ -628,4 +687,15 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ result: 'error', message: error.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function getAttachmentsFolder_() {
+  if (!DRIVE_ATTACHMENTS_FOLDER_ID) throw new Error('Falta DRIVE_ATTACHMENTS_FOLDER_ID');
+  return DriveApp.getFolderById(DRIVE_ATTACHMENTS_FOLDER_ID);
+}
+
+function ensureFileIsShareable_(file) {
+  // Opción 1: que cualquiera con el link pueda ver
+  // (Requiere que tu dominio/Drive permita link-sharing)
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 }
