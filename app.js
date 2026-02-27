@@ -24,6 +24,8 @@ let currentNavLevel = 'home'; // 'home' | 'proyecto' | 'subproyecto' | 'tarea_de
 
 let ganttConfig = { pxPerDay: 50, headerStep: 1 };
 let currentUserFilter = '';
+let currentPriorityFilter = '';
+let currentStatusFilter = '';
 
 // ============================================
 // INICIALIZACIÓN
@@ -480,10 +482,37 @@ function renderTareaDetalle() {
     const statusBadge = getStatusBadge(t.estatus);
     const user = getCurrentUser();
     const canEdit = user && (user.role === 'director' || user.role === 'supervisor');
+    const isSupervisor = user && (user.role === 'supervisor' || user.role === 'director');
     const editBtn = canEdit
         ? '<button onclick="openTareaModal(\'' + t.id + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">Editar</button>'
         : '';
     const commentCount = comentarios.filter(function (c) { return c.id_tarea === t.id; }).length;
+
+    // Action buttons based on status
+    let actionBtns = '';
+    const isLocked = t.estatus === 'bloqueada';
+    if (isLocked) {
+        if (isSupervisor) {
+            actionBtns = '<button onclick="desbloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 px-4 py-2 rounded-lg text-sm font-semibold">🔓 Desbloquear</button>';
+        } else {
+            actionBtns = '<span class="text-sm text-red-500 font-medium">🔒 Tarea bloqueada</span>';
+        }
+    } else if (t.estatus === 'pendiente') {
+        actionBtns = '<button onclick="quickChangeEstatus(\'' + t.id + '\', \'en_curso\')" class="flex items-center gap-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 px-4 py-2 rounded-lg text-sm font-semibold">▶ Iniciar</button>';
+        if (isSupervisor) {
+            actionBtns += '<button onclick="bloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg text-sm font-semibold">🔒 Bloquear</button>';
+        }
+    } else if (t.estatus === 'en_curso') {
+        actionBtns = '<button onclick="quickChangeEstatus(\'' + t.id + '\', \'pendiente\')" class="flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-lg text-sm font-semibold">⏸ Pausar</button>' +
+            '<button onclick="quickChangeEstatus(\'' + t.id + '\', \'en_revision\')" class="flex items-center gap-1.5 bg-amber-100 text-amber-700 hover:bg-amber-200 px-4 py-2 rounded-lg text-sm font-semibold">🔍 Enviar a revisión</button>';
+        if (isSupervisor) {
+            actionBtns += '<button onclick="bloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg text-sm font-semibold">🔒 Bloquear</button>';
+        }
+    } else if (t.estatus === 'en_revision') {
+        if (isSupervisor) {
+            actionBtns = '<button onclick="openAprobacionModal(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-4 py-2 rounded-lg text-sm font-semibold">✅ Aprobar / Rechazar</button>';
+        }
+    }
 
     container.innerHTML =
         '<div class="flex items-start justify-between mb-6">' +
@@ -499,6 +528,7 @@ function renderTareaDetalle() {
         '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Responsable</span><span class="text-sm text-slate-700 font-medium">' + respNombre + '</span></div>' +
         (t.fecha_limite ? '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Vencimiento</span><span class="text-sm text-slate-700">📅 ' + t.fecha_limite + '</span></div>' : '') +
         '</div>' +
+        (actionBtns ? '<div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-slate-200">' + actionBtns + '</div>' : '') +
         (t.descripcion ? '<div class="bg-slate-50 rounded-xl p-4 mb-6"><h3 class="font-semibold text-slate-700 mb-2 text-sm uppercase tracking-wider">Descripción</h3><p class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">' + t.descripcion + '</p></div>' : '') +
         '<div class="pt-4 border-t border-slate-200">' +
         '<button onclick="showTareaComments(\'' + t.id + '\')" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">' +
@@ -567,6 +597,12 @@ function getTareasActuales() {
     if (currentUserFilter) {
         const resp = responsables.find(function (r) { return r.nombre === currentUserFilter; });
         if (resp) result = result.filter(function (t) { return t.id_responsable === resp.id; });
+    }
+    if (currentPriorityFilter) {
+        result = result.filter(function (t) { return t.prioridad === currentPriorityFilter; });
+    }
+    if (currentStatusFilter) {
+        result = result.filter(function (t) { return t.estatus === currentStatusFilter; });
     }
     return result;
 }
@@ -861,6 +897,10 @@ async function quickChangeEstatus(tareaId, nuevoEstatus) {
     tarea.estatus = nuevoEstatus;
     renderTareasBoard();
     renderTareasList();
+    if (currentNavLevel === 'tarea_detail' && currentTarea && currentTarea.id === tareaId) {
+        currentTarea = tarea;
+        renderTareaDetalle();
+    }
     await postToBackend('tarea_update', tarea);
 }
 
@@ -1318,21 +1358,37 @@ function closeCommentsModal() {
 function updateUserFilterSelect() {
     const select = document.getElementById('filterUser');
     if (!select) return;
-    select.innerHTML = '<option value="">Todos</option>';
+    select.innerHTML = '<option value="">Todos los responsables</option>';
     responsables.forEach(function (r) {
         select.innerHTML += '<option value="' + r.nombre + '" ' + (currentUserFilter === r.nombre ? 'selected' : '') + '>' + r.nombre + '</option>';
     });
 }
 
-function applyUserFilter() {
-    currentUserFilter = document.getElementById('filterUser').value;
+function applyFilters() {
+    const filterUser = document.getElementById('filterUser');
+    const filterPriority = document.getElementById('filterPriority');
+    const filterStatus = document.getElementById('filterStatus');
+    currentUserFilter = filterUser ? filterUser.value : '';
+    currentPriorityFilter = filterPriority ? filterPriority.value : '';
+    currentStatusFilter = filterStatus ? filterStatus.value : '';
     renderTareasBoard();
     renderTareasList();
 }
 
+function applyUserFilter() {
+    applyFilters();
+}
+
 function clearFilter() {
     currentUserFilter = '';
-    document.getElementById('filterUser').value = '';
+    currentPriorityFilter = '';
+    currentStatusFilter = '';
+    const filterUser = document.getElementById('filterUser');
+    const filterPriority = document.getElementById('filterPriority');
+    const filterStatus = document.getElementById('filterStatus');
+    if (filterUser) filterUser.value = '';
+    if (filterPriority) filterPriority.value = '';
+    if (filterStatus) filterStatus.value = '';
     renderTareasBoard();
     renderTareasList();
 }
