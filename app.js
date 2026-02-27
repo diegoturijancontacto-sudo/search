@@ -530,6 +530,14 @@ function renderTareaDetalle() {
         '</div>' +
         (actionBtns ? '<div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-slate-200">' + actionBtns + '</div>' : '') +
         (t.descripcion ? '<div class="bg-slate-50 rounded-xl p-4 mb-6"><h3 class="font-semibold text-slate-700 mb-2 text-sm uppercase tracking-wider">Descripción</h3><p class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">' + t.descripcion + '</p></div>' : '') +
+        (t.adjuntos && t.adjuntos.length > 0 ?
+            '<div class="bg-slate-50 rounded-xl p-4 mb-6"><h3 class="font-semibold text-slate-700 mb-3 text-sm uppercase tracking-wider">📎 Adjuntos (' + t.adjuntos.length + ')</h3><div class="space-y-2">' +
+            t.adjuntos.map(function (url, i) {
+                return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 hover:underline break-all">' +
+                    '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>' +
+                    'Archivo ' + (i + 1) + '</a>';
+            }).join('') +
+            '</div></div>' : '') +
         '<div class="pt-4 border-t border-slate-200">' +
         '<button onclick="showTareaComments(\'' + t.id + '\')" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">' +
         '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' +
@@ -1119,6 +1127,9 @@ function openTareaModal(id) {
     const descEl = document.getElementById('tareaDescripcion');
     if (descEl) descEl.value = '';
 
+    const adjuntosEl = document.getElementById('tareaAdjuntos');
+    if (adjuntosEl) adjuntosEl.value = '';
+
     const isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
     statusSelect.innerHTML = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisión</option>' + (isPrivileged ? '<option value="completado">Completado</option><option value="bloqueada">🔒 Bloqueada</option>' : '');
 
@@ -1215,13 +1226,20 @@ async function saveTarea(e) {
             await postToBackend('tarea_add', data);
             sendWhatsAppNotification('📋 NUEVA TAREA: *' + (detalles || id) + '*\n' + (currentSubproyecto ? '📁 Programa: ' + currentSubproyecto.nombre + '\n' : '') + '📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
         }
-        closeTareaModal();
-        renderTareasBoard();
-        renderTareasList();
-        // If viewing task detail, refresh the view
-        if (currentNavLevel === 'tarea_detail' && currentTarea && data.id === currentTarea.id) {
-            currentTarea = tareas.find(function (t) { return t.id === data.id; });
-            renderTareaDetalle();
+        const adjuntosEl = document.getElementById('tareaAdjuntos');
+        if (adjuntosEl && adjuntosEl.files && adjuntosEl.files.length > 0) {
+            await uploadAttachments(nuevoId, adjuntosEl.files);
+            closeTareaModal();
+            await refreshData();
+        } else {
+            closeTareaModal();
+            renderTareasBoard();
+            renderTareasList();
+            // If viewing task detail, refresh the view
+            if (currentNavLevel === 'tarea_detail' && currentTarea && data.id === currentTarea.id) {
+                currentTarea = tareas.find(function (t) { return t.id === data.id; });
+                renderTareaDetalle();
+            }
         }
     } finally {
         showLoading(false);
@@ -1396,6 +1414,49 @@ function clearFilter() {
 // ============================================
 // BACKEND
 // ============================================
+function readFileAsBase64(file) {
+    return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            var base64 = e.target.result.split(',')[1];
+            resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+async function uploadAttachments(idTarea, files) {
+    if (!WEB_APP_URL || !files || files.length === 0) return;
+    var failed = [];
+    for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        try {
+            var base64 = await readFileAsBase64(file);
+            await fetch(WEB_APP_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'tarea_upload_adjunto',
+                    data: {
+                        id_tarea: idTarea,
+                        filename: file.name,
+                        mimeType: file.type || 'application/octet-stream',
+                        base64: base64
+                    }
+                })
+            });
+        } catch (err) {
+            console.error('Error subiendo adjunto:', file.name, err);
+            failed.push(file.name);
+        }
+    }
+    if (failed.length > 0) {
+        alert('No se pudieron subir los siguientes archivos:\n' + failed.join('\n'));
+    }
+}
+
 async function postToBackend(action, data) {
     if (!WEB_APP_URL) return;
     try {
