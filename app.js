@@ -484,7 +484,7 @@ function renderTareaDetalle() {
     const canEdit = user && (user.role === 'director' || user.role === 'supervisor');
     const isSupervisor = user && (user.role === 'supervisor' || user.role === 'director');
     const editBtn = canEdit
-        ? '<button onclick="openTareaModal(\'' + t.id + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">Editar</button>'
+        ? '<button onclick="openInlineEditForm(\'' + t.id + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">Editar</button>'
         : '';
     const commentCount = comentarios.filter(function (c) { return c.id_tarea === t.id; }).length;
 
@@ -546,11 +546,130 @@ function renderTareaDetalle() {
         '</div>';
 }
 
+function selectTareaDetalleAndEdit(tareaId) {
+    var found = tareas.find(function (t) { return t.id === tareaId; });
+    if (!found) return;
+    currentTarea = found;
+    currentNavLevel = 'tarea_detail';
+    renderCurrentLevel();
+    openInlineEditForm(tareaId);
+}
 
+function openInlineEditForm(id) {
+    var t = tareas.find(function (x) { return x.id === id; });
+    if (!t) return;
+    var user = getCurrentUser();
+    var isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
+    if (t.estatus === 'bloqueada' && !isPrivileged) {
+        alert('Esta tarea está bloqueada y no puede ser modificada.');
+        return;
+    }
+    var respOptions = '<option value="">Sin asignar</option>';
+    responsables.forEach(function (r) {
+        respOptions += '<option value="' + r.id + '"' + (t.id_responsable === r.id ? ' selected' : '') + '>' + r.nombre + ' (' + (r.rol || '') + ')</option>';
+    });
+    var statusOpts =
+        '<option value="pendiente"' + (t.estatus === 'pendiente' ? ' selected' : '') + '>Pendiente</option>' +
+        '<option value="en_curso"' + (t.estatus === 'en_curso' ? ' selected' : '') + '>En Curso</option>' +
+        '<option value="en_revision"' + (t.estatus === 'en_revision' ? ' selected' : '') + '>En Revisión</option>' +
+        (isPrivileged ? '<option value="completado"' + (t.estatus === 'completado' ? ' selected' : '') + '>Completado</option><option value="bloqueada"' + (t.estatus === 'bloqueada' ? ' selected' : '') + '>🔒 Bloqueada</option>' : '');
 
-// ============================================
-// RENDER: PROGRAMAS (antes SUBPROYECTOS)
-// ============================================
+    var container = document.getElementById('tarea-detalle-content');
+    container.innerHTML =
+        '<div class="flex items-center justify-between mb-6">' +
+        '<h2 class="text-xl font-bold text-slate-800">Editar Tarea</h2>' +
+        '<button type="button" onclick="renderTareaDetalle()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
+        '</div>' +
+        '<form class="space-y-4" onsubmit="saveInlineTarea(event, \'' + id + '\')">' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Título / Detalles</label>' +
+        '<textarea id="inline_detalles" required rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none">' + (t.detalles || '') + '</textarea>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción (larga, opcional)</label>' +
+        '<textarea id="inline_descripcion" rows="4" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none">' + (t.descripcion || '') + '</textarea>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Responsable</label>' +
+        '<select id="inline_responsable" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + respOptions + '</select>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Prioridad</label>' +
+        '<select id="inline_prioridad" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' +
+        '<option value="alta"' + (t.prioridad === 'alta' ? ' selected' : '') + '>🔴 Alta</option>' +
+        '<option value="media"' + ((t.prioridad === 'media' || !t.prioridad) ? ' selected' : '') + '>🟡 Media</option>' +
+        '<option value="baja"' + (t.prioridad === 'baja' ? ' selected' : '') + '>🟢 Baja</option>' +
+        '</select>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Estado</label>' +
+        '<select id="inline_estatus" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + statusOpts + '</select>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Fecha Límite</label>' +
+        '<input type="date" id="inline_fecha_limite" value="' + (t.fecha_limite || '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">' +
+        '</div>' +
+        '<div class="flex gap-3 pt-2">' +
+        '<button type="button" onclick="renderTareaDetalle()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
+        '<button type="submit" id="btn-save-inline-tarea" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>' +
+        '</div>' +
+        '<button type="button" onclick="deleteTareaInline(\'' + id + '\')" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline' + (isPrivileged ? '' : ' hidden') + '">Eliminar Tarea</button>' +
+        '</form>';
+}
+
+async function saveInlineTarea(e, id) {
+    e.preventDefault();
+    var t = tareas.find(function (x) { return x.id === id; });
+    if (!t) return;
+    var id_responsable = document.getElementById('inline_responsable').value;
+    var prioridad = document.getElementById('inline_prioridad').value;
+    var estatus = document.getElementById('inline_estatus').value;
+    var detalles = document.getElementById('inline_detalles').value;
+    var descripcion = document.getElementById('inline_descripcion').value;
+    var fecha_limite = document.getElementById('inline_fecha_limite').value;
+
+    var data = {
+        id: id,
+        id_subproyecto: t.id_subproyecto,
+        id_responsable: id_responsable,
+        prioridad: prioridad,
+        estatus: estatus,
+        detalles: detalles,
+        descripcion: descripcion,
+        adjuntos: t.adjuntos || [],
+        fecha_inicio: t.fecha_inicio || null,
+        fecha_limite: fecha_limite
+    };
+
+    showLoading(true);
+    setButtonLoading('btn-save-inline-tarea', true);
+    try {
+        var idx = tareas.findIndex(function (x) { return x.id === id; });
+        var estatusAnterior = tareas[idx] ? tareas[idx].estatus : null;
+        tareas[idx] = Object.assign({}, tareas[idx], data);
+        currentTarea = tareas[idx];
+        await postToBackend('tarea_update', data);
+        if (estatusAnterior && estatusAnterior !== estatus) {
+            sendWhatsAppNotification('🔄 TAREA ACTUALIZADA: *' + (detalles || id) + '*\n📊 Estado: ' + estatusAnterior + ' → ' + estatus + '\n📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
+        }
+        renderTareasBoard();
+        renderTareasList();
+        renderTareaDetalle();
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function deleteTareaInline(id) {
+    if (!id || !confirm('¿Eliminar esta tarea? Esta acción no se puede deshacer.')) return;
+    tareas = tareas.filter(function (t) { return t.id !== id; });
+    currentTarea = null;
+    currentNavLevel = 'subproyecto';
+    renderTareasBoard();
+    renderTareasList();
+    renderCurrentLevel();
+    await postToBackend('tarea_delete', { id: id });
+}
 function renderSubproyectos() {
     const container = document.getElementById('view-subproyectos');
     const user = getCurrentUser();
@@ -616,7 +735,7 @@ function getTareasActuales() {
 }
 
 function renderTareasBoard() {
-    const cols = ['pendiente', 'en_curso', 'en_revision', 'completado', 'bloqueada'];
+    const cols = ['en_curso', 'pendiente', 'en_revision', 'completado', 'bloqueada'];
     const tareasActuales = getTareasActuales();
     const user = getCurrentUser();
     const isSupervisor = user && user.role === 'supervisor';
@@ -670,7 +789,7 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
         : '';
 
     const commentBtnHtml = '<button onclick="event.stopPropagation(); showTareaComments(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded relative" title="Comentarios"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' + (commentCount > 0 ? '<span class="absolute -top-1 -right-1 bg-indigo-500 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center">' + commentCount + '</span>' : '') + '</button>';
-    const editBtnHtml = canEdit ? '<button onclick="event.stopPropagation(); openTareaModal(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded" title="Editar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>' : '';
+    const editBtnHtml = canEdit ? '<button onclick="event.stopPropagation(); selectTareaDetalleAndEdit(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-1 rounded" title="Editar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>' : '';
     const lockBtnHtml = isSupervisorOrDirector && !isLocked ? '<button onclick="event.stopPropagation(); bloquearTarea(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-red-100 hover:text-red-600 p-1 rounded" title="Bloquear">🔒</button>' : '';
     const unlockBtnHtml = isSupervisorOrDirector && isLocked ? '<button onclick="event.stopPropagation(); desbloquearTarea(\'' + tarea.id + '\')" class="text-red-400 hover:bg-green-100 hover:text-green-600 p-1 rounded" title="Desbloquear">🔓</button>' : '';
 
@@ -725,7 +844,7 @@ function renderTareasList() {
         tr.onclick = function () { selectTareaDetalle(tarea.id); };
 
         const editBtn = canEdit
-            ? '<button onclick="event.stopPropagation(); openTareaModal(\'' + tarea.id + '\')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg text-xs font-bold uppercase">Editar</button>'
+            ? '<button onclick="event.stopPropagation(); selectTareaDetalleAndEdit(\'' + tarea.id + '\')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg text-xs font-bold uppercase">Editar</button>'
             : '';
 
         const hasDesc = (tarea.descripcion || '').trim().length > 0;
@@ -1209,6 +1328,10 @@ async function saveTarea(e) {
         adjuntos: [],
         fecha_limite: document.getElementById('tareaFechaLimite').value
     };
+
+    if (!id) {
+        data.fecha_inicio = new Date().toISOString().split('T')[0];
+    }
 
     showLoading(true);
     setButtonLoading('btn-save-tarea', true);
