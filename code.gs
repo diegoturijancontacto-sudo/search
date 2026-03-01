@@ -16,9 +16,7 @@
  *   donde DT sale de Responsables!Identificador (col G) en MAYÚSCULAS.
  * - En tarea_update: si cambia responsable, se actualiza sufijo sin cambiar consecutivo.
  *
- * NUEVO:
- * - Tareas incluye columna "Descripción" (col G)
- *   Estructura Tareas:
+ * Estructura Tareas (con Entregables estructurados):
  *   A ID
  *   B ID Subproyecto
  *   C ID Responsable
@@ -26,17 +24,39 @@
  *   E Estatus
  *   F Detalles
  *   G Descripción
- *   H Adjuntos
+ *   H Adjuntos                (JSON)  <-- incluye adjuntos y evidencias/entregables-subidos
  *   I Fecha Creación
  *   J Fecha Límite
  *   K asignacion
+ *   L Entregables             (JSON)  <-- entregables estructurados (definición)
  *
- * + NUEVO (BLOQUEADAS):
- * - Estado adicional de tarea: "bloqueada"
- * - Solo el supervisor puede bloquear/desbloquear
- * - Acciones nuevas:
- *    - tarea_bloquear  => set estatus = "bloqueada" + historial
- *    - tarea_desbloquear => set estatus = "en_curso" + historial
+ * BLOQUEADAS:
+ * - Estado adicional: "bloqueada"
+ * - Solo supervisor/director puede bloquear/desbloquear
+ *
+ * ADJUNTOS / ENTREGABLES (estructura + evidencia):
+ * - Tareas!H guarda JSON:
+ *   [
+ *     { id, name, url, kind, uploadedBy, createdAt }
+ *   ]
+ *   kind: "adjunto" | "entregable"
+ *
+ * ENTREGABLES ESTRUCTURADOS:
+ * - Tareas!L guarda JSON:
+ *   [
+ *     {
+ *       id: "ent_...",
+ *       descripcion_entregable: "...",   // Resultado concreto esperado
+ *       formato_requerido: "PDF|JPG|link|físico|...",
+ *       medio_entrega: "opcore|drive|whatsapp|correo|fisica|otro",
+ *       medio_otro: "..."               // solo si medio_entrega = "otro"
+ *     }
+ *   ]
+ *
+ * PERMISOS (recomendados):
+ * - Definir/editar entregables (Tareas!L): supervisor/director
+ * - Subir archivo kind="entregable": responsable de la tarea o supervisor/director
+ * - Eliminar archivo (Drive->Papelera + quitar de Tareas!H): supervisor/director
  */
 
 const SHEET_PROYECTOS = 'Proyectos';
@@ -45,7 +65,14 @@ const SHEET_TAREAS = 'Tareas';
 const SHEET_RESPONSABLES = 'Responsables';
 const SHEET_COMENTARIOS = 'Comentarios';
 const SHEET_HISTORIAL = 'HistorialAprobaciones';
+
+// Carpeta en Drive donde se guardan archivos
 const DRIVE_ATTACHMENTS_FOLDER_ID = '1IKdpJc0ezb6ZwtUzXJm6I91WZIO3s7FS';
+
+// Índices de columnas (1-based) en hoja Tareas
+const COL_TAREA_ADJUNTOS = 8;     // H
+const COL_TAREA_ENTREGABLES = 12; // L
+const COL_TAREA_ASIGNACION = 11;  // K
 
 // ======================================================
 // INIT / VALIDACIÓN DE ESQUEMA
@@ -55,10 +82,14 @@ function ensureSchema_() {
 
   getOrCreateSheet_(ss, SHEET_PROYECTOS, ['ID', 'Nombre', 'Descripción', 'Fecha Creación', 'Estado', 'asignacion']);
   getOrCreateSheet_(ss, SHEET_SUBPROYECTOS, ['ID', 'ID Proyecto', 'Nombre', 'Descripción', 'Fecha Inicio', 'Fecha Fin Estimada', 'Fecha Creación', 'asignacion']);
+
+  // Importante: agregamos "Entregables" al final (col L) para no romper tu estructura previa
   getOrCreateSheet_(ss, SHEET_TAREAS, [
     'ID', 'ID Subproyecto', 'ID Responsable', 'Prioridad', 'Estatus',
-    'Detalles', 'Descripción', 'Adjuntos', 'Fecha Creación', 'Fecha Límite', 'asignacion'
+    'Detalles', 'Descripción', 'Adjuntos', 'Fecha Creación', 'Fecha Límite', 'asignacion',
+    'Entregables'
   ]);
+
   getOrCreateSheet_(ss, SHEET_RESPONSABLES, ['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro', 'Identificador']);
   getOrCreateSheet_(ss, SHEET_COMENTARIOS, ['ID', 'ID Tarea', 'ID Responsable', 'Comentario', 'Fecha']);
   getOrCreateSheet_(ss, SHEET_HISTORIAL, ['ID', 'ID Tarea', 'ID Supervisor', 'Estado Anterior', 'Estado Nuevo', 'Fecha', 'Observaciones']);
@@ -82,7 +113,7 @@ function ensureSchema_() {
   // Forzar columnas asignacion como TEXTO (evita 1.1 => 1/1/26)
   forceTextColumn_(ss.getSheetByName(SHEET_PROYECTOS), 6);     // F
   forceTextColumn_(ss.getSheetByName(SHEET_SUBPROYECTOS), 8);  // H
-  forceTextColumn_(ss.getSheetByName(SHEET_TAREAS), 11);       // K
+  forceTextColumn_(ss.getSheetByName(SHEET_TAREAS), COL_TAREA_ASIGNACION); // K
 }
 
 function getOrCreateSheet_(ss, name, headers) {
@@ -96,11 +127,32 @@ function getOrCreateSheet_(ss, name, headers) {
     sh.appendRow(headers);
     return sh;
   }
+
+  // Si la hoja no tiene cabeceras válidas, insertarlas
   const a1 = (sh.getRange(1, 1).getValue() || '').toString().trim().toLowerCase();
   if (a1 !== 'id') {
     sh.insertRowBefore(1);
     sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return sh;
   }
+
+  // Asegurar que existan todas las cabeceras (no destructivo)
+  const lastCol = Math.max(sh.getLastColumn(), 1);
+  const row1 = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || '').toString().trim());
+
+  // Si faltan columnas al final, agrégalas
+  if (sh.getLastColumn() < headers.length) {
+    sh.getRange(1, sh.getLastColumn() + 1, 1, headers.length - sh.getLastColumn())
+      .setValues([headers.slice(sh.getLastColumn())]);
+  }
+
+  // Rellenar headers vacíos dentro del rango existente
+  for (let i = 0; i < headers.length; i++) {
+    const expected = headers[i];
+    const existing = row1[i];
+    if (!existing) sh.getRange(1, i + 1).setValue(expected);
+  }
+
   return sh;
 }
 
@@ -152,7 +204,7 @@ function normalizeAsignacion_(v) {
 }
 
 // ======================================================
-// SEGURIDAD / ROLES (para bloquear)
+// ROLES / PERMISOS
 // ======================================================
 function getResponsableRolById_(ss, responsableId) {
   if (!responsableId) return '';
@@ -167,11 +219,108 @@ function getResponsableRolById_(ss, responsableId) {
   return '';
 }
 
-function assertSupervisor_(ss, actorId) {
+function isPrivileged_(ss, actorId) {
   const rol = getResponsableRolById_(ss, actorId);
-  if (rol !== 'supervisor') {
-    throw new Error('No autorizado: solo supervisor puede realizar esta acción.');
+  return rol === 'supervisor' || rol === 'director';
+}
+
+function assertPrivileged_(ss, actorId) {
+  if (!isPrivileged_(ss, actorId)) {
+    throw new Error('No autorizado: solo supervisor/director puede realizar esta acción.');
   }
+}
+
+function getTareaById_(ss, tareaId) {
+  const shT = ss.getSheetByName(SHEET_TAREAS);
+  const rows = shT.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if ((rows[i][0] || '').toString() === tareaId.toString()) {
+      return { rowIndex: i + 1, values: rows[i], sh: shT };
+    }
+  }
+  return null;
+}
+
+function assertCanUploadEntregable_(ss, tareaId, actorId) {
+  const tarea = getTareaById_(ss, tareaId);
+  if (!tarea) throw new Error('Tarea no encontrada');
+
+  const tareaResponsableId = (tarea.values[2] || '').toString(); // col C
+  if (isPrivileged_(ss, actorId)) return;
+
+  if (!actorId || actorId.toString() !== tareaResponsableId.toString()) {
+    throw new Error('No autorizado: solo el responsable (o supervisor/director) puede subir entregables.');
+  }
+}
+
+function assertCanUploadAdjunto_(ss, tareaId, actorId) {
+  // Por defecto igual que entregable (puedes relajarlo si quieres)
+  return assertCanUploadEntregable_(ss, tareaId, actorId);
+}
+
+// ======================================================
+// ADJUNTOS: JSON en celda (Tareas!H)
+// ======================================================
+function parseAdjuntosCell_(cellValue) {
+  const raw = (cellValue || '').toString().trim();
+  if (!raw) return [];
+
+  // JSON
+  if (raw.startsWith('[') || raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      // cae a CSV viejo
+    }
+  }
+
+  // CSV viejo de URLs
+  return raw
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(url => ({ id: '', name: '', url, kind: 'adjunto', uploadedBy: '', createdAt: '' }));
+}
+
+function stringifyAdjuntosCell_(adjuntos) {
+  return JSON.stringify(adjuntos || []);
+}
+
+// ======================================================
+// ENTREGABLES ESTRUCTURADOS: JSON en celda (Tareas!L)
+// ======================================================
+function parseEntregablesCell_(cellValue) {
+  const raw = (cellValue || '').toString().trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function stringifyEntregablesCell_(entregables) {
+  return JSON.stringify(entregables || []);
+}
+
+function validateMedioEntrega_(medio) {
+  const allowed = ['opcore', 'drive', 'whatsapp', 'correo', 'fisica', 'otro'];
+  if (!allowed.includes(medio)) throw new Error('medio_entrega inválido');
+}
+
+// ======================================================
+// DRIVE
+// ======================================================
+function getAttachmentsFolder_() {
+  if (!DRIVE_ATTACHMENTS_FOLDER_ID) throw new Error('Falta DRIVE_ATTACHMENTS_FOLDER_ID');
+  return DriveApp.getFolderById(DRIVE_ATTACHMENTS_FOLDER_ID);
+}
+
+function ensureFileIsShareable_(file) {
+  // Público por link
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 }
 
 // ======================================================
@@ -271,7 +420,6 @@ function doGet() {
     ensureSchema_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // Proyectos
     const shP = ss.getSheetByName(SHEET_PROYECTOS);
     const proyectosData = shP.getDataRange().getValues();
     const proyectos = proyectosData.slice(1).map(r => ({
@@ -284,7 +432,6 @@ function doGet() {
       asignacion: normalizeAsignacion_(r[5])
     }));
 
-    // Subproyectos
     const shS = ss.getSheetByName(SHEET_SUBPROYECTOS);
     const subData = shS.getDataRange().getValues();
     const subproyectos = subData.slice(1).map(r => ({
@@ -299,7 +446,6 @@ function doGet() {
       asignacion: normalizeAsignacion_(r[7])
     }));
 
-    // Tareas
     const shT = ss.getSheetByName(SHEET_TAREAS);
     const tareasData = shT.getDataRange().getValues();
     const tareas = tareasData.slice(1).map(r => ({
@@ -310,13 +456,13 @@ function doGet() {
       estatus: r[4] || 'pendiente',
       detalles: r[5] || '',
       descripcion: r[6] || '',
-      adjuntos: r[7] ? r[7].toString().split(',').filter(a => a) : [],
+      adjuntos: parseAdjuntosCell_(r[7]),
       fecha_creacion: r[8] ? new Date(r[8]).toISOString().split('T')[0] : '',
       fecha_limite: r[9] ? new Date(r[9]).toISOString().split('T')[0] : '',
-      asignacion: normalizeAsignacion_(r[10])
+      asignacion: normalizeAsignacion_(r[10]),
+      entregables: parseEntregablesCell_(r[11]) // col L
     }));
 
-    // Responsables
     const shR = ss.getSheetByName(SHEET_RESPONSABLES);
     const colIdent = ensureColumnWithHeader_(shR, 'Identificador');
     const respData = shR.getDataRange().getValues();
@@ -330,7 +476,6 @@ function doGet() {
       identificador: (r[colIdent - 1] || '').toString() || generarIdentificador(r[1] || '')
     }));
 
-    // Comentarios
     const shC = ss.getSheetByName(SHEET_COMENTARIOS);
     const comData = shC.getDataRange().getValues();
     const comentarios = comData.slice(1).map(r => ({
@@ -341,7 +486,6 @@ function doGet() {
       fecha: r[4] || ''
     }));
 
-    // Historial
     const shH = ss.getSheetByName(SHEET_HISTORIAL);
     const histData = shH.getDataRange().getValues();
     const historial = histData.slice(1).map(r => ({
@@ -380,10 +524,204 @@ function doPost(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const body = JSON.parse(e.postData.contents);
     const action = body.action;
-    const data = body.data;
+    const data = body.data || {};
 
-    // PROYECTOS
-    if (action === 'proyecto_add' || action === 'proyecto_update' || action === 'proyecto_delete') {
+    // ======================================================
+    // 1) ENTREGABLES ESTRUCTURADOS (CRUD) => Tareas!L
+    // ======================================================
+    if (action === 'tarea_entregables_set') {
+      // data: { id_tarea, entregables: [...], id_actor }
+      const idTarea = (data.id_tarea || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const entregables = Array.isArray(data.entregables) ? data.entregables : [];
+
+      if (!idTarea) throw new Error('Falta data.id_tarea');
+      if (!actorId) throw new Error('Falta data.id_actor');
+
+      // Solo supervisor/director define el "qué se entrega" (modelo orientado a resultados)
+      assertPrivileged_(ss, actorId);
+
+      entregables.forEach(en => validateMedioEntrega_((en.medio_entrega || '').toString()));
+
+      const tarea = getTareaById_(ss, idTarea);
+      if (!tarea) throw new Error('Tarea no encontrada');
+
+      tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).setValue(stringifyEntregablesCell_(entregables));
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    else if (action === 'tarea_entregable_add') {
+      // data: { id_tarea, entregable: {...}, id_actor }
+      const idTarea = (data.id_tarea || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const entregable = data.entregable || {};
+
+      if (!idTarea) throw new Error('Falta data.id_tarea');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      assertPrivileged_(ss, actorId);
+
+      validateMedioEntrega_((entregable.medio_entrega || '').toString());
+
+      const tarea = getTareaById_(ss, idTarea);
+      if (!tarea) throw new Error('Tarea no encontrada');
+
+      const prev = parseEntregablesCell_(tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).getValue());
+
+      const newEnt = {
+        id: entregable.id || ('ent_' + Date.now().toString()),
+        descripcion_entregable: (entregable.descripcion_entregable || '').toString(),
+        formato_requerido: (entregable.formato_requerido || '').toString(),
+        medio_entrega: (entregable.medio_entrega || '').toString(),
+        medio_otro: (entregable.medio_otro || '').toString()
+      };
+
+      prev.push(newEnt);
+      tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).setValue(stringifyEntregablesCell_(prev));
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success', entregable: newEnt }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    else if (action === 'tarea_entregable_update') {
+      // data: { id_tarea, entregable: {...}, id_actor }
+      const idTarea = (data.id_tarea || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const entregable = data.entregable || {};
+      const entregableId = (entregable.id || '').toString().trim();
+
+      if (!idTarea) throw new Error('Falta data.id_tarea');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      if (!entregableId) throw new Error('Falta entregable.id');
+      assertPrivileged_(ss, actorId);
+
+      validateMedioEntrega_((entregable.medio_entrega || '').toString());
+
+      const tarea = getTareaById_(ss, idTarea);
+      if (!tarea) throw new Error('Tarea no encontrada');
+
+      const prev = parseEntregablesCell_(tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).getValue());
+      const next = prev.map(en => {
+        if ((en.id || '') !== entregableId) return en;
+        return {
+          ...en,
+          descripcion_entregable: (entregable.descripcion_entregable ?? en.descripcion_entregable ?? '').toString(),
+          formato_requerido: (entregable.formato_requerido ?? en.formato_requerido ?? '').toString(),
+          medio_entrega: (entregable.medio_entrega ?? en.medio_entrega ?? '').toString(),
+          medio_otro: (entregable.medio_otro ?? en.medio_otro ?? '').toString()
+        };
+      });
+
+      tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).setValue(stringifyEntregablesCell_(next));
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    else if (action === 'tarea_entregable_delete') {
+      // data: { id_tarea, entregableId, id_actor }
+      const idTarea = (data.id_tarea || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const entregableId = (data.entregableId || '').toString().trim();
+
+      if (!idTarea) throw new Error('Falta data.id_tarea');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      if (!entregableId) throw new Error('Falta data.entregableId');
+      assertPrivileged_(ss, actorId);
+
+      const tarea = getTareaById_(ss, idTarea);
+      if (!tarea) throw new Error('Tarea no encontrada');
+
+      const prev = parseEntregablesCell_(tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).getValue());
+      const next = prev.filter(en => (en.id || '') !== entregableId);
+      tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).setValue(stringifyEntregablesCell_(next));
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ======================================================
+    // 2) SUBIR ARCHIVO (Adjunto o Entregable como archivo) => Tareas!H
+    // ======================================================
+    else if (action === 'tarea_upload_adjunto') {
+      // data: { id_tarea, filename, mimeType, base64, kind, id_actor }
+      const idTarea = (data.id_tarea || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const kind = (data.kind || 'adjunto').toString().trim(); // "adjunto" | "entregable"
+
+      if (!idTarea) throw new Error('Falta data.id_tarea');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      if (!data.base64) throw new Error('Falta data.base64');
+
+      if (kind === 'entregable') assertCanUploadEntregable_(ss, idTarea, actorId);
+      else assertCanUploadAdjunto_(ss, idTarea, actorId);
+
+      const folder = getAttachmentsFolder_();
+      const filename = (data.filename || 'adjunto').toString();
+      const mimeType = (data.mimeType || 'application/octet-stream').toString();
+      const base64 = (data.base64 || '').toString();
+
+      const bytes = Utilities.base64Decode(base64);
+      const blob = Utilities.newBlob(bytes, mimeType, filename);
+
+      const finalName = `${idTarea}__${kind}__${filename}`;
+      const file = folder.createFile(blob).setName(finalName);
+      ensureFileIsShareable_(file);
+
+      const fileUrl = file.getUrl();
+      const fileId = file.getId();
+
+      const tarea = getTareaById_(ss, idTarea);
+      if (tarea) {
+        const prevRaw = tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ADJUNTOS).getValue();
+        const prevAdj = parseAdjuntosCell_(prevRaw);
+        prevAdj.push({
+          id: fileId,
+          name: filename,
+          url: fileUrl,
+          kind: kind,
+          uploadedBy: actorId,
+          createdAt: new Date().toISOString()
+        });
+        tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ADJUNTOS).setValue(stringifyAdjuntosCell_(prevAdj));
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success', fileId, url: fileUrl }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ======================================================
+    // 3) ELIMINAR ARCHIVO (Drive->Papelera + quitar de Tareas!H)
+    // ======================================================
+    else if (action === 'tarea_adjunto_eliminar') {
+      // data: { id_tarea, fileId, id_actor }
+      const idTarea = (data.id_tarea || '').toString().trim();
+      const fileId = (data.fileId || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+
+      if (!idTarea) throw new Error('Falta data.id_tarea');
+      if (!fileId) throw new Error('Falta data.fileId');
+      if (!actorId) throw new Error('Falta data.id_actor');
+
+      assertPrivileged_(ss, actorId);
+
+      DriveApp.getFileById(fileId).setTrashed(true);
+
+      const tarea = getTareaById_(ss, idTarea);
+      if (tarea) {
+        const prevRaw = tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ADJUNTOS).getValue();
+        const prevAdj = parseAdjuntosCell_(prevRaw);
+        const nextAdj = prevAdj.filter(a => (a.id || '') !== fileId);
+        tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ADJUNTOS).setValue(stringifyAdjuntosCell_(nextAdj));
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ======================================================
+    // 4) PROYECTOS (CRUD)
+    // ======================================================
+    else if (action === 'proyecto_add' || action === 'proyecto_update' || action === 'proyecto_delete') {
       const sh = ss.getSheetByName(SHEET_PROYECTOS);
 
       if (action === 'proyecto_add') {
@@ -395,7 +733,7 @@ function doPost(e) {
       } else if (action === 'proyecto_update') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
             sh.getRange(i + 1, 2).setValue(data.nombre);
             sh.getRange(i + 1, 3).setValue(data.descripcion || '');
             sh.getRange(i + 1, 5).setValue(data.estado || 'activo');
@@ -405,7 +743,7 @@ function doPost(e) {
       } else if (action === 'proyecto_delete') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
             sh.deleteRow(i + 1);
             break;
           }
@@ -413,7 +751,9 @@ function doPost(e) {
       }
     }
 
-    // SUBPROYECTOS
+    // ======================================================
+    // 5) SUBPROYECTOS (CRUD)
+    // ======================================================
     else if (action === 'subproyecto_add' || action === 'subproyecto_update' || action === 'subproyecto_delete') {
       const sh = ss.getSheetByName(SHEET_SUBPROYECTOS);
 
@@ -438,7 +778,7 @@ function doPost(e) {
       else if (action === 'subproyecto_update') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
             sh.getRange(i + 1, 2).setValue(data.id_proyecto);
             sh.getRange(i + 1, 3).setValue(data.nombre);
             sh.getRange(i + 1, 4).setValue(data.descripcion || '');
@@ -451,7 +791,7 @@ function doPost(e) {
       else if (action === 'subproyecto_delete') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
             sh.deleteRow(i + 1);
             break;
           }
@@ -459,7 +799,9 @@ function doPost(e) {
       }
     }
 
-    // TAREAS (CRUD normal)
+    // ======================================================
+    // 6) TAREAS (CRUD normal)
+    // ======================================================
     else if (action === 'tarea_add' || action === 'tarea_update' || action === 'tarea_delete') {
       const sh = ss.getSheetByName(SHEET_TAREAS);
 
@@ -474,37 +816,55 @@ function doPost(e) {
           data.estatus || 'pendiente',
           data.detalles || '',
           data.descripcion || '',
-          data.adjuntos ? data.adjuntos.join(',') : '',
+          // Adjuntos H: puede venir como string o array; lo dejamos como vacío aquí
+          '', // Adjuntos (H)
           new Date().toISOString(),
           data.fecha_limite || '',
           '' // asignacion (K)
+          // Entregables (L) se crea en blanco (si existe columna)
         ]);
 
+        // Set asignacion (K) como texto
         const lastRow = sh.getLastRow();
-        sh.getRange(lastRow, 11).setNumberFormat('@STRING@'); // K
-        sh.getRange(lastRow, 11).setValue(String(asignacion || ''));
+        sh.getRange(lastRow, COL_TAREA_ASIGNACION).setNumberFormat('@STRING@');
+        sh.getRange(lastRow, COL_TAREA_ASIGNACION).setValue(String(asignacion || ''));
+
+        // Inicializar Entregables (L) si existe
+        const lastCol = sh.getLastColumn();
+        if (lastCol >= COL_TAREA_ENTREGABLES) {
+          sh.getRange(lastRow, COL_TAREA_ENTREGABLES).setValue('[]');
+        }
       }
       else if (action === 'tarea_update') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
+            // B..J
             sh.getRange(i + 1, 2).setValue(data.id_subproyecto);
             sh.getRange(i + 1, 3).setValue(data.id_responsable);
             sh.getRange(i + 1, 4).setValue(data.prioridad || 'media');
             sh.getRange(i + 1, 5).setValue(data.estatus || 'pendiente');
             sh.getRange(i + 1, 6).setValue(data.detalles || '');
             sh.getRange(i + 1, 7).setValue(data.descripcion || '');
-            sh.getRange(i + 1, 8).setValue(data.adjuntos ? data.adjuntos.join(',') : '');
+
+            // Adjuntos (H): si te llegan como array, lo guardamos como JSON
+            if (Array.isArray(data.adjuntos)) {
+              sh.getRange(i + 1, COL_TAREA_ADJUNTOS).setValue(stringifyAdjuntosCell_(data.adjuntos));
+            } else if (typeof data.adjuntos === 'string') {
+              sh.getRange(i + 1, COL_TAREA_ADJUNTOS).setValue(data.adjuntos);
+            }
+
             sh.getRange(i + 1, 10).setValue(data.fecha_limite || '');
 
             // actualizar sufijo de asignacion según responsable (sin cambiar 1.1.3)
-            const prevAsign = normalizeAsignacion_(rows[i][10]); // K
+            const prevAsign = normalizeAsignacion_(rows[i][10]); // K (index 10)
             const ini = getResponsableInicialesById_(ss, data.id_responsable);
             const m = prevAsign.match(/^(\d+\.\d+\.\d+)([A-Z]*)$/);
             const newAsign = m ? `${m[1]}${ini}` : getNextTareaAsignacion_(ss, data.id_subproyecto, data.id_responsable);
 
-            sh.getRange(i + 1, 11).setNumberFormat('@STRING@'); // K
-            sh.getRange(i + 1, 11).setValue(String(newAsign || ''));
+            sh.getRange(i + 1, COL_TAREA_ASIGNACION).setNumberFormat('@STRING@');
+            sh.getRange(i + 1, COL_TAREA_ASIGNACION).setValue(String(newAsign || ''));
+
             break;
           }
         }
@@ -512,73 +872,17 @@ function doPost(e) {
       else if (action === 'tarea_delete') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
             sh.deleteRow(i + 1);
             break;
           }
         }
       }
     }
-else if (action === 'tarea_upload_adjunto') {
-  // data esperado:
-  // {
-  //   id_tarea: "....",
-  //   filename: "archivo.png",
-  //   mimeType: "image/png",
-  //   base64: "...." (sin el prefijo "data:...;base64,")
-  //   id_actor: "..." (opcional para auditoría)
-  // }
 
-  const folder = getAttachmentsFolder_();
-
-  const idTarea = (data.id_tarea || '').toString().trim();
-  const filename = (data.filename || 'adjunto').toString();
-  const mimeType = (data.mimeType || 'application/octet-stream').toString();
-  const base64 = (data.base64 || '').toString();
-
-  if (!idTarea) throw new Error('Falta data.id_tarea');
-  if (!base64) throw new Error('Falta data.base64');
-
-  const bytes = Utilities.base64Decode(base64);
-  const blob = Utilities.newBlob(bytes, mimeType, filename);
-
-  // Guardar con prefijo del id_tarea para orden
-  const finalName = `${idTarea}__${filename}`;
-  const file = folder.createFile(blob).setName(finalName);
-
-  // Hacerlo accesible por link (si quieres)
-  ensureFileIsShareable_(file);
-
-  const fileUrl = file.getUrl();
-  const fileId = file.getId();
-
-  // Guardar en hoja Tareas, col H = Adjuntos (índice 8)
-  // Tu schema:
-  // A ID
-  // ...
-  // H Adjuntos (col 8)
-  const shT = ss.getSheetByName(SHEET_TAREAS);
-  const rows = shT.getDataRange().getValues();
-  for (let i = 1; i < rows.length; i++) {
-    if ((rows[i][0] || '').toString() === idTarea) {
-      const prev = (rows[i][7] || '').toString().trim(); // col H en array => index 7
-      const updated = prev ? (prev + ',' + fileUrl) : fileUrl;
-      shT.getRange(i + 1, 8).setValue(updated);
-      break;
-    }
-  }
-
-  // Respuesta específica (IMPORTANTE: return aquí)
-  return ContentService
-    .createTextOutput(JSON.stringify({
-      result: 'success',
-      fileId,
-      url: fileUrl
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-    // RESPONSABLES
+    // ======================================================
+    // 7) RESPONSABLES (CRUD)
+    // ======================================================
     else if (action === 'responsable_add' || action === 'responsable_update' || action === 'responsable_delete') {
       const sh = ss.getSheetByName(SHEET_RESPONSABLES);
       const colIdent = ensureColumnWithHeader_(sh, 'Identificador');
@@ -599,7 +903,7 @@ else if (action === 'tarea_upload_adjunto') {
       } else if (action === 'responsable_update') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
             sh.getRange(i + 1, 2).setValue(data.nombre);
             sh.getRange(i + 1, 3).setValue(data.departamento || '');
             sh.getRange(i + 1, 4).setValue(data.email || '');
@@ -611,7 +915,7 @@ else if (action === 'tarea_upload_adjunto') {
       } else if (action === 'responsable_delete') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
             sh.deleteRow(i + 1);
             break;
           }
@@ -619,7 +923,9 @@ else if (action === 'tarea_upload_adjunto') {
       }
     }
 
-    // COMENTARIOS
+    // ======================================================
+    // 8) COMENTARIOS (add/delete)
+    // ======================================================
     else if (action === 'comentario_add' || action === 'comentario_delete') {
       const sh = ss.getSheetByName(SHEET_COMENTARIOS);
 
@@ -628,7 +934,7 @@ else if (action === 'tarea_upload_adjunto') {
       } else if (action === 'comentario_delete') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
-          if (rows[i][0].toString() === data.id.toString()) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
             sh.deleteRow(i + 1);
             break;
           }
@@ -636,7 +942,9 @@ else if (action === 'tarea_upload_adjunto') {
       }
     }
 
-    // APROBACIONES + HISTORIAL (+ BLOQUEAR/DESBLOQUEAR)
+    // ======================================================
+    // 9) APROBACIONES + HISTORIAL (+ bloquear/desbloquear)
+    // ======================================================
     else if (
       action === 'tarea_revisar' ||
       action === 'tarea_aprobar' ||
@@ -656,13 +964,13 @@ else if (action === 'tarea_upload_adjunto') {
       else if (action === 'tarea_bloquear') nuevoEstado = 'bloqueada';
       else if (action === 'tarea_desbloquear') nuevoEstado = 'en_curso';
 
-      // Seguridad: solo supervisor puede bloquear/desbloquear
+      // Seguridad: solo supervisor/director puede bloquear/desbloquear
       if (action === 'tarea_bloquear' || action === 'tarea_desbloquear') {
-        assertSupervisor_(ss, data.id_actor || data.id_supervisor);
+        assertPrivileged_(ss, data.id_actor || data.id_supervisor);
       }
 
       for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0].toString() === data.id_tarea.toString()) {
+        if ((rows[i][0] || '').toString() === (data.id_tarea || '').toString()) {
           const estadoAnterior = rows[i][4]; // Col E = Estatus
           shT.getRange(i + 1, 5).setValue(nuevoEstado);
 
@@ -689,13 +997,13 @@ else if (action === 'tarea_upload_adjunto') {
   }
 }
 
-function getAttachmentsFolder_() {
-  if (!DRIVE_ATTACHMENTS_FOLDER_ID) throw new Error('Falta DRIVE_ATTACHMENTS_FOLDER_ID');
-  return DriveApp.getFolderById(DRIVE_ATTACHMENTS_FOLDER_ID);
-}
-
-function ensureFileIsShareable_(file) {
-  // Opción 1: que cualquiera con el link pueda ver
-  // (Requiere que tu dominio/Drive permita link-sharing)
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+// ======================================================
+// TESTS (opcional)
+// ======================================================
+function testAttachmentsFolder() {
+  const folder = DriveApp.getFolderById(DRIVE_ATTACHMENTS_FOLDER_ID);
+  Logger.log(folder.getName());
+  const f = folder.createFile('test_upload.txt', 'hola');
+  ensureFileIsShareable_(f);
+  Logger.log(f.getUrl());
 }
