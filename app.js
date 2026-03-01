@@ -620,6 +620,7 @@ function openInlineEditForm(id) {
         '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción (larga, opcional)</label>' +
         '<textarea id="inline_descripcion" rows="4" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none">' + (t.descripcion || '') + '</textarea>' +
         '</div>' +
+        buildInlineAdjuntosHtml(t, isPrivileged) +
         '<div>' +
         '<label class="block text-sm font-bold text-slate-700 mb-1">Responsable</label>' +
         '<select id="inline_responsable" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + respOptions + '</select>' +
@@ -685,7 +686,13 @@ async function saveInlineTarea(e, id) {
         }
         renderTareasBoard();
         renderTareasList();
-        renderTareaDetalle();
+        var inlineAdjEl = document.getElementById('inline_adjuntos');
+        if (inlineAdjEl && inlineAdjEl.files && inlineAdjEl.files.length > 0) {
+            await uploadAttachments(id, inlineAdjEl.files);
+            await refreshData();
+        } else {
+            renderTareaDetalle();
+        }
     } finally {
         showLoading(false);
     }
@@ -1264,6 +1271,77 @@ function updateResponsableSelect() {
     });
 }
 
+function buildInlineAdjuntosHtml(t, isPrivileged) {
+    var adjuntos = (t.adjuntos || []).filter(function (a) { return typeof a === 'object' && a.id; });
+    var listHtml = adjuntos.length > 0
+        ? '<div class="mt-1 space-y-1">' +
+            adjuntos.map(function (a) {
+                return '<div class="flex items-center gap-2 text-sm bg-slate-50 px-3 py-1.5 rounded-lg">' +
+                    '<a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline truncate flex-1">' + escapeHtml(a.name || a.url) + '</a>' +
+                    (isPrivileged ? '<button type="button" onclick="deleteAttachment(\'' + t.id + '\',\'' + a.id + '\')" class="text-red-400 hover:text-red-600 flex-shrink-0 ml-1" title="Eliminar adjunto">✕</button>' : '') +
+                    '</div>';
+            }).join('') +
+            '</div>'
+        : '';
+    return '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Adjuntos</label>' +
+        listHtml +
+        '<input type="file" id="inline_adjuntos" multiple class="mt-2 w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">' +
+        '<p class="text-xs text-slate-400 mt-1">Nuevos archivos se subirán a Drive al guardar</p>' +
+        '</div>';
+}
+
+function renderModalAdjuntos(tareaId) {
+    var container = document.getElementById('modal-tarea-adjuntos-list');
+    if (!container) return;
+    var t = tareas.find(function (x) { return x.id === tareaId; });
+    if (!t) { container.innerHTML = ''; return; }
+    var adjuntos = (t.adjuntos || []).filter(function (a) { return typeof a === 'object' && a.id; });
+    if (adjuntos.length === 0) { container.innerHTML = ''; return; }
+    var user = getCurrentUser();
+    var isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
+    container.innerHTML = '<div class="mt-1 space-y-1">' +
+        adjuntos.map(function (a) {
+            return '<div class="flex items-center gap-2 text-sm bg-slate-50 px-3 py-1.5 rounded-lg">' +
+                '<a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline truncate flex-1">' + escapeHtml(a.name || a.url) + '</a>' +
+                (isPrivileged ? '<button type="button" onclick="deleteAttachment(\'' + tareaId + '\',\'' + a.id + '\')" class="text-red-400 hover:text-red-600 flex-shrink-0 ml-1" title="Eliminar adjunto">✕</button>' : '') +
+                '</div>';
+        }).join('') +
+        '</div>';
+}
+
+async function deleteAttachment(tareaId, fileId) {
+    if (!confirm('¿Eliminar este archivo adjunto?')) return;
+    var user = getCurrentUser();
+    showLoading(true);
+    try {
+        await postToBackend('tarea_adjunto_eliminar', {
+            id_tarea: tareaId,
+            fileId: fileId,
+            id_actor: user ? user.id : ''
+        });
+        var tarea = tareas.find(function (t) { return t.id === tareaId; });
+        if (tarea && Array.isArray(tarea.adjuntos)) {
+            tarea.adjuntos = tarea.adjuntos.filter(function (a) {
+                return !(typeof a === 'object' && a.id === fileId);
+            });
+            if (currentTarea && currentTarea.id === tareaId) currentTarea = tarea;
+        }
+        var modalEl = document.getElementById('modal-tarea');
+        if (modalEl && !modalEl.classList.contains('hidden') && document.getElementById('tareaId').value === tareaId) {
+            renderModalAdjuntos(tareaId);
+        }
+        if (currentNavLevel === 'tarea_detail' && currentTarea && currentTarea.id === tareaId) {
+            var inlineForm = document.getElementById('tarea-detalle-content');
+            if (inlineForm && inlineForm.querySelector('#inline_detalles')) {
+                openInlineEditForm(tareaId);
+            }
+        }
+    } finally {
+        showLoading(false);
+    }
+}
+
 function openTareaModal(id) {
     const user = getCurrentUser();
     const modal = document.getElementById('modal-tarea');
@@ -1299,10 +1377,13 @@ function openTareaModal(id) {
         document.getElementById('tareaEstatus').value = t.estatus || 'pendiente';
         document.getElementById('tareaFechaLimite').value = t.fecha_limite || '';
         btnDelete.classList.remove('hidden');
+        renderModalAdjuntos(id);
     } else {
         title.innerText = 'Nueva Tarea';
         document.getElementById('tareaId').value = '';
         btnDelete.classList.add('hidden');
+        var listEl = document.getElementById('modal-tarea-adjuntos-list');
+        if (listEl) listEl.innerHTML = '';
     }
     modal.classList.remove('hidden');
 }
