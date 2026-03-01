@@ -514,6 +514,36 @@ function renderTareaDetalle() {
         }
     }
 
+    var entregables = Array.isArray(t.entregables) ? t.entregables : [];
+    var medioEntregaLabel = function (m, otro) {
+        return ({ opcore: 'OpCore', drive: 'Drive', whatsapp: 'WhatsApp', correo: 'Correo', fisica: 'Física', otro: otro || 'Otro' })[m] || m;
+    };
+    var entregablesHtml = (canEdit || entregables.length > 0) ?
+        '<div class="bg-slate-50 rounded-xl p-4 mb-6">' +
+        '<div class="flex items-center justify-between mb-3">' +
+        '<h3 class="font-semibold text-slate-700 text-sm uppercase tracking-wider">📋 Entregables (' + entregables.length + ')</h3>' +
+        (canEdit ? '<button onclick="openEntregableModal(\'' + t.id + '\')" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-indigo-700">+ Agregar</button>' : '') +
+        '</div>' +
+        (entregables.length > 0 ?
+            '<div class="space-y-2">' +
+            entregables.map(function (en) {
+                var editBtns = canEdit ?
+                    '<div class="flex gap-2 ml-2 flex-shrink-0">' +
+                    '<button onclick="openEntregableModal(\'' + t.id + '\', \'' + en.id + '\')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Editar</button>' +
+                    '<button onclick="deleteEntregableItem(\'' + t.id + '\', \'' + en.id + '\')" class="text-xs text-red-400 hover:text-red-600 font-medium">✕</button>' +
+                    '</div>' : '';
+                return '<div class="bg-white rounded-lg border border-slate-200 p-3 flex items-start justify-between">' +
+                    '<div class="flex-1 min-w-0">' +
+                    '<p class="text-sm text-slate-700 font-medium leading-snug">' + escapeHtml(en.descripcion_entregable || '') + '</p>' +
+                    '<div class="flex flex-wrap gap-2 mt-1.5">' +
+                    (en.formato_requerido ? '<span class="inline-flex items-center text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">' + escapeHtml(en.formato_requerido) + '</span>' : '') +
+                    (en.medio_entrega ? '<span class="inline-flex items-center text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">📤 ' + escapeHtml(medioEntregaLabel(en.medio_entrega, en.medio_otro)) + '</span>' : '') +
+                    '</div>' +
+                    '</div>' + editBtns + '</div>';
+            }).join('') +
+            '</div>' : '<p class="text-sm text-slate-400 italic">Sin entregables definidos</p>') +
+        '</div>' : '';
+
     container.innerHTML =
         '<div class="flex items-start justify-between mb-6">' +
         '<div>' +
@@ -538,6 +568,7 @@ function renderTareaDetalle() {
                     'Archivo ' + (i + 1) + '</a>';
             }).join('') +
             '</div></div>' : '') +
+        entregablesHtml +
         '<div class="pt-4 border-t border-slate-200">' +
         '<button onclick="showTareaComments(\'' + t.id + '\')" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">' +
         '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' +
@@ -1437,8 +1468,116 @@ function closeDescripcionModal() {
 }
 
 // ============================================
-// COMENTARIOS
+// ENTREGABLES
 // ============================================
+function openEntregableModal(tareaId, entId) {
+    var user = getCurrentUser();
+    if (!user || (user.role !== 'supervisor' && user.role !== 'director')) {
+        alert('Solo supervisores y directores pueden gestionar entregables.');
+        return;
+    }
+    document.getElementById('entregableTareaId').value = tareaId;
+    document.getElementById('entregableId').value = entId || '';
+    document.getElementById('modal-entregable-title').innerText = entId ? 'Editar Entregable' : 'Nuevo Entregable';
+    document.getElementById('form-entregable').reset();
+    document.getElementById('entregable-medio-otro-wrapper').classList.add('hidden');
+    var btnDelete = document.getElementById('btn-delete-entregable');
+    if (entId) {
+        var tarea = tareas.find(function (t) { return t.id === tareaId; });
+        var en = tarea && Array.isArray(tarea.entregables) ? tarea.entregables.find(function (e) { return e.id === entId; }) : null;
+        if (en) {
+            document.getElementById('entregableDescripcion').value = en.descripcion_entregable || '';
+            document.getElementById('entregableFormato').value = en.formato_requerido || '';
+            document.getElementById('entregableMedio').value = en.medio_entrega || 'opcore';
+            document.getElementById('entregableMedioOtro').value = en.medio_otro || '';
+            if (en.medio_entrega === 'otro') {
+                document.getElementById('entregable-medio-otro-wrapper').classList.remove('hidden');
+            }
+        }
+        btnDelete.classList.remove('hidden');
+    } else {
+        btnDelete.classList.add('hidden');
+    }
+    document.getElementById('modal-entregable').classList.remove('hidden');
+}
+
+function closeEntregableModal() {
+    document.getElementById('modal-entregable').classList.add('hidden');
+}
+
+function toggleMedioOtro() {
+    var medio = document.getElementById('entregableMedio').value;
+    document.getElementById('entregable-medio-otro-wrapper').classList.toggle('hidden', medio !== 'otro');
+}
+
+async function saveEntregable(e) {
+    e.preventDefault();
+    var user = getCurrentUser();
+    var tareaId = document.getElementById('entregableTareaId').value;
+    var entId = document.getElementById('entregableId').value;
+    var descripcion = document.getElementById('entregableDescripcion').value;
+    var formato = document.getElementById('entregableFormato').value;
+    var medio = document.getElementById('entregableMedio').value;
+    var medioOtro = document.getElementById('entregableMedioOtro').value;
+    var entregable = {
+        id: entId || ('ent_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)),
+        descripcion_entregable: descripcion,
+        formato_requerido: formato,
+        medio_entrega: medio,
+        medio_otro: medioOtro
+    };
+    showLoading(true);
+    setButtonLoading('btn-save-entregable', true);
+    try {
+        if (entId) {
+            await postToBackend('tarea_entregable_update', { id_tarea: tareaId, entregable: entregable, id_actor: user ? user.id : '' });
+        } else {
+            await postToBackend('tarea_entregable_add', { id_tarea: tareaId, entregable: entregable, id_actor: user ? user.id : '' });
+        }
+        var tarea = tareas.find(function (t) { return t.id === tareaId; });
+        if (tarea) {
+            if (!Array.isArray(tarea.entregables)) tarea.entregables = [];
+            if (entId) {
+                var idx = tarea.entregables.findIndex(function (e) { return e.id === entId; });
+                if (idx >= 0) tarea.entregables[idx] = entregable;
+            } else {
+                tarea.entregables.push(entregable);
+            }
+            if (currentTarea && currentTarea.id === tareaId) currentTarea = tarea;
+        }
+        closeEntregableModal();
+        renderTareaDetalle();
+    } finally {
+        showLoading(false);
+        setButtonLoading('btn-save-entregable', false);
+    }
+}
+
+async function deleteEntregableItem(tareaId, entId) {
+    if (!confirm('¿Eliminar este entregable?')) return;
+    var user = getCurrentUser();
+    showLoading(true);
+    try {
+        await postToBackend('tarea_entregable_delete', { id_tarea: tareaId, entregableId: entId, id_actor: user ? user.id : '' });
+        var tarea = tareas.find(function (t) { return t.id === tareaId; });
+        if (tarea && Array.isArray(tarea.entregables)) {
+            tarea.entregables = tarea.entregables.filter(function (e) { return e.id !== entId; });
+            if (currentTarea && currentTarea.id === tareaId) currentTarea = tarea;
+        }
+        renderTareaDetalle();
+    } finally {
+        showLoading(false);
+    }
+}
+
+function deleteEntregableFromModal() {
+    var tareaId = document.getElementById('entregableTareaId').value;
+    var entId = document.getElementById('entregableId').value;
+    closeEntregableModal();
+    deleteEntregableItem(tareaId, entId);
+}
+
+
 function showTareaComments(tareaId) {
     const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
@@ -1610,6 +1749,10 @@ async function sendWhatsAppNotification(message) {
 // ============================================
 // UTILIDADES
 // ============================================
+function escapeHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function setButtonLoading(btnId, isLoading) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
@@ -1680,6 +1823,7 @@ document.addEventListener('keydown', function (e) {
         closeAprobacionModal();
         closeCommentsModal();
         closeDescripcionModal();
+        closeEntregableModal();
     }
 });
 
