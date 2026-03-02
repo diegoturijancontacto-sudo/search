@@ -1265,13 +1265,13 @@ function updateResponsableSelect() {
 }
 
 function buildInlineAdjuntosHtml(t, isPrivileged) {
-    var adjuntos = (t.adjuntos || []).filter(function (a) { return typeof a === 'object' && a.id; });
+    var adjuntos = normalizeAdjuntos_(t.adjuntos);
     var listHtml = adjuntos.length > 0
         ? '<div class="mt-1 space-y-1">' +
             adjuntos.map(function (a) {
                 return '<div class="flex items-center gap-2 text-sm bg-slate-50 px-3 py-1.5 rounded-lg">' +
                     '<a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline truncate flex-1">' + escapeHtml(a.name || a.url) + '</a>' +
-                    (isPrivileged ? '<button type="button" onclick="deleteAttachment(\'' + t.id + '\',\'' + a.id + '\')" class="text-red-400 hover:text-red-600 flex-shrink-0 ml-1" title="Eliminar adjunto">✕</button>' : '') +
+                    (isPrivileged && a.id ? '<button type="button" onclick="deleteAttachment(\'' + t.id + '\',\'' + a.id + '\')" class="text-red-400 hover:text-red-600 flex-shrink-0 ml-1" title="Eliminar adjunto">✕</button>' : '') +
                     '</div>';
             }).join('') +
             '</div>'
@@ -1289,7 +1289,7 @@ function renderModalAdjuntos(tareaId) {
     if (!container) return;
     var t = tareas.find(function (x) { return x.id === tareaId; });
     if (!t) { container.innerHTML = ''; return; }
-    var adjuntos = (t.adjuntos || []).filter(function (a) { return typeof a === 'object' && a.id; });
+    var adjuntos = normalizeAdjuntos_(t.adjuntos);
     if (adjuntos.length === 0) { container.innerHTML = ''; return; }
     var user = getCurrentUser();
     var isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
@@ -1297,7 +1297,7 @@ function renderModalAdjuntos(tareaId) {
         adjuntos.map(function (a) {
             return '<div class="flex items-center gap-2 text-sm bg-slate-50 px-3 py-1.5 rounded-lg">' +
                 '<a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline truncate flex-1">' + escapeHtml(a.name || a.url) + '</a>' +
-                (isPrivileged ? '<button type="button" onclick="deleteAttachment(\'' + tareaId + '\',\'' + a.id + '\')" class="text-red-400 hover:text-red-600 flex-shrink-0 ml-1" title="Eliminar adjunto">✕</button>' : '') +
+                (isPrivileged && a.id ? '<button type="button" onclick="deleteAttachment(\'' + tareaId + '\',\'' + a.id + '\')" class="text-red-400 hover:text-red-600 flex-shrink-0 ml-1" title="Eliminar adjunto">✕</button>' : '') +
                 '</div>';
         }).join('') +
         '</div>';
@@ -1760,37 +1760,6 @@ function readFileAsBase64(file) {
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
-}
-
-async function uploadAttachments(idTarea, files) {
-    if (!WEB_APP_URL || !files || files.length === 0) return;
-    var failed = [];
-    for (var i = 0; i < files.length; i++) {
-        var file = files[i];
-        try {
-            var base64 = await readFileAsBase64(file);
-            await fetch(WEB_APP_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'tarea_upload_adjunto',
-                    data: {
-                        id_tarea: idTarea,
-                        filename: file.name,
-                        mimeType: file.type || 'application/octet-stream',
-                        base64: base64
-                    }
-                })
-            });
-        } catch (err) {
-            console.error('Error subiendo adjunto:', file.name, err);
-            failed.push(file.name);
-        }
-    }
-    if (failed.length > 0) {
-        alert('No se pudieron subir los siguientes archivos:\n' + failed.join('\n'));
-    }
 }
 
 async function postToBackend(action, data) {
