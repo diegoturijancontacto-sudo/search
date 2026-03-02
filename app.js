@@ -560,14 +560,7 @@ function renderTareaDetalle() {
         '</div>' +
         (actionBtns ? '<div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-slate-200">' + actionBtns + '</div>' : '') +
         (t.descripcion ? '<div class="bg-slate-50 rounded-xl p-4 mb-6"><h3 class="font-semibold text-slate-700 mb-2 text-sm uppercase tracking-wider">Descripción</h3><p class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">' + t.descripcion + '</p></div>' : '') +
-        (t.adjuntos && t.adjuntos.length > 0 ?
-            '<div class="bg-slate-50 rounded-xl p-4 mb-6"><h3 class="font-semibold text-slate-700 mb-3 text-sm uppercase tracking-wider">📎 Adjuntos (' + t.adjuntos.length + ')</h3><div class="space-y-2">' +
-            t.adjuntos.map(function (url, i) {
-                return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 hover:underline break-all">' +
-                    '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>' +
-                    'Archivo ' + (i + 1) + '</a>';
-            }).join('') +
-            '</div></div>' : '') +
+        buildAdjuntosHtml_(t, isSupervisor) +
         entregablesHtml +
         '<div class="pt-4 border-t border-slate-200">' +
         '<button onclick="showTareaComments(\'' + t.id + '\')" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">' +
@@ -1938,3 +1931,194 @@ function debugTareaId(tareaId) {
 function tareaIdExists(id) {
     return tareas.some(t => t.id === id);
 }
+
+// ======================================================
+// PATCH: Compatibilidad con backend nuevo (Adjuntos JSON + Entregables)
+// Pegar al FINAL de tu app(1).js
+// ======================================================
+
+// ------------------------------
+// Utils
+// ------------------------------
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+// Normaliza adjuntos a array de objetos: {id,name,url,kind,uploadedBy,createdAt}
+function normalizeAdjuntos_(adjuntos) {
+  if (!adjuntos) return [];
+
+  // Ya viene como array (backend nuevo)
+  if (Array.isArray(adjuntos)) {
+    // Puede ser array de strings viejo o array de objetos nuevo
+    return adjuntos
+      .map((a) => {
+        if (!a) return null;
+        if (typeof a === 'string') {
+          const url = a.trim();
+          return url
+            ? { id: '', name: '', url, kind: 'adjunto', uploadedBy: '', createdAt: '' }
+            : null;
+        }
+        // objeto
+        return {
+          id: String(a.id || ''),
+          name: String(a.name || ''),
+          url: String(a.url || ''),
+          kind: String(a.kind || 'adjunto'),
+          uploadedBy: String(a.uploadedBy || ''),
+          createdAt: String(a.createdAt || '')
+        };
+      })
+      .filter(Boolean)
+      .filter(a => !!a.url);
+  }
+
+  // Si por error te llega string CSV (muy viejo)
+  if (typeof adjuntos === 'string') {
+    const raw = adjuntos.trim();
+    if (!raw) return [];
+    return raw
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(url => ({ id: '', name: '', url, kind: 'adjunto', uploadedBy: '', createdAt: '' }));
+  }
+
+  return [];
+}
+
+function fileToBase64_(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const result = reader.result || '';
+      const base64 = result.toString().split(',')[1] || '';
+      resolve(base64);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ------------------------------
+// Upload adjuntos compatible con backend nuevo
+// ------------------------------
+async function uploadAttachments(idTarea, fileList, kind) {
+  const user = getCurrentUser();
+  if (!user) throw new Error('No hay usuario logueado');
+
+  const files = Array.from(fileList || []);
+  if (files.length === 0) return;
+
+  for (const file of files) {
+    const base64 = await fileToBase64_(file);
+
+    // IMPORTANTE: backend nuevo requiere id_actor y permite kind
+    await postToBackend('tarea_upload_adjunto', {
+      id_tarea: idTarea,
+      filename: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      base64: base64,
+      kind: kind || 'adjunto', // 'adjunto' | 'entregable'
+      id_actor: user.id
+    });
+  }
+}
+
+// ------------------------------
+// Eliminar adjunto (Drive -> papelera + quitar de tarea)
+// ------------------------------
+async function deleteAttachmentFromTarea(idTarea, fileId) {
+  const user = getCurrentUser();
+  if (!user) throw new Error('No hay usuario logueado');
+
+  if (!confirm('¿Eliminar este archivo? (Se moverá a la papelera de Drive)')) return;
+
+  showLoading(true);
+  try {
+    await postToBackend('tarea_adjunto_eliminar', {
+      id_tarea: idTarea,
+      fileId: fileId,
+      id_actor: user.id
+    });
+    await refreshData();
+
+    // Si estás en detalle de tarea, vuelve a renderizar
+    if (currentTarea && currentTarea.id === idTarea) {
+      currentTarea = tareas.find(t => t.id === idTarea) || currentTarea;
+      renderTareaDetalle();
+    }
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ------------------------------
+// Render HTML de adjuntos (nuevo)
+// ------------------------------
+function buildAdjuntosHtml_(t, canDelete) {
+  const adj = normalizeAdjuntos_(t.adjuntos);
+  if (adj.length === 0) return '';
+
+  const user = getCurrentUser();
+  const canDel = !!canDelete;
+
+  return (
+    '<div class="bg-slate-50 rounded-xl p-4 mb-6">' +
+      '<div class="flex items-center justify-between mb-3">' +
+        '<h3 class="font-semibold text-slate-700 text-sm uppercase tracking-wider">📎 Archivos (' + adj.length + ')</h3>' +
+      '</div>' +
+      '<div class="space-y-2">' +
+        adj.map(function (a, i) {
+          const badge = a.kind === 'entregable'
+            ? '<span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold">ENTREGABLE</span>'
+            : '<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold">ADJUNTO</span>';
+
+          const name = a.name ? escapeHtml(a.name) : ('Archivo ' + (i + 1));
+          const url = escapeHtml(a.url);
+
+          const delBtn = (canDel && a.id)
+            ? '<button type="button" onclick="deleteAttachmentFromTarea(\'' + escapeHtml(t.id) + '\', \'' + escapeHtml(a.id) + '\')" class="text-xs text-red-500 hover:text-red-700 font-semibold">Eliminar</button>'
+            : '';
+
+          return (
+            '<div class="bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3">' +
+              '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="min-w-0 flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 hover:underline">' +
+                '<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>' +
+                '<span class="truncate">' + name + '</span>' +
+              '</a>' +
+              '<div class="flex items-center gap-2 flex-shrink-0">' +
+                badge +
+                delBtn +
+              '</div>' +
+            '</div>'
+          );
+        }).join('') +
+      '</div>' +
+    '</div>'
+  );
+}
+
+// ------------------------------
+// PATCH: reemplazo seguro de la parte de adjuntos en renderTareaDetalle()
+// ------------------------------
+// Si tu función renderTareaDetalle ya existe, NO la reescribimos completa.
+// Solo te dejamos un helper que puedes usar en tu HTML:
+//
+//   + buildAdjuntosHtml_(t, isSupervisor)
+//
+// En tu renderTareaDetalle(), reemplaza el bloque viejo:
+//
+// (t.adjuntos && t.adjuntos.length > 0 ? ... t.adjuntos.map(function(url){...}) ... : '')
+//
+// por:
+//
+// buildAdjuntosHtml_(t, isSupervisor)
+//
+// ------------------------------
