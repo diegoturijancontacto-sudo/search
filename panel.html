@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="styles.css">
     <style>
         html, body { height: 100%; }
+        .hidden { display: none !important; }
         .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         @keyframes bounce-dot {
             0%, 100% { transform: translateY(0); opacity: 0.6; }
@@ -257,229 +258,26 @@
                 </div>
             </div>
 
+            <!-- VISTA: Formulario Cuenta (inline, reemplaza modal-proyecto) -->
+            <div id="view-form-cuenta" class="hidden p-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 max-w-3xl">
+                    <div id="form-cuenta-content"></div>
+                </div>
+            </div>
+
+            <!-- VISTA: Formulario Programa (inline, reemplaza modal-subproyecto) -->
+            <div id="view-form-programa" class="hidden p-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 max-w-3xl">
+                    <div id="form-programa-content"></div>
+                </div>
+            </div>
+
         </main>
     </div>
 
     <!-- Attribution -->
     <div class="flex-shrink-0 text-center py-2 text-xs text-slate-400 border-t border-slate-100 bg-white">
         OPCore v1.2.0 &mdash; Desarrollado por Diego Turiján
-    </div>
-
-    <!-- MODAL DE CUENTA (antes Proyecto) -->
-    <div id="modal-proyecto" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 id="modal-proyecto-title" class="text-xl font-bold text-slate-800">Nueva Cuenta</h3>
-                <button onclick="closeProyectoModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </div>
-            <form id="form-proyecto" class="p-6 space-y-4" onsubmit="saveProyecto(event)">
-                <input type="hidden" id="proyectoId">
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Nombre de la Cuenta</label>
-                    <input type="text" id="proyectoNombre" required class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Ej: Cuenta Principal">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Descripción</label>
-                    <textarea id="proyectoDesc" rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Descripción de la cuenta..."></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Estado</label>
-                    <select id="proyectoEstado" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
-                        <option value="activo">Activo</option>
-                        <option value="completado">Completado</option>
-                    </select>
-                </div>
-                <div class="flex gap-3 pt-2">
-                    <button type="button" onclick="closeProyectoModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>
-                    <button type="submit" id="btn-save-proyecto" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
-                        <span>Guardar</span>
-                    </button>
-                </div>
-                <button type="button" id="btn-delete-proyecto" onclick="deleteProyecto()" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">Eliminar Cuenta</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL DE PROGRAMA (antes Subproyecto) -->
-    <div id="modal-subproyecto" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 id="modal-subproyecto-title" class="text-xl font-bold text-slate-800">Nuevo Programa</h3>
-                <button onclick="closeSubproyectoModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </div>
-            <form id="form-subproyecto" class="p-6 space-y-4" onsubmit="saveSubproyecto(event)">
-                <input type="hidden" id="subproyectoId">
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Nombre del Programa</label>
-                    <input type="text" id="subproyectoNombre" required class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Ej: Programa de Marketing">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Descripción</label>
-                    <textarea id="subproyectoDesc" rows="2" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Descripción..."></textarea>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-bold text-slate-700 mb-1">Fecha Inicio</label>
-                        <input type="date" id="subproyectoFechaInicio" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-slate-700 mb-1">Fecha Fin Estimada</label>
-                        <input type="date" id="subproyectoFechaFin" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    </div>
-                </div>
-                <div class="flex gap-3 pt-2">
-                    <button type="button" onclick="closeSubproyectoModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>
-                    <button type="submit" id="btn-save-subproyecto" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>
-                </div>
-                <button type="button" id="btn-delete-subproyecto" onclick="deleteSubproyecto()" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">Eliminar Programa</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL DE TAREA -->
-    <div id="modal-tarea" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-screen overflow-y-auto">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 id="modal-tarea-title" class="text-xl font-bold text-slate-800">Nueva Tarea</h3>
-                <button onclick="closeTareaModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </div>
-            <form id="form-tarea" class="p-6 space-y-4" onsubmit="saveTarea(event)">
-                <input type="hidden" id="tareaId">
-
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Título / Detalles (corto)</label>
-                    <textarea id="tareaDetalles" required rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Describe la tarea..."></textarea>
-                </div>
-
-                <!-- NUEVO: Descripción larga -->
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Descripción (larga, opcional)</label>
-                    <textarea id="tareaDescripcion" rows="4" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Información extendida, pasos, contexto, etc."></textarea>
-                </div>
-
-                <!-- Adjuntos -->
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Adjuntos (opcional)</label>
-                    <div id="modal-tarea-adjuntos-list"></div>
-                    <input type="file" id="tareaAdjuntos" multiple class="mt-2 w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
-                    <p class="text-xs text-slate-400 mt-1">Los archivos nuevos se subirán a Drive al guardar</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Responsable</label>
-                    <select id="tareaResponsable" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
-                        <option value="">Sin asignar</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Prioridad</label>
-                    <select id="tareaPrioridad" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
-                        <option value="alta">🔴 Alta</option>
-                        <option value="media" selected>🟡 Media</option>
-                        <option value="baja">🟢 Baja</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Estado</label>
-                    <select id="tareaEstatus" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
-                        <option value="pendiente">Pendiente</option>
-                        <option value="en_curso">En Curso</option>
-                        <option value="en_revision">En Revisión</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Fecha Límite</label>
-                    <input type="date" id="tareaFechaLimite" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                </div>
-                <div class="flex gap-3 pt-2">
-                    <button type="button" onclick="closeTareaModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>
-                    <button type="submit" id="btn-save-tarea" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>
-                </div>
-                <button type="button" id="btn-delete-tarea" onclick="deleteTarea()" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">Eliminar Tarea</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL DE APROBACIÓN (supervisor) -->
-    <div id="modal-aprobacion" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 class="text-xl font-bold text-slate-800">Revisar Tarea</h3>
-                <button onclick="closeAprobacionModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </div>
-            <div class="p-6 space-y-4">
-                <input type="hidden" id="aprobacionTareaId">
-                <div id="aprobacion-tarea-info" class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm text-slate-700"></div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Observaciones (opcional)</label>
-                    <textarea id="aprobacionObservaciones" rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Añade observaciones..."></textarea>
-                </div>
-                <div class="flex gap-3 pt-2">
-                    <button onclick="closeAprobacionModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>
-                    <button onclick="rechazarTarea()" class="flex-1 bg-red-100 text-red-600 px-4 py-2.5 rounded-lg font-bold hover:bg-red-200">Rechazar</button>
-                    <button onclick="aprobarTarea()" class="flex-1 bg-emerald-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-emerald-700">Aprobar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL DE COMENTARIOS -->
-    <div id="comments-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 id="comments-modal-title" class="text-xl font-bold text-slate-800">Comentarios</h3>
-                <button onclick="closeCommentsModal()" class="text-slate-400 hover:text-slate-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            <div class="p-6">
-                <div id="comments-modal-content" class="space-y-4"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL DE ENTREGABLE -->
-    <div id="modal-entregable" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden max-h-screen overflow-y-auto">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 id="modal-entregable-title" class="text-xl font-bold text-slate-800">Nuevo Entregable</h3>
-                <button onclick="closeEntregableModal()" class="text-slate-400 hover:text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-            </div>
-            <form id="form-entregable" class="p-6 space-y-4" onsubmit="saveEntregable(event)">
-                <input type="hidden" id="entregableTareaId">
-                <input type="hidden" id="entregableId">
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Descripción del Entregable</label>
-                    <textarea id="entregableDescripcion" required rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Resultado concreto esperado..."></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Formato Requerido</label>
-                    <input type="text" id="entregableFormato" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="PDF, JPG, enlace, documento físico, etc.">
-                </div>
-                <div>
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Medio de Entrega</label>
-                    <select id="entregableMedio" onchange="toggleMedioOtro()" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
-                        <option value="opcore">OpCore</option>
-                        <option value="drive">Drive</option>
-                        <option value="whatsapp">WhatsApp</option>
-                        <option value="correo">Correo</option>
-                        <option value="fisica">Física</option>
-                        <option value="otro">Otro</option>
-                    </select>
-                </div>
-                <div id="entregable-medio-otro-wrapper" class="hidden">
-                    <label class="block text-sm font-bold text-slate-700 mb-1">Especificar medio</label>
-                    <input type="text" id="entregableMedioOtro" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Describe el medio de entrega...">
-                </div>
-                <div class="flex gap-3 pt-2">
-                    <button type="button" onclick="closeEntregableModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>
-                    <button type="submit" id="btn-save-entregable" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>
-                </div>
-                <button type="button" id="btn-delete-entregable" onclick="deleteEntregableFromModal()" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">Eliminar Entregable</button>
-            </form>
-        </div>
     </div>
 
     <script src="app.js"></script>
