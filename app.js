@@ -159,6 +159,8 @@ function renderCurrentLevel() {
     document.getElementById('view-subproyectos').classList.add('hidden');
     document.getElementById('view-tareas').classList.add('hidden');
     document.getElementById('view-tarea-detalle').classList.add('hidden');
+    document.getElementById('view-form-cuenta').classList.add('hidden');
+    document.getElementById('view-form-programa').classList.add('hidden');
 
     if (currentNavLevel === 'home') {
         document.getElementById('view-global-tasks').classList.remove('hidden');
@@ -173,6 +175,10 @@ function renderCurrentLevel() {
     } else if (currentNavLevel === 'tarea_detail') {
         document.getElementById('view-tarea-detalle').classList.remove('hidden');
         renderTareaDetalle();
+    } else if (currentNavLevel === 'cuenta_form') {
+        document.getElementById('view-form-cuenta').classList.remove('hidden');
+    } else if (currentNavLevel === 'programa_form') {
+        document.getElementById('view-form-programa').classList.remove('hidden');
     }
 }
 
@@ -188,7 +194,7 @@ function updateBreadcrumb() {
     elSubproyecto.classList.add('hidden');
     if (elTarea) elTarea.classList.add('hidden');
 
-    if (currentNavLevel === 'proyecto') {
+    if (currentNavLevel === 'proyecto' || currentNavLevel === 'programa_form') {
         elProyecto.classList.remove('hidden');
         elProyecto.style.display = 'inline-flex';
         elProyectoBtn.innerText = currentProyecto ? currentProyecto.nombre : '';
@@ -226,7 +232,7 @@ function updateHeaderActions() {
         extraBtns = '<button onclick="openTareaModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nueva Tarea</button>';
     }
 
-    container.innerHTML = extraBtns + '<button onclick="refreshData()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-medium shadow-sm transition-all text-sm">Actualizar</button><a href="admin.html" class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Usuarios</a>';
+    container.innerHTML = extraBtns + '<button onclick="refreshData()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-medium shadow-sm transition-all text-sm">Actualizar</button><a href="admin.html" class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Usuarios</a><a href="index.html" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1">📄 Documentación</a>';
 }
 
 function updateFilterBar() {
@@ -252,13 +258,13 @@ function renderSidebar() {
     const btnNuevaCuenta = document.getElementById('btn-nueva-cuenta');
     if (btnNuevaCuenta) btnNuevaCuenta.classList.toggle('hidden', !(user && user.role === 'director'));
 
-    if (currentNavLevel === 'home') {
+    if (currentNavLevel === 'home' || currentNavLevel === 'cuenta_form') {
         cuentasPanel.classList.remove('hidden');
         cuentasPanel.style.display = 'flex';
         if (programasPanel) { programasPanel.classList.add('hidden'); programasPanel.style.display = 'none'; }
         tareasPanel.classList.add('hidden'); tareasPanel.style.display = 'none';
         renderSidebarCuentas();
-    } else if (currentNavLevel === 'proyecto') {
+    } else if (currentNavLevel === 'proyecto' || currentNavLevel === 'programa_form') {
         cuentasPanel.classList.add('hidden'); cuentasPanel.style.display = 'none';
         if (programasPanel) {
             programasPanel.classList.remove('hidden');
@@ -483,8 +489,12 @@ function renderTareaDetalle() {
     const user = getCurrentUser();
     const canEdit = user && (user.role === 'director' || user.role === 'supervisor');
     const isSupervisor = user && (user.role === 'supervisor' || user.role === 'director');
+    const isDirector = user && user.role === 'director';
     const editBtn = canEdit
         ? '<button onclick="openInlineEditForm(\'' + t.id + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">Editar</button>'
+        : '';
+    const duplicateBtn = isDirector
+        ? '<button onclick="duplicateTarea(\'' + t.id + '\')" class="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-200">⧉ Duplicar</button>'
         : '';
     const commentCount = comentarios.filter(function (c) { return c.id_tarea === t.id; }).length;
 
@@ -550,7 +560,7 @@ function renderTareaDetalle() {
         '<h2 class="text-2xl font-bold text-slate-800">' + (t.detalles || 'Sin título') + '</h2>' +
         (t.asignacion ? '<p class="text-xs text-slate-400 font-mono mt-1">#' + t.asignacion + '</p>' : '') +
         '</div>' +
-        '<div class="flex gap-2">' + editBtn + '</div>' +
+        '<div class="flex gap-2">' + editBtn + duplicateBtn + '</div>' +
         '</div>' +
         '<div class="flex flex-wrap gap-3 mb-6">' +
         '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Prioridad</span><span class="text-xs px-2 py-0.5 rounded-full font-bold ' + prioColor + '">' + prioIcon + ' ' + (t.prioridad || 'media') + '</span></div>' +
@@ -808,6 +818,7 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
     const commentCount = comentarios.filter(function (c) { return c.id_tarea === tarea.id; }).length;
     const isSupervisorOrDirector = isSupervisor || isDirector;
     const canEdit = isSupervisorOrDirector && !isLocked;
+    const duplicateBtnHtml = isDirector ? '<button onclick="event.stopPropagation(); duplicateTarea(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-amber-100 hover:text-amber-600 p-1 rounded" title="Duplicar">⧉</button>' : '';
 
     // NUEVO: botón de descripción
     const hasDesc = (tarea.descripcion || '').trim().length > 0;
@@ -843,7 +854,7 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
     card.innerHTML =
         '<div class="flex items-start justify-between mb-2">' +
         '<span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span>' +
-        '<div class="flex gap-1">' + descBtnHtml + commentBtnHtml + lockBtnHtml + unlockBtnHtml + editBtnHtml + '</div>' +
+        '<div class="flex gap-1">' + descBtnHtml + commentBtnHtml + lockBtnHtml + unlockBtnHtml + editBtnHtml + duplicateBtnHtml + '</div>' +
         '</div>' +
         '<p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p>' +
         asignacionHtml +
@@ -864,6 +875,7 @@ function renderTareasList() {
     const tareasActuales = getTareasActuales();
     const user = getCurrentUser();
     const canEdit = user && (user.role === 'director' || user.role === 'supervisor');
+    const isDirector = user && user.role === 'director';
 
     tareasActuales.forEach(function (tarea) {
         const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
@@ -876,6 +888,10 @@ function renderTareasList() {
 
         const editBtn = canEdit
             ? '<button onclick="event.stopPropagation(); selectTareaDetalleAndEdit(\'' + tarea.id + '\')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg text-xs font-bold uppercase">Editar</button>'
+            : '';
+
+        const duplicateBtn = isDirector
+            ? '<button onclick="event.stopPropagation(); duplicateTarea(\'' + tarea.id + '\')" class="text-amber-600 hover:bg-amber-50 p-2 rounded-lg text-xs font-bold uppercase">Duplicar</button>'
             : '';
 
         const hasDesc = (tarea.descripcion || '').trim().length > 0;
@@ -897,7 +913,7 @@ function renderTareasList() {
             '<td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + getPriorityIcon(tarea.prioridad) + ' ' + (tarea.prioridad || 'media') + '</span></td>' +
             '<td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td>' +
             '<td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '-') + '</td>' +
-            '<td class="p-4 text-right"><div class="flex gap-1 justify-end">' + descBtn + editBtn + '</div></td>';
+            '<td class="p-4 text-right"><div class="flex gap-1 justify-end">' + descBtn + editBtn + duplicateBtn + '</div></td>';
 
         container.appendChild(tr);
     });
@@ -1114,33 +1130,49 @@ async function desbloquearTarea(tareaId) {
 }
 
 // ============================================
-// MODALES: PROYECTO
+// MODALES: PROYECTO (ahora vista inline)
 // ============================================
 function openProyectoModal(id) {
-    const modal = document.getElementById('modal-proyecto');
-    const form = document.getElementById('form-proyecto');
-    const title = document.getElementById('modal-proyecto-title');
-    const btnDelete = document.getElementById('btn-delete-proyecto');
-    form.reset();
-    if (id) {
-        const p = proyectos.find(function (x) { return x.id === id; });
-        if (!p) return;
-        title.innerText = 'Editar Cuenta';
-        document.getElementById('proyectoId').value = p.id;
-        document.getElementById('proyectoNombre').value = p.nombre || '';
-        document.getElementById('proyectoDesc').value = p.descripcion || '';
-        document.getElementById('proyectoEstado').value = p.estado || 'activo';
-        btnDelete.classList.remove('hidden');
-    } else {
-        title.innerText = 'Nueva Cuenta';
-        document.getElementById('proyectoId').value = '';
-        btnDelete.classList.add('hidden');
-    }
-    modal.classList.remove('hidden');
+    const p = id ? proyectos.find(function (x) { return x.id === id; }) : null;
+    currentNavLevel = 'cuenta_form';
+    renderCurrentLevel();
+
+    const container = document.getElementById('form-cuenta-content');
+    container.innerHTML =
+        '<div class="flex items-center justify-between mb-6">' +
+        '<h2 class="text-xl font-bold text-slate-800">' + (p ? 'Editar Cuenta' : 'Nueva Cuenta') + '</h2>' +
+        '<button type="button" onclick="closeProyectoModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
+        '</div>' +
+        '<form class="space-y-4" onsubmit="saveProyecto(event)">' +
+        '<input type="hidden" id="proyectoId" value="' + (p ? escapeHtml(p.id) : '') + '">' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Nombre de la Cuenta</label>' +
+        '<input type="text" id="proyectoNombre" required value="' + (p ? escapeHtml(p.nombre || '') : '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Ej: Cuenta Principal">' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción</label>' +
+        '<textarea id="proyectoDesc" rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Descripción de la cuenta...">' + (p ? escapeHtml(p.descripcion || '') : '') + '</textarea>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Estado</label>' +
+        '<select id="proyectoEstado" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' +
+        '<option value="activo"' + (!p || p.estado !== 'completado' ? ' selected' : '') + '>Activo</option>' +
+        '<option value="completado"' + (p && p.estado === 'completado' ? ' selected' : '') + '>Completado</option>' +
+        '</select>' +
+        '</div>' +
+        '<div class="flex gap-3 pt-2">' +
+        '<button type="button" onclick="closeProyectoModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
+        '<button type="submit" id="btn-save-proyecto" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>' +
+        '</div>' +
+        (p ? '<button type="button" onclick="deleteProyecto()" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline">Eliminar Cuenta</button>' : '') +
+        '</form>';
 }
 
 function closeProyectoModal() {
-    document.getElementById('modal-proyecto').classList.add('hidden');
+    if (currentNavLevel !== 'cuenta_form') return;
+    currentNavLevel = 'home';
+    currentProyecto = null;
+    renderCurrentLevel();
 }
 
 async function saveProyecto(e) {
@@ -1182,34 +1214,51 @@ async function deleteProyecto() {
 }
 
 // ============================================
-// MODALES: SUBPROYECTO
+// MODALES: SUBPROYECTO (ahora vista inline)
 // ============================================
 function openSubproyectoModal(id) {
-    const modal = document.getElementById('modal-subproyecto');
-    const form = document.getElementById('form-subproyecto');
-    const title = document.getElementById('modal-subproyecto-title');
-    const btnDelete = document.getElementById('btn-delete-subproyecto');
-    form.reset();
-    if (id) {
-        const s = subproyectos.find(function (x) { return x.id === id; });
-        if (!s) return;
-        title.innerText = 'Editar Programa';
-        document.getElementById('subproyectoId').value = s.id;
-        document.getElementById('subproyectoNombre').value = s.nombre || '';
-        document.getElementById('subproyectoDesc').value = s.descripcion || '';
-        document.getElementById('subproyectoFechaInicio').value = s.fecha_inicio || '';
-        document.getElementById('subproyectoFechaFin').value = s.fecha_fin_estimada || '';
-        btnDelete.classList.remove('hidden');
-    } else {
-        title.innerText = 'Nuevo Programa';
-        document.getElementById('subproyectoId').value = '';
-        btnDelete.classList.add('hidden');
-    }
-    modal.classList.remove('hidden');
+    const s = id ? subproyectos.find(function (x) { return x.id === id; }) : null;
+    currentNavLevel = 'programa_form';
+    renderCurrentLevel();
+
+    const container = document.getElementById('form-programa-content');
+    container.innerHTML =
+        '<div class="flex items-center justify-between mb-6">' +
+        '<h2 class="text-xl font-bold text-slate-800">' + (s ? 'Editar Programa' : 'Nuevo Programa') + '</h2>' +
+        '<button type="button" onclick="closeSubproyectoModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
+        '</div>' +
+        '<form class="space-y-4" onsubmit="saveSubproyecto(event)">' +
+        '<input type="hidden" id="subproyectoId" value="' + (s ? escapeHtml(s.id) : '') + '">' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Nombre del Programa</label>' +
+        '<input type="text" id="subproyectoNombre" required value="' + (s ? escapeHtml(s.nombre || '') : '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Ej: Programa de Marketing">' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción</label>' +
+        '<textarea id="subproyectoDesc" rows="2" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Descripción...">' + (s ? escapeHtml(s.descripcion || '') : '') + '</textarea>' +
+        '</div>' +
+        '<div class="grid grid-cols-2 gap-4">' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Fecha Inicio</label>' +
+        '<input type="date" id="subproyectoFechaInicio" value="' + (s ? (s.fecha_inicio || '') : '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Fecha Fin Estimada</label>' +
+        '<input type="date" id="subproyectoFechaFin" value="' + (s ? (s.fecha_fin_estimada || '') : '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">' +
+        '</div>' +
+        '</div>' +
+        '<div class="flex gap-3 pt-2">' +
+        '<button type="button" onclick="closeSubproyectoModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
+        '<button type="submit" id="btn-save-subproyecto" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>' +
+        '</div>' +
+        (s ? '<button type="button" onclick="deleteSubproyecto()" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline">Eliminar Programa</button>' : '') +
+        '</form>';
 }
 
 function closeSubproyectoModal() {
-    document.getElementById('modal-subproyecto').classList.add('hidden');
+    if (currentNavLevel !== 'programa_form') return;
+    currentNavLevel = 'proyecto';
+    renderCurrentLevel();
 }
 
 async function saveSubproyecto(e) {
@@ -1320,10 +1369,6 @@ async function deleteAttachment(tareaId, fileId) {
             });
             if (currentTarea && currentTarea.id === tareaId) currentTarea = tarea;
         }
-        var modalEl = document.getElementById('modal-tarea');
-        if (modalEl && !modalEl.classList.contains('hidden') && document.getElementById('tareaId').value === tareaId) {
-            renderModalAdjuntos(tareaId);
-        }
         if (currentNavLevel === 'tarea_detail' && currentTarea && currentTarea.id === tareaId) {
             var inlineForm = document.getElementById('tarea-detalle-content');
             if (inlineForm && inlineForm.querySelector('#inline_detalles')) {
@@ -1336,213 +1381,156 @@ async function deleteAttachment(tareaId, fileId) {
 }
 
 function openTareaModal(id) {
-    const user = getCurrentUser();
-    const modal = document.getElementById('modal-tarea');
-    const form = document.getElementById('form-tarea');
-    const title = document.getElementById('modal-tarea-title');
-    const btnDelete = document.getElementById('btn-delete-tarea');
-    const statusSelect = document.getElementById('tareaEstatus');
-    form.reset();
-    updateResponsableSelect();
-
-    const descEl = document.getElementById('tareaDescripcion');
-    if (descEl) descEl.value = '';
-
-    const adjuntosEl = document.getElementById('tareaAdjuntos');
-    if (adjuntosEl) adjuntosEl.value = '';
-
-    const isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
-    statusSelect.innerHTML = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisión</option>' + (isPrivileged ? '<option value="completado">Completado</option><option value="bloqueada">🔒 Bloqueada</option>' : '');
-
     if (id) {
-        const t = tareas.find(function (x) { return x.id === id; });
-        if (!t) return;
-        if (t.estatus === 'bloqueada' && !isPrivileged) {
-            alert('Esta tarea está bloqueada y no puede ser modificada.');
-            return;
-        }
-        title.innerText = 'Editar Tarea';
-        document.getElementById('tareaId').value = t.id;
-        document.getElementById('tareaDetalles').value = t.detalles || '';
-        if (descEl) descEl.value = t.descripcion || '';
-        document.getElementById('tareaResponsable').value = t.id_responsable || '';
-        document.getElementById('tareaPrioridad').value = t.prioridad || 'media';
-        document.getElementById('tareaEstatus').value = t.estatus || 'pendiente';
-        document.getElementById('tareaFechaLimite').value = t.fecha_limite || '';
-        btnDelete.classList.remove('hidden');
-        renderModalAdjuntos(id);
+        selectTareaDetalleAndEdit(id);
     } else {
-        title.innerText = 'Nueva Tarea';
-        document.getElementById('tareaId').value = '';
-        btnDelete.classList.add('hidden');
-        var listEl = document.getElementById('modal-tarea-adjuntos-list');
-        if (listEl) listEl.innerHTML = '';
+        openInlineNewTareaForm();
     }
-    modal.classList.remove('hidden');
+}
+
+function openInlineNewTareaForm() {
+    const user = getCurrentUser();
+    const isPrivileged = user && (user.role === 'supervisor' || user.role === 'director');
+    currentNavLevel = 'tarea_detail';
+    currentTarea = null;
+    renderCurrentLevel();
+
+    var respOptions = '<option value="">Sin asignar</option>';
+    responsables.forEach(function (r) {
+        respOptions += '<option value="' + r.id + '">' + escapeHtml(r.nombre) + ' (' + escapeHtml(r.rol || '') + ')</option>';
+    });
+    var statusOpts = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisión</option>' +
+        (isPrivileged ? '<option value="completado">Completado</option><option value="bloqueada">🔒 Bloqueada</option>' : '');
+
+    var container = document.getElementById('tarea-detalle-content');
+    container.innerHTML =
+        '<div class="flex items-center justify-between mb-6">' +
+        '<h2 class="text-xl font-bold text-slate-800">Nueva Tarea</h2>' +
+        '<button type="button" onclick="closeTareaModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
+        '</div>' +
+        '<form class="space-y-4" onsubmit="saveInlineNewTarea(event)">' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Título / Detalles</label>' +
+        '<textarea id="new_detalles" required rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Describe la tarea..."></textarea>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción (larga, opcional)</label>' +
+        '<textarea id="new_descripcion" rows="4" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Información extendida, pasos, contexto, etc."></textarea>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Adjuntos (opcional)</label>' +
+        '<input type="file" id="new_adjuntos" multiple class="w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">' +
+        '<p class="text-xs text-slate-400 mt-1">Los archivos nuevos se subirán a Drive al guardar</p>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Responsable</label>' +
+        '<select id="new_responsable" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + respOptions + '</select>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Prioridad</label>' +
+        '<select id="new_prioridad" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' +
+        '<option value="alta">🔴 Alta</option>' +
+        '<option value="media" selected>🟡 Media</option>' +
+        '<option value="baja">🟢 Baja</option>' +
+        '</select>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Estado</label>' +
+        '<select id="new_estatus" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + statusOpts + '</select>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Fecha Límite</label>' +
+        '<input type="date" id="new_fecha_limite" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">' +
+        '</div>' +
+        '<div class="flex gap-3 pt-2">' +
+        '<button type="button" onclick="closeTareaModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
+        '<button type="submit" id="btn-save-new-tarea" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>' +
+        '</div>' +
+        '</form>';
 }
 
 function closeTareaModal() {
-    document.getElementById('modal-tarea').classList.add('hidden');
+    if (currentNavLevel !== 'tarea_detail' || currentTarea !== null) return;
+    currentNavLevel = 'subproyecto';
+    renderCurrentLevel();
 }
 
-async function saveTarea(e) {
+async function saveInlineNewTarea(e) {
     e.preventDefault();
-    const id = document.getElementById('tareaId').value;
+    var id_responsable = document.getElementById('new_responsable').value;
+    var prioridad = document.getElementById('new_prioridad').value;
+    var estatus = document.getElementById('new_estatus').value;
+    var detalles = document.getElementById('new_detalles').value;
+    var descripcion = document.getElementById('new_descripcion').value;
+    var fecha_limite = document.getElementById('new_fecha_limite').value;
 
-    const id_responsable = document.getElementById('tareaResponsable').value;
-    const prioridad = document.getElementById('tareaPrioridad').value;
-    const estatus = document.getElementById('tareaEstatus').value;
-    const detalles = document.getElementById('tareaDetalles').value;
+    var timestamp = Date.now();
+    var detallesClean = detalles.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20);
+    var nuevoId = [
+        currentProyecto ? currentProyecto.id : 'sin_proyecto',
+        currentSubproyecto ? currentSubproyecto.id : 'sin_subproyecto',
+        timestamp,
+        id_responsable || 'sin_responsable',
+        prioridad || 'media',
+        estatus || 'pendiente',
+        detallesClean || 'sin_detalles'
+    ].join('.');
+    if (tareaIdExists(nuevoId)) nuevoId = nuevoId + '.' + Date.now();
 
-    const descEl = document.getElementById('tareaDescripcion');
-    const descripcion = descEl ? descEl.value : '';
-
-    let nuevoId;
-    if (id) {
-        nuevoId = id;
-    } else {
-        const timestamp = Date.now();
-        const detallesClean = detalles
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, '_')
-            .substring(0, 20);
-
-        nuevoId = [
-            currentProyecto ? currentProyecto.id : 'sin_proyecto',
-            currentSubproyecto ? currentSubproyecto.id : 'sin_subproyecto',
-            timestamp,
-            id_responsable || 'sin_responsable',
-            prioridad || 'media',
-            estatus || 'pendiente',
-            detallesClean || 'sin_detalles'
-        ].join('.');
-
-        if (tareaIdExists(nuevoId)) {
-            nuevoId = nuevoId + '.' + Date.now();
-        }
-    }
-
-    const data = {
+    var data = {
         id: nuevoId,
         id_subproyecto: currentSubproyecto ? currentSubproyecto.id : null,
         id_responsable: id_responsable,
         prioridad: prioridad,
         estatus: estatus,
         detalles: detalles,
-        descripcion: descripcion, // NUEVO
+        descripcion: descripcion,
         adjuntos: [],
-        fecha_limite: document.getElementById('tareaFechaLimite').value
+        fecha_inicio: new Date().toISOString().split('T')[0],
+        fecha_limite: fecha_limite
     };
 
-    if (!id) {
-        data.fecha_inicio = new Date().toISOString().split('T')[0];
-    }
-
     showLoading(true);
-    setButtonLoading('btn-save-tarea', true);
+    setButtonLoading('btn-save-new-tarea', true);
     try {
-        if (id) {
-            const idx = tareas.findIndex(function (t) { return t.id === id; });
-            const estatusAnterior = tareas[idx] ? tareas[idx].estatus : null;
-            tareas[idx] = Object.assign({}, tareas[idx], data);
-            await postToBackend('tarea_update', data);
-            if (estatusAnterior && estatusAnterior !== estatus) {
-                sendWhatsAppNotification('🔄 TAREA ACTUALIZADA: *' + (detalles || id) + '*\n📊 Estado: ' + estatusAnterior + ' → ' + estatus + '\n📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
-            }
-        } else {
-            tareas.push(data);
-            await postToBackend('tarea_add', data);
-            sendWhatsAppNotification('📋 NUEVA TAREA: *' + (detalles || id) + '*\n' + (currentSubproyecto ? '📁 Programa: ' + currentSubproyecto.nombre + '\n' : '') + '📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
-        }
-        const adjuntosEl = document.getElementById('tareaAdjuntos');
+        tareas.push(data);
+        await postToBackend('tarea_add', data);
+        sendWhatsAppNotification('📋 NUEVA TAREA: *' + (detalles || nuevoId) + '*\n' + (currentSubproyecto ? '📁 Programa: ' + currentSubproyecto.nombre + '\n' : '') + '📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
+
+        var adjuntosEl = document.getElementById('new_adjuntos');
         if (adjuntosEl && adjuntosEl.files && adjuntosEl.files.length > 0) {
             await uploadAttachments(nuevoId, adjuntosEl.files);
-            closeTareaModal();
             await refreshData();
         } else {
-            closeTareaModal();
-            renderTareasBoard();
-            renderTareasList();
-            // If viewing task detail, refresh the view
-            if (currentNavLevel === 'tarea_detail' && currentTarea && data.id === currentTarea.id) {
-                currentTarea = tareas.find(function (t) { return t.id === data.id; });
-                renderTareaDetalle();
-            }
+            currentTarea = data;
+            currentNavLevel = 'tarea_detail';
+            renderCurrentLevel();
         }
     } finally {
         showLoading(false);
-        setButtonLoading('btn-save-tarea', false);
     }
 }
 
-async function deleteTarea() {
-    const id = document.getElementById('tareaId').value;
-    if (!id || !confirm('¿Eliminar esta tarea?')) return;
-    const wasCurrentTarea = currentTarea && currentTarea.id === id;
-    tareas = tareas.filter(function (t) { return t.id !== id; });
-    closeTareaModal();
-    if (wasCurrentTarea) {
-        currentTarea = null;
-        currentNavLevel = 'subproyecto';
-    }
-    renderTareasBoard();
-    renderTareasList();
-    if (wasCurrentTarea) renderCurrentLevel();
-    await postToBackend('tarea_delete', { id: id });
-}
-
 // ============================================
-// MODAL: DESCRIPCIÓN (POPUP)
+// MODAL: DESCRIPCIÓN (ahora inline en tarea_detail)
 // ============================================
-function ensureDescripcionModal_() {
-    if (document.getElementById('descripcion-modal')) return;
-
-    const modal = document.createElement('div');
-    modal.id = 'descripcion-modal';
-    modal.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden p-4 flex items-center justify-center';
-
-    modal.innerHTML =
-        '<div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden">' +
-        '<div class="p-4 border-b border-slate-100 flex items-center justify-between">' +
-        '<h3 id="descripcion-modal-title" class="text-base font-bold text-slate-800">Descripción</h3>' +
-        '<button onclick="closeDescripcionModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded">' +
-        '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>' +
-        '</svg>' +
-        '</button>' +
-        '</div>' +
-        '<div class="p-4">' +
-        '<div id="descripcion-modal-content" class="text-sm text-slate-700 whitespace-pre-wrap"></div>' +
-        '</div>' +
-        '<div class="p-4 border-t border-slate-100 flex justify-end">' +
-        '<button onclick="closeDescripcionModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Cerrar</button>' +
-        '</div>' +
-        '</div>';
-
-    document.body.appendChild(modal);
-}
-
 function showTareaDescripcion(tareaId) {
-    ensureDescripcionModal_();
+    // Navigate to tarea detail — description is already visible there
     const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
-
-    document.getElementById('descripcion-modal-title').innerText =
-        'Descripción: ' + ((tarea.detalles || 'Tarea').toString().substring(0, 60));
-
-    document.getElementById('descripcion-modal-content').textContent =
-        (tarea.descripcion || '').trim() || 'Sin descripción.';
-
-    document.getElementById('descripcion-modal').classList.remove('hidden');
+    if (currentNavLevel !== 'tarea_detail' || !currentTarea || currentTarea.id !== tareaId) {
+        currentTarea = tarea;
+        currentNavLevel = 'tarea_detail';
+        renderCurrentLevel();
+    }
 }
 
 function closeDescripcionModal() {
-    const modal = document.getElementById('descripcion-modal');
-    if (modal) modal.classList.add('hidden');
+    // No-op: description is shown inline in tarea detail
 }
 
 // ============================================
-// ENTREGABLES
+// ENTREGABLES (ahora vista inline en tarea_detail)
 // ============================================
 function openEntregableModal(tareaId, entId) {
     var user = getCurrentUser();
@@ -1550,33 +1538,62 @@ function openEntregableModal(tareaId, entId) {
         alert('Solo supervisores y directores pueden gestionar entregables.');
         return;
     }
-    document.getElementById('entregableTareaId').value = tareaId;
-    document.getElementById('entregableId').value = entId || '';
-    document.getElementById('modal-entregable-title').innerText = entId ? 'Editar Entregable' : 'Nuevo Entregable';
-    document.getElementById('form-entregable').reset();
-    document.getElementById('entregable-medio-otro-wrapper').classList.add('hidden');
-    var btnDelete = document.getElementById('btn-delete-entregable');
-    if (entId) {
-        var tarea = tareas.find(function (t) { return t.id === tareaId; });
-        var en = tarea && Array.isArray(tarea.entregables) ? tarea.entregables.find(function (e) { return e.id === entId; }) : null;
-        if (en) {
-            document.getElementById('entregableDescripcion').value = en.descripcion_entregable || '';
-            document.getElementById('entregableFormato').value = en.formato_requerido || '';
-            document.getElementById('entregableMedio').value = en.medio_entrega || 'opcore';
-            document.getElementById('entregableMedioOtro').value = en.medio_otro || '';
-            if (en.medio_entrega === 'otro') {
-                document.getElementById('entregable-medio-otro-wrapper').classList.remove('hidden');
-            }
-        }
-        btnDelete.classList.remove('hidden');
-    } else {
-        btnDelete.classList.add('hidden');
+    var tarea = tareas.find(function (t) { return t.id === tareaId; });
+    if (!tarea) return;
+
+    if (currentNavLevel !== 'tarea_detail' || !currentTarea || currentTarea.id !== tareaId) {
+        currentTarea = tarea;
+        currentNavLevel = 'tarea_detail';
+        renderCurrentLevel();
     }
-    document.getElementById('modal-entregable').classList.remove('hidden');
+
+    var en = (entId && Array.isArray(tarea.entregables)) ? tarea.entregables.find(function (e) { return e.id === entId; }) : null;
+    var medioValue = en ? (en.medio_entrega || 'opcore') : 'opcore';
+    var otroValue = en ? (en.medio_otro || '') : '';
+    var showOtro = medioValue === 'otro';
+
+    var container = document.getElementById('tarea-detalle-content');
+    container.innerHTML =
+        '<div class="flex items-center justify-between mb-6">' +
+        '<h2 class="text-xl font-bold text-slate-800">' + (entId ? 'Editar Entregable' : 'Nuevo Entregable') + '</h2>' +
+        '<button type="button" onclick="closeEntregableModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
+        '</div>' +
+        '<form class="space-y-4" onsubmit="saveEntregable(event)">' +
+        '<input type="hidden" id="entregableTareaId" value="' + escapeHtml(tareaId) + '">' +
+        '<input type="hidden" id="entregableId" value="' + escapeHtml(entId || '') + '">' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción del Entregable</label>' +
+        '<textarea id="entregableDescripcion" required rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Resultado concreto esperado...">' + (en ? escapeHtml(en.descripcion_entregable || '') : '') + '</textarea>' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Formato Requerido</label>' +
+        '<input type="text" id="entregableFormato" value="' + (en ? escapeHtml(en.formato_requerido || '') : '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="PDF, JPG, enlace, documento físico, etc.">' +
+        '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Medio de Entrega</label>' +
+        '<select id="entregableMedio" onchange="toggleMedioOtro()" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' +
+        '<option value="opcore"' + (medioValue === 'opcore' ? ' selected' : '') + '>OpCore</option>' +
+        '<option value="drive"' + (medioValue === 'drive' ? ' selected' : '') + '>Drive</option>' +
+        '<option value="whatsapp"' + (medioValue === 'whatsapp' ? ' selected' : '') + '>WhatsApp</option>' +
+        '<option value="correo"' + (medioValue === 'correo' ? ' selected' : '') + '>Correo</option>' +
+        '<option value="fisica"' + (medioValue === 'fisica' ? ' selected' : '') + '>Física</option>' +
+        '<option value="otro"' + (medioValue === 'otro' ? ' selected' : '') + '>Otro</option>' +
+        '</select>' +
+        '</div>' +
+        '<div id="entregable-medio-otro-wrapper"' + (showOtro ? '' : ' class="hidden"') + '>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Especificar medio</label>' +
+        '<input type="text" id="entregableMedioOtro" value="' + escapeHtml(otroValue) + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Describe el medio de entrega...">' +
+        '</div>' +
+        '<div class="flex gap-3 pt-2">' +
+        '<button type="button" onclick="closeEntregableModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
+        '<button type="submit" id="btn-save-entregable" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>' +
+        '</div>' +
+        (entId ? '<button type="button" onclick="deleteEntregableFromModal()" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline">Eliminar Entregable</button>' : '') +
+        '</form>';
 }
 
 function closeEntregableModal() {
-    document.getElementById('modal-entregable').classList.add('hidden');
+    if (currentNavLevel === 'tarea_detail') renderTareaDetalle();
 }
 
 function toggleMedioOtro() {
@@ -1655,29 +1672,43 @@ function deleteEntregableFromModal() {
 function showTareaComments(tareaId) {
     const tarea = tareas.find(function (t) { return t.id === tareaId; });
     if (!tarea) return;
+
+    if (currentNavLevel !== 'tarea_detail' || !currentTarea || currentTarea.id !== tareaId) {
+        currentTarea = tarea;
+        currentNavLevel = 'tarea_detail';
+        renderCurrentLevel();
+    }
+
     const tareaComments = comentarios.filter(function (c) { return c.id_tarea === tareaId; });
-    const modal = document.getElementById('comments-modal');
-    document.getElementById('comments-modal-title').innerText = 'Comentarios: ' + (tarea.detalles || '').substring(0, 40);
 
     const commentsHtml = tareaComments.length === 0
         ? '<p class="text-center text-slate-400 py-4">No hay comentarios aún</p>'
         : tareaComments.map(function (c) {
             const resp = responsables.find(function (r) { return r.id === c.id_responsable; });
-            return '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><div class="flex justify-between items-start mb-1"><span class="font-bold text-xs text-indigo-600">' + (resp ? resp.nombre : c.id_responsable) + '</span><span class="text-[10px] text-slate-400">' + (c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span></div><p class="text-sm text-slate-700">' + c.comentario + '</p></div>';
+            return '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200">' +
+                '<div class="flex justify-between items-start mb-1">' +
+                '<span class="font-bold text-xs text-indigo-600">' + escapeHtml(resp ? resp.nombre : c.id_responsable) + '</span>' +
+                '<span class="text-[10px] text-slate-400">' + (c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span>' +
+                '</div>' +
+                '<p class="text-sm text-slate-700">' + escapeHtml(c.comentario) + '</p>' +
+                '</div>';
         }).join('');
 
-    document.getElementById('comments-modal-content').innerHTML =
-        '<div class="space-y-4">' +
-        '<div class="space-y-3 max-h-60 overflow-y-auto">' + commentsHtml + '</div>' +
+    const container = document.getElementById('tarea-detalle-content');
+    container.innerHTML =
+        '<div class="flex items-center justify-between mb-6">' +
+        '<h2 class="text-xl font-bold text-slate-800">Comentarios</h2>' +
+        '<button type="button" onclick="closeCommentsModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cerrar</button>' +
+        '</div>' +
+        '<p class="text-sm text-slate-500 mb-4">' + escapeHtml((tarea.detalles || '').substring(0, 60)) + '</p>' +
+        '<div class="space-y-3 max-h-[50vh] overflow-y-auto mb-4">' + commentsHtml + '</div>' +
         '<div class="border-t border-slate-200 pt-4">' +
         '<textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm" placeholder="Escribe tu comentario..."></textarea>' +
-        '<div class="flex justify-end mt-2">' +
+        '<div class="flex justify-between mt-2">' +
+        '<button onclick="closeCommentsModal()" class="text-sm text-slate-400 hover:text-slate-600 font-medium">← Volver a tarea</button>' +
         '<button onclick="addTareaComment(\'' + tareaId + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Enviar</button>' +
         '</div>' +
-        '</div>' +
         '</div>';
-
-    modal.classList.remove('hidden');
 }
 
 async function addTareaComment(tareaId) {
@@ -1703,12 +1734,133 @@ async function addTareaComment(tareaId) {
 }
 
 function closeCommentsModal() {
-    document.getElementById('comments-modal').classList.add('hidden');
+    if (currentNavLevel === 'tarea_detail') renderTareaDetalle();
 }
 
 // ============================================
-// FILTRO
+// APROBACIÓN (ahora vista inline en tarea_detail)
 // ============================================
+function openAprobacionModal(tareaId) {
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
+    if (!tarea) return;
+
+    if (currentNavLevel !== 'tarea_detail' || !currentTarea || currentTarea.id !== tareaId) {
+        currentTarea = tarea;
+        currentNavLevel = 'tarea_detail';
+        renderCurrentLevel();
+    }
+
+    const container = document.getElementById('tarea-detalle-content');
+    container.innerHTML =
+        '<div class="flex items-center justify-between mb-6">' +
+        '<h2 class="text-xl font-bold text-slate-800">Revisar Tarea</h2>' +
+        '<button type="button" onclick="closeAprobacionModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
+        '</div>' +
+        '<div class="space-y-4">' +
+        '<input type="hidden" id="aprobacionTareaId" value="' + escapeHtml(tareaId) + '">' +
+        '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm text-slate-700">' + escapeHtml(tarea.detalles || '') + '</div>' +
+        '<div>' +
+        '<label class="block text-sm font-bold text-slate-700 mb-1">Observaciones (opcional)</label>' +
+        '<textarea id="aprobacionObservaciones" rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Añade observaciones..."></textarea>' +
+        '</div>' +
+        '<div class="flex gap-3 pt-2">' +
+        '<button onclick="closeAprobacionModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
+        '<button onclick="rechazarTarea()" class="flex-1 bg-red-100 text-red-600 px-4 py-2.5 rounded-lg font-bold hover:bg-red-200">Rechazar</button>' +
+        '<button onclick="aprobarTarea()" class="flex-1 bg-emerald-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-emerald-700">Aprobar</button>' +
+        '</div>' +
+        '</div>';
+}
+
+function closeAprobacionModal() {
+    if (currentNavLevel === 'tarea_detail') renderTareaDetalle();
+}
+
+async function aprobarTarea() {
+    const tareaId = document.getElementById('aprobacionTareaId').value;
+    const observaciones = document.getElementById('aprobacionObservaciones').value;
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
+    if (!tarea) return;
+    const user = getCurrentUser();
+    showLoading(true);
+    try {
+        tarea.estatus = 'completado';
+        await postToBackend('tarea_aprobar', { id_tarea: tareaId, id_actor: user ? user.id : '', observaciones: observaciones });
+        currentTarea = tarea;
+        renderTareaDetalle();
+        renderTareasBoard();
+        renderTareasList();
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function rechazarTarea() {
+    const tareaId = document.getElementById('aprobacionTareaId').value;
+    const observaciones = document.getElementById('aprobacionObservaciones').value;
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
+    if (!tarea) return;
+    const user = getCurrentUser();
+    showLoading(true);
+    try {
+        tarea.estatus = 'en_curso';
+        await postToBackend('tarea_rechazar', { id_tarea: tareaId, id_actor: user ? user.id : '', observaciones: observaciones });
+        currentTarea = tarea;
+        renderTareaDetalle();
+        renderTareasBoard();
+        renderTareasList();
+    } finally {
+        showLoading(false);
+    }
+}
+
+// ============================================
+// DUPLICAR TAREA
+// ============================================
+async function duplicateTarea(tareaId) {
+    const user = getCurrentUser();
+    if (!user || user.role !== 'director') {
+        alert('Solo el director puede duplicar tareas.');
+        return;
+    }
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
+    if (!tarea) return;
+    if (!confirm('¿Duplicar esta tarea?')) return;
+
+    const timestamp = Date.now();
+    const detallesClean = (tarea.detalles || '').toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20);
+    var nuevoId = [
+        currentProyecto ? currentProyecto.id : (tarea.id.split('.')[0] || 'sin_proyecto'),
+        currentSubproyecto ? currentSubproyecto.id : (tarea.id.split('.')[1] || 'sin_subproyecto'),
+        timestamp,
+        tarea.id_responsable || 'sin_responsable',
+        tarea.prioridad || 'media',
+        'pendiente',
+        detallesClean || 'sin_detalles'
+    ].join('.');
+    if (tareaIdExists(nuevoId)) nuevoId = nuevoId + '.' + timestamp;
+
+    const nuevaTarea = Object.assign({}, tarea, {
+        id: nuevoId,
+        estatus: 'pendiente',
+        fecha_inicio: new Date().toISOString().split('T')[0],
+        adjuntos: [],
+        entregables: [],
+        detalles: (tarea.detalles || '') + ' (copia)'
+    });
+
+    showLoading(true);
+    try {
+        tareas.push(nuevaTarea);
+        await postToBackend('tarea_add', nuevaTarea);
+        currentTarea = nuevaTarea;
+        currentNavLevel = 'tarea_detail';
+        renderCurrentLevel();
+        renderTareasBoard();
+        renderTareasList();
+    } finally {
+        showLoading(false);
+    }
+}
 function updateUserFilterSelect() {
     const select = document.getElementById('filterUser');
     if (!select) return;
