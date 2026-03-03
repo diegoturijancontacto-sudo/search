@@ -1171,7 +1171,6 @@ function openProyectoModal(id) {
 function closeProyectoModal() {
     if (currentNavLevel !== 'cuenta_form') return;
     currentNavLevel = 'home';
-    currentProyecto = null;
     renderCurrentLevel();
 }
 
@@ -1450,6 +1449,8 @@ function openInlineNewTareaForm() {
 }
 
 function closeTareaModal() {
+    // Only act when the new-task form is open (currentTarea is null).
+    // Editing an existing task uses openInlineEditForm which has its own cancel.
     if (currentNavLevel !== 'tarea_detail' || currentTarea !== null) return;
     currentNavLevel = 'subproyecto';
     renderCurrentLevel();
@@ -1688,7 +1689,7 @@ function showTareaComments(tareaId) {
             return '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200">' +
                 '<div class="flex justify-between items-start mb-1">' +
                 '<span class="font-bold text-xs text-indigo-600">' + escapeHtml(resp ? resp.nombre : c.id_responsable) + '</span>' +
-                '<span class="text-[10px] text-slate-400">' + (c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span>' +
+                '<span class="text-[10px] text-slate-400">' + escapeHtml(c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span>' +
                 '</div>' +
                 '<p class="text-sm text-slate-700">' + escapeHtml(c.comentario) + '</p>' +
                 '</div>';
@@ -1828,9 +1829,15 @@ async function duplicateTarea(tareaId) {
 
     const timestamp = Date.now();
     const detallesClean = (tarea.detalles || '').toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20);
+    // Use the original task's subproyecto context for the duplicate ID
+    const subId = tarea.id_subproyecto || (currentSubproyecto ? currentSubproyecto.id : 'sin_subproyecto');
+    const proyId = (function () {
+        const sub = subproyectos.find(function (s) { return s.id === subId; });
+        return sub ? sub.id_proyecto : (currentProyecto ? currentProyecto.id : 'sin_proyecto');
+    }());
     var nuevoId = [
-        currentProyecto ? currentProyecto.id : (tarea.id.split('.')[0] || 'sin_proyecto'),
-        currentSubproyecto ? currentSubproyecto.id : (tarea.id.split('.')[1] || 'sin_subproyecto'),
+        proyId,
+        subId,
         timestamp,
         tarea.id_responsable || 'sin_responsable',
         tarea.prioridad || 'media',
@@ -1841,6 +1848,7 @@ async function duplicateTarea(tareaId) {
 
     const nuevaTarea = Object.assign({}, tarea, {
         id: nuevoId,
+        id_subproyecto: subId,
         estatus: 'pendiente',
         fecha_inicio: new Date().toISOString().split('T')[0],
         adjuntos: [],
