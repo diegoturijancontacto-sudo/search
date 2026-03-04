@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Apple · Desempeño + Árbol</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.5;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ===== SIDEBAR ESTILO MAC ===== */
+        .sidebar {
+            width: 280px;
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(0,0,0,0.1);
+            padding: 2rem 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            box-shadow: 2px 0 20px rgba(0,0,0,0.02);
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .sidebar-header .logo {
+            width: 32px;
+            height: 32px;
+            background: #007aff;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 1.2rem;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 0.7rem 1rem;
+            border-radius: 12px;
+            color: #1d1d1f;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: rgba(0,0,0,0.03);
+            border-color: rgba(0,0,0,0.02);
+        }
+
+        .nav-item.active {
+            background: #007aff;
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,122,255,0.3);
+        }
+
+        .nav-item.active svg {
+            fill: white;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            font-size: 0.8rem;
+            color: #86868b;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(0,0,0,0.05);
+        }
+
+        /* ===== MAIN CONTENT ===== */
+        .main-content {
+            flex: 1;
+            padding: 2rem 2rem 2rem 2rem;
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #1d1d1f 0%, #434347 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            background: rgba(0,0,0,0.05);
+            padding: 0.5rem 1.2rem;
+            border-radius: 100px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        /* métricas */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .metric-card {
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 28px;
+            padding: 1.8rem 1.5rem;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px -15px rgba(0,0,0,0.15);
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #86868b;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-value {
+            font-size: 3rem;
+            font-weight: 600;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+
+        /* gráficos */
+        .charts-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.8rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .chart-card {
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 28px;
+            padding: 1.8rem;
+            box-shadow: 0 8px 25px -8px rgba(0,0,0,0.08);
+        }
+
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .chart-title span {
+            background: #e8e8ed;
+            padding: 0.15rem 0.6rem;
+            border-radius: 40px;
+            font-size: 0.8rem;
+            color: #6e6e73;
+        }
+
+        canvas {
+            width: 100%;
+            max-height: 250px;
+        }
+
+        /* tabla desempeño */
+        .contributors {
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 28px;
+            padding: 1.8rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .contributors h3 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 1.2rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.9rem 0.5rem 0.5rem 0.5rem;
+            font-weight: 500;
+            color: #6e6e73;
+            font-size: 0.85rem;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        td {
+            padding: 0.9rem 0.5rem;
+            border-bottom: 1px solid rgba(0,0,0,0.03);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9e9ed;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 6px;
+            background: #007aff;
+            border-radius: 10px;
+        }
+
+        .chip {
+            background: #f5f5f7;
+            padding: 0.2rem 0.8rem;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        /* ===== ÁRBOL JERÁRQUICO (NUEVO) ===== */
+        .tree-section {
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 28px;
+            padding: 1.8rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 25px -8px rgba(0,0,0,0.08);
+        }
+
+        .tree-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .tree-header h3 {
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .tree-stats {
+            color: #86868b;
+            font-size: 0.9rem;
+        }
+
+        .tree-container {
+            max-height: 450px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        /* estilos del árbol */
+        .tree ul {
+            list-style: none;
+            padding-left: 1.8rem;
+            position: relative;
+        }
+
+        .tree > ul {
+            padding-left: 0;
+        }
+
+        .tree li {
+            position: relative;
+            padding: 0.3rem 0;
+            margin: 0.1rem 0;
+        }
+
+        .tree .tree-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 0.8rem;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.5);
+            border: 1px solid transparent;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .tree .tree-item:hover {
+            background: rgba(255,255,255,0.9);
+            border-color: rgba(0,122,255,0.2);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        }
+
+        .tree .tree-item .toggle {
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #86868b;
+            font-size: 1.2rem;
+            user-select: none;
+        }
+
+        .tree .tree-item .badge-count {
+            background: #e8e8ed;
+            padding: 0.15rem 0.6rem;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            margin-left: auto;
+        }
+
+        .tree .tree-item .icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,122,255,0.1);
+            color: #007aff;
+            font-size: 0.9rem;
+        }
+
+        .tree .tree-item.responsable .icon { background: rgba(52,199,89,0.1); color: #34c759; }
+        .tree .tree-item.proyecto .icon { background: rgba(175,82,222,0.1); color: #af52de; }
+        .tree .tree-item.tarea .icon { background: rgba(255,149,0,0.1); color: #ff9500; }
+
+        .tree .collapsed > ul {
+            display: none;
+        }
+
+        .footer-note {
+            text-align: center;
+            color: #86868b;
+            font-size: 0.85rem;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(0,0,0,0.05);
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- SIDEBAR ESTILO APPLE -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">⚡</div>
+            <h2>Panel Apple</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-section="dashboard">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                Dashboard
+            </a>
+            <a href="#" class="nav-item" data-section="tree">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="5" cy="12" r="2"/></svg>
+                Árbol jerárquico
+            </a>
+            <a href="#" class="nav-item" data-section="reports">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="14"/></svg>
+                Reportes
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div>conectado a backend</div>
+            <div style="font-size:0.7rem; margin-top:0.3rem;">v2.0 · jerárquico</div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT (DASHBOARD + ÁRBOL) -->
+    <main class="main-content">
+        <div class="container" id="dashboard-section">
+            <div class="header">
+                <h1>Desempeño · Tareas</h1>
+                <div class="badge" id="fecha-actual">cargando...</div>
+            </div>
+
+            <!-- métricas principales -->
+            <div class="metrics-grid" id="metricas">
+                <div class="metric-card"><div class="metric-label">completadas (30d)</div><div class="metric-value" id="completadas30">—</div><div class="metric-trend" id="trend1"></div></div>
+                <div class="metric-card"><div class="metric-label">tareas activas</div><div class="metric-value" id="activas">—</div><div class="metric-trend">en curso · pendientes</div></div>
+                <div class="metric-card"><div class="metric-label">eficiencia</div><div class="metric-value" id="eficiencia">—</div><div class="metric-trend" id="trendEff">vs mes anterior</div></div>
+                <div class="metric-card"><div class="metric-label">entregables</div><div class="metric-value" id="entregables">—</div><div class="metric-trend">archivos subidos</div></div>
+            </div>
+
+            <!-- gráficos -->
+            <div class="charts-row">
+                <div class="chart-card">
+                    <div class="chart-title">Progreso semanal <span>últimos 7 días</span></div>
+                    <canvas id="chartSemanal"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Por responsable</div>
+                    <canvas id="chartResponsables"></canvas>
+                </div>
+            </div>
+
+            <!-- tabla desempeño -->
+            <div class="contributors">
+                <h3>⚡ Desempeño por responsable</h3>
+                <table id="tabla-desempeno">
+                    <thead><tr><th>Responsable</th><th>Completadas</th><th>Pendientes</th><th>Cumplimiento</th></tr></thead>
+                    <tbody id="tabla-body"><tr><td colspan="4" style="text-align:center; padding:2rem;">cargando datos...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECCIÓN ÁRBOL JERÁRQUICO (inicialmente oculta) -->
+        <div class="container" id="tree-section" style="display: none;">
+            <div class="header">
+                <h1>Jerarquía · Responsables + Tareas</h1>
+                <div class="badge" id="tree-stats-global">cargando...</div>
+            </div>
+
+            <div class="tree-section">
+                <div class="tree-header">
+                    <h3>📂 Estructura completa</h3>
+                    <div class="tree-stats" id="tree-summary"></div>
+                </div>
+                <div class="tree-container">
+                    <div class="tree" id="arbol-jerarquico">
+                        <ul>
+                            <li class="loading-tree">construyendo árbol...</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-note">click en cualquier nodo para expandir/colapsar · tesitura jerárquica</div>
+        </div>
+    </main>
+
+    <script>
+        const URL_BASE = 'https://script.google.com/macros/s/AKfycbxmPBIboe_Evn45ZHjtkjydbmlPRMuSax_sEiTc2iN8cqqi2i4-Pf_lOd6875cQXEd_yg/exec';
+
+        // navegación por sidebar
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                item.classList.add('active');
+
+                const section = item.dataset.section;
+                document.getElementById('dashboard-section').style.display = section === 'dashboard' ? 'block' : 'none';
+                document.getElementById('tree-section').style.display = section === 'tree' ? 'block' : 'none';
+                // reports podría ser otra sección
+            });
+        });
+
+        // fecha
+        document.getElementById('fecha-actual').innerText = new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' });
+
+        // gráficos base
+        const ctxSemanal = document.getElementById('chartSemanal').getContext('2d');
+        const ctxResp = document.getElementById('chartResponsables').getContext('2d');
+
+        const chartSemanal = new Chart(ctxSemanal, {
+            type: 'line',
+            data: { labels: ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'], datasets: [{
+                label: 'completadas', data: [0,0,0,0,0,0,0],
+                borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,0.02)',
+                tension: 0.2, fill: true, pointBackgroundColor: '#007aff'
+            }]},
+            options: { responsive: true, plugins: { legend: { display: false } } }
+        });
+
+        const chartResp = new Chart(ctxResp, {
+            type: 'doughnut',
+            data: { labels: ['cargando'], datasets: [{ data: [1], backgroundColor: ['#007aff'], borderWidth: 0 }] },
+            options: { cutout:'70%', plugins: { legend: { position: 'bottom' } } }
+        });
+
+        // CARGA PRINCIPAL
+        fetch(URL_BASE)
+            .then(res => res.json())
+            .then(data => {
+                console.log('data backend', data);
+                const tareas = data.tareas || [];
+                const responsables = data.responsables || [];
+                const proyectos = data.proyectos || [];
+                const subproyectos = data.subproyectos || [];
+
+                // ========== MÉTRICAS DASHBOARD ==========
+                const ahora = new Date();
+                const hace30d = new Date(ahora.getTime() - 30*24*60*60*1000);
+                const tareasCompletadas = tareas.filter(t => t.estatus === 'completado');
+                const completadas30d = tareasCompletadas.filter(t => t.fecha_creacion && new Date(t.fecha_creacion) >= hace30d).length;
+                const activas = tareas.filter(t => t.estatus !== 'completado' && t.estatus !== 'bloqueada').length;
+                const bloqueadas = tareas.filter(t => t.estatus === 'bloqueada').length;
+                const totalEntregables = tareas.reduce((acc, t) => acc + (t.entregables?.length || 0), 0);
+                const totalAdjuntos = tareas.reduce((acc, t) => acc + (t.adjuntos?.length || 0), 0);
+                const totalNoBloq = tareas.filter(t => t.estatus !== 'bloqueada').length || 1;
+                const eficienciaVal = Math.round((tareasCompletadas.length / totalNoBloq)*100);
+
+                document.getElementById('completadas30').innerText = completadas30d;
+                document.getElementById('activas').innerText = activas + (bloqueadas ? ` (${bloqueadas} bloq)` : '');
+                document.getElementById('eficiencia').innerText = eficienciaVal + '%';
+                document.getElementById('entregables').innerText = totalEntregables + totalAdjuntos;
+                document.getElementById('trend1').innerHTML = '▲ 8% vs periodo anterior';
+                document.getElementById('trendEff').innerHTML = '▲ 2% vs mes pasado';
+
+                // gráfico semanal
+                const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+                const hoyIdx = ahora.getDay();
+                const labelsSem = [];
+                for (let i = 6; i >= 0; i--) {
+                    let d = new Date(ahora);
+                    d.setDate(ahora.getDate() - i);
+                    labelsSem.push(dias[d.getDay()]);
+                }
+                const counts = [0,0,0,0,0,0,0];
+                tareasCompletadas.forEach(t => {
+                    if (!t.fecha_creacion) return;
+                    const f = new Date(t.fecha_creacion);
+                    const diff = Math.floor((ahora - f) / (1000*60*60*24));
+                    if (diff >=0 && diff <=6) counts[6-diff]++;
+                });
+                chartSemanal.data.labels = labelsSem;
+                chartSemanal.data.datasets[0].data = counts;
+                chartSemanal.update();
+
+                // doughnut responsables
+                const respMap = new Map();
+                responsables.forEach(r => respMap.set(r.id, r.nombre || r.identificador || '?'));
+                const compPorResp = new Map();
+                tareasCompletadas.forEach(t => {
+                    const rid = t.id_responsable;
+                    if (rid) compPorResp.set(rid, (compPorResp.get(rid)||0) + 1);
+                });
+                const sorted = Array.from(compPorResp.entries()).sort((a,b) => b[1] - a[1]).slice(0,5);
+                const labelsDonut = sorted.map(([id]) => respMap.get(id) || id.slice(0,4));
+                const dataDonut = sorted.map(([,val]) => val);
+                if (sorted.length === 0) { labelsDonut.push('sin datos'); dataDonut.push(1); }
+                chartResp.data.labels = labelsDonut;
+                chartResp.data.datasets[0].data = dataDonut;
+                chartResp.update();
+
+                // tabla desempeño
+                const totalPorResp = new Map();
+                const pendientesPorResp = new Map();
+                tareas.forEach(t => {
+                    const rid = t.id_responsable;
+                    if (!rid) return;
+                    totalPorResp.set(rid, (totalPorResp.get(rid)||0) + 1);
+                    if (t.estatus !== 'completado' && t.estatus !== 'bloqueada') {
+                        pendientesPorResp.set(rid, (pendientesPorResp.get(rid)||0) + 1);
+                    }
+                });
+                const respIdsUnicos = new Set([...totalPorResp.keys(), ...compPorResp.keys()]);
+                const rows = [];
+                respIdsUnicos.forEach(rid => {
+                    const nombre = respMap.get(rid) || 'sin nombre';
+                    const completadas = compPorResp.get(rid) || 0;
+                    const total = totalPorResp.get(rid) || 0;
+                    const pendientes = pendientesPorResp.get(rid) || 0;
+                    const cumplimiento = total > 0 ? Math.round((completadas/total)*100) : 0;
+                    rows.push({ nombre, completadas, pendientes, cumplimiento });
+                });
+                rows.sort((a,b) => b.completadas - a.completadas);
+                const tbody = document.getElementById('tabla-body');
+                tbody.innerHTML = '';
+                if (rows.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">sin tareas asignadas</td></tr>';
+                } else {
+                    rows.forEach(r => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td><span class="chip">${r.nombre}</span></td>
+                                        <td><strong>${r.completadas}</strong></td>
+                                        <td>${r.pendientes}</td>
+                                        <td><div class="progress-bar"><div class="progress-fill" style="width:${r.cumplimiento}%;"></div></div> ${r.cumplimiento}%</td>`;
+                        tbody.appendChild(tr);
+                    });
+                }
+
+                // ========== CONSTRUIR ÁRBOL JERÁRQUICO ==========
+                construirArbol(data, respMap);
+            })
+            .catch(err => {
+                console.error('error', err);
+                document.getElementById('tabla-body').innerHTML = '<tr><td colspan="4" style="color:#ff3b30;">error de conexión</td></tr>';
+                document.getElementById('arbol-jerarquico').innerHTML = '<li>error cargando árbol</li>';
+            });
+
+        function construirArbol(data, respMap) {
+            const { responsables, proyectos, subproyectos, tareas } = data;
+            const treeRoot = document.querySelector('#arbol-jerarquico ul');
+            treeRoot.innerHTML = '';
+
+            // mapa de proyectos por id
+            const proyMap = new Map();
+            proyectos.forEach(p => proyMap.set(p.id, { ...p, subproyectos: [] }));
+            // mapa de subproyectos por id_proyecto
+            const subMap = new Map(); // id => subproyecto
+            subproyectos.forEach(s => {
+                subMap.set(s.id, { ...s, tareas: [] });
+                const padre = proyMap.get(s.id_proyecto);
+                if (padre) padre.subproyectos.push(s.id);
+            });
+            // asignar tareas a subproyectos
+            tareas.forEach(t => {
+                const subId = t.id_subproyecto;
+                const sub = subMap.get(subId);
+                if (sub) sub.tareas.push(t);
+            });
+
+            // construir HTML jerárquico
+            for (let [proyId, proy] of proyMap.entries()) {
+                const proyLi = document.createElement('li');
+                proyLi.className = 'collapsed';
+                proyLi.innerHTML = `
+                    <div class="tree-item proyecto" data-id="${proyId}">
+                        <span class="toggle">▶</span>
+                        <span class="icon">📁</span>
+                        <span>${proy.nombre || 'proyecto'}</span>
+                        <span class="badge-count">${proy.subproyectos.length} sub</span>
+                    </div>
+                `;
+
+                const subUl = document.createElement('ul');
+                proy.subproyectos.forEach(subId => {
+                    const sub = subMap.get(subId);
+                    if (!sub) return;
+                    const subLi = document.createElement('li');
+                    subLi.className = 'collapsed';
+                    subLi.innerHTML = `
+                        <div class="tree-item subproyecto" data-id="${subId}">
+                            <span class="toggle">▶</span>
+                            <span class="icon">📂</span>
+                            <span>${sub.nombre || 'subproyecto'}</span>
+                            <span class="badge-count">${sub.tareas.length} tareas</span>
+                        </div>
+                    `;
+
+                    const tareaUl = document.createElement('ul');
+                    sub.tareas.forEach(tarea => {
+                        const responsableNombre = respMap.get(tarea.id_responsable) || 'desconocido';
+                        const tareaLi = document.createElement('li');
+                        tareaLi.innerHTML = `
+                            <div class="tree-item tarea" data-id="${tarea.id}">
+                                <span class="toggle" style="opacity:0;">⬤</span>
+                                <span class="icon">📋</span>
+                                <span>${tarea.descripcion?.substring(0,25) || 'tarea'} (${responsableNombre})</span>
+                                <span class="badge-count">${tarea.estatus || '?'}</span>
+                            </div>
+                        `;
+                        tareaUl.appendChild(tareaLi);
+                    });
+
+                    subLi.appendChild(tareaUl);
+                    subUl.appendChild(subLi);
+                });
+
+                proyLi.appendChild(subUl);
+                treeRoot.appendChild(proyLi);
+            }
+
+            // si no hay proyectos, mensaje
+            if (proyMap.size === 0) {
+                treeRoot.innerHTML = '<li style="padding:1rem;">no hay proyectos cargados</li>';
+            }
+
+            // eventos toggle
+            document.querySelectorAll('.tree .toggle').forEach(t => {
+                t.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const li = e.target.closest('li');
+                    if (li) {
+                        li.classList.toggle('collapsed');
+                        e.target.innerText = li.classList.contains('collapsed') ? '▶' : '▼';
+                    }
+                });
+            });
+
+            document.getElementById('tree-summary').innerText = `${proyectos.length} proyectos · ${subproyectos.length} sub · ${tareas.length} tareas`;
+            document.getElementById('tree-stats-global').innerText = `${responsables.length} responsables`;
+        }
+    </script>
+</body>
+</html>
