@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Apple · Desempeño + Árbol</title>
+    <title>Opcore | administración</title>
     <style>
         * {
             margin: 0;
@@ -81,6 +81,7 @@
             font-weight: 500;
             transition: all 0.2s ease;
             border: 1px solid transparent;
+            cursor: pointer;
         }
 
         .nav-item:hover {
@@ -281,7 +282,7 @@
             border: 1px solid rgba(0,0,0,0.05);
         }
 
-        /* ===== ÁRBOL JERÁRQUICO (NUEVO) ===== */
+        /* árbol jerárquico */
         .tree-section {
             background: rgba(255,255,255,0.7);
             backdrop-filter: blur(20px);
@@ -315,7 +316,6 @@
             padding-right: 0.5rem;
         }
 
-        /* estilos del árbol */
         .tree ul {
             list-style: none;
             padding-left: 1.8rem;
@@ -390,6 +390,70 @@
             display: none;
         }
 
+        /* TradingView widgets */
+        .tradingview-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.8rem;
+            margin-bottom: 2rem;
+        }
+
+        .tradingview-card {
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 28px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 25px -8px rgba(0,0,0,0.08);
+            min-height: 400px;
+        }
+
+        .tradingview-card h3 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tradingview-widget {
+            width: 100%;
+            height: 350px;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #0a0c0f;
+        }
+
+        .symbol-selector {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .symbol-btn {
+            background: rgba(255,255,255,0.5);
+            border: 1px solid rgba(0,0,0,0.05);
+            padding: 0.4rem 1rem;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .symbol-btn:hover {
+            background: rgba(0,122,255,0.1);
+            border-color: #007aff;
+        }
+
+        .symbol-btn.active {
+            background: #007aff;
+            color: white;
+            border-color: #007aff;
+        }
+
         .footer-note {
             text-align: center;
             color: #86868b;
@@ -400,43 +464,45 @@
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- TradingView Widget Library -->
+    <script src="https://s3.tradingview.com/tv.js"></script>
 </head>
 <body>
     <!-- SIDEBAR ESTILO APPLE -->
     <aside class="sidebar">
         <div class="sidebar-header">
             <div class="logo">⚡</div>
-            <h2>Panel Apple</h2>
+            <h2>Panel</h2>
         </div>
         <nav class="sidebar-nav">
-            <a href="#" class="nav-item active" data-section="dashboard">
+            <div class="nav-item active" data-section="dashboard">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
                 Dashboard
-            </a>
-            <a href="#" class="nav-item" data-section="tree">
+            </div>
+            <div class="nav-item" data-section="tree">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="5" cy="12" r="2"/></svg>
                 Árbol jerárquico
-            </a>
-            <a href="#" class="nav-item" data-section="reports">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="14"/></svg>
-                Reportes
-            </a>
+            </div>
+            <div class="nav-item" data-section="trading">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7"/><polyline points="15 3 21 3 21 9"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="16" x2="21" y2="16"/></svg>
+                TradingView
+            </div>
         </nav>
         <div class="sidebar-footer">
             <div>conectado a backend</div>
-            <div style="font-size:0.7rem; margin-top:0.3rem;">v2.0 · jerárquico</div>
+            <div style="font-size:0.7rem; margin-top:0.3rem;">v3.0 · trading</div>
         </div>
     </aside>
 
-    <!-- MAIN CONTENT (DASHBOARD + ÁRBOL) -->
+    <!-- MAIN CONTENT -->
     <main class="main-content">
+        <!-- SECCIÓN DASHBOARD -->
         <div class="container" id="dashboard-section">
             <div class="header">
                 <h1>Desempeño · Tareas</h1>
                 <div class="badge" id="fecha-actual">cargando...</div>
             </div>
 
-            <!-- métricas principales -->
             <div class="metrics-grid" id="metricas">
                 <div class="metric-card"><div class="metric-label">completadas (30d)</div><div class="metric-value" id="completadas30">—</div><div class="metric-trend" id="trend1"></div></div>
                 <div class="metric-card"><div class="metric-label">tareas activas</div><div class="metric-value" id="activas">—</div><div class="metric-trend">en curso · pendientes</div></div>
@@ -444,7 +510,6 @@
                 <div class="metric-card"><div class="metric-label">entregables</div><div class="metric-value" id="entregables">—</div><div class="metric-trend">archivos subidos</div></div>
             </div>
 
-            <!-- gráficos -->
             <div class="charts-row">
                 <div class="chart-card">
                     <div class="chart-title">Progreso semanal <span>últimos 7 días</span></div>
@@ -456,7 +521,6 @@
                 </div>
             </div>
 
-            <!-- tabla desempeño -->
             <div class="contributors">
                 <h3>⚡ Desempeño por responsable</h3>
                 <table id="tabla-desempeno">
@@ -466,7 +530,7 @@
             </div>
         </div>
 
-        <!-- SECCIÓN ÁRBOL JERÁRQUICO (inicialmente oculta) -->
+        <!-- SECCIÓN ÁRBOL JERÁRQUICO -->
         <div class="container" id="tree-section" style="display: none;">
             <div class="header">
                 <h1>Jerarquía · Responsables + Tareas</h1>
@@ -486,7 +550,62 @@
                     </div>
                 </div>
             </div>
-            <div class="footer-note">click en cualquier nodo para expandir/colapsar · tesitura jerárquica</div>
+        </div>
+
+        <!-- SECCIÓN TRADINGVIEW (NUEVA) -->
+        <div class="container" id="trading-section" style="display: none;">
+            <div class="header">
+                <h1>TradingView · Acciones</h1>
+                <div class="badge">tiempo real</div>
+            </div>
+
+            <div class="tradingview-row">
+                <div class="tradingview-card">
+                    <h3>📈 S&P 500</h3>
+                    <div class="symbol-selector">
+                        <div class="symbol-btn active" data-symbol="SPY">SPY</div>
+                        <div class="symbol-btn" data-symbol="AAPL">AAPL</div>
+                        <div class="symbol-btn" data-symbol="MSFT">MSFT</div>
+                        <div class="symbol-btn" data-symbol="GOOGL">GOOGL</div>
+                    </div>
+                    <div id="tradingview-chart1" class="tradingview-widget"></div>
+                </div>
+                <div class="tradingview-card">
+                    <h3>📊 Nasdaq</h3>
+                    <div class="symbol-selector">
+                        <div class="symbol-btn active" data-symbol="QQQ">QQQ</div>
+                        <div class="symbol-btn" data-symbol="TSLA">TSLA</div>
+                        <div class="symbol-btn" data-symbol="NVDA">NVDA</div>
+                        <div class="symbol-btn" data-symbol="META">META</div>
+                    </div>
+                    <div id="tradingview-chart2" class="tradingview-widget"></div>
+                </div>
+            </div>
+
+            <div class="tradingview-row">
+                <div class="tradingview-card">
+                    <h3>🏦 Índices mundiales</h3>
+                    <div class="symbol-selector">
+                        <div class="symbol-btn active" data-symbol="IXIC">NASDAQ</div>
+                        <div class="symbol-btn" data-symbol="DJI">DOW</div>
+                        <div class="symbol-btn" data-symbol="FTSE">FTSE</div>
+                        <div class="symbol-btn" data-symbol="DAX">DAX</div>
+                    </div>
+                    <div id="tradingview-chart3" class="tradingview-widget"></div>
+                </div>
+                <div class="tradingview-card">
+                    <h3>💰 Criptomonedas</h3>
+                    <div class="symbol-selector">
+                        <div class="symbol-btn active" data-symbol="BTCUSD">BTC/USD</div>
+                        <div class="symbol-btn" data-symbol="ETHUSD">ETH/USD</div>
+                        <div class="symbol-btn" data-symbol="BNBUSD">BNB/USD</div>
+                        <div class="symbol-btn" data-symbol="SOLUSD">SOL/USD</div>
+                    </div>
+                    <div id="tradingview-chart4" class="tradingview-widget"></div>
+                </div>
+            </div>
+
+            <div class="footer-note">datos de mercado en tiempo real · widgets TradingView</div>
         </div>
     </main>
 
@@ -496,14 +615,13 @@
         // navegación por sidebar
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                e.preventDefault();
                 document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
                 item.classList.add('active');
 
                 const section = item.dataset.section;
                 document.getElementById('dashboard-section').style.display = section === 'dashboard' ? 'block' : 'none';
                 document.getElementById('tree-section').style.display = section === 'tree' ? 'block' : 'none';
-                // reports podría ser otra sección
+                document.getElementById('trading-section').style.display = section === 'trading' ? 'block' : 'none';
             });
         });
 
@@ -561,7 +679,6 @@
 
                 // gráfico semanal
                 const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-                const hoyIdx = ahora.getDay();
                 const labelsSem = [];
                 for (let i = 6; i >= 0; i--) {
                     let d = new Date(ahora);
@@ -632,7 +749,7 @@
                     });
                 }
 
-                // ========== CONSTRUIR ÁRBOL JERÁRQUICO ==========
+                // ========== CONSTRUIR ÁRBOL ==========
                 construirArbol(data, respMap);
             })
             .catch(err => {
@@ -646,24 +763,20 @@
             const treeRoot = document.querySelector('#arbol-jerarquico ul');
             treeRoot.innerHTML = '';
 
-            // mapa de proyectos por id
             const proyMap = new Map();
             proyectos.forEach(p => proyMap.set(p.id, { ...p, subproyectos: [] }));
-            // mapa de subproyectos por id_proyecto
-            const subMap = new Map(); // id => subproyecto
+            const subMap = new Map();
             subproyectos.forEach(s => {
                 subMap.set(s.id, { ...s, tareas: [] });
                 const padre = proyMap.get(s.id_proyecto);
                 if (padre) padre.subproyectos.push(s.id);
             });
-            // asignar tareas a subproyectos
             tareas.forEach(t => {
                 const subId = t.id_subproyecto;
                 const sub = subMap.get(subId);
                 if (sub) sub.tareas.push(t);
             });
 
-            // construir HTML jerárquico
             for (let [proyId, proy] of proyMap.entries()) {
                 const proyLi = document.createElement('li');
                 proyLi.className = 'collapsed';
@@ -714,12 +827,10 @@
                 treeRoot.appendChild(proyLi);
             }
 
-            // si no hay proyectos, mensaje
             if (proyMap.size === 0) {
                 treeRoot.innerHTML = '<li style="padding:1rem;">no hay proyectos cargados</li>';
             }
 
-            // eventos toggle
             document.querySelectorAll('.tree .toggle').forEach(t => {
                 t.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -734,6 +845,159 @@
             document.getElementById('tree-summary').innerText = `${proyectos.length} proyectos · ${subproyectos.length} sub · ${tareas.length} tareas`;
             document.getElementById('tree-stats-global').innerText = `${responsables.length} responsables`;
         }
+
+        // ========== TRADINGVIEW WIDGETS ==========
+        function initTradingViewWidgets() {
+            // Widget 1 - SPY por defecto
+            new TradingView.widget({
+                "container_id": "tradingview-chart1",
+                "width": "100%",
+                "height": "100%",
+                "symbol": "SPY",
+                "interval": "D",
+                "timezone": "America/Mexico_City",
+                "theme": "dark",
+                "style": "1",
+                "locale": "es",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "hide_side_toolbar": false,
+                "allow_symbol_change": true,
+                "save_image": false,
+                "studies": ["Volume@tv-basicstudies"],
+                "show_popup_button": true,
+                "popup_width": "1000",
+                "popup_height": "650"
+            });
+
+            // Widget 2 - QQQ por defecto
+            new TradingView.widget({
+                "container_id": "tradingview-chart2",
+                "width": "100%",
+                "height": "100%",
+                "symbol": "QQQ",
+                "interval": "D",
+                "timezone": "America/Mexico_City",
+                "theme": "dark",
+                "style": "1",
+                "locale": "es",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "hide_side_toolbar": false,
+                "allow_symbol_change": true,
+                "save_image": false,
+                "studies": ["Volume@tv-basicstudies"],
+                "show_popup_button": true,
+                "popup_width": "1000",
+                "popup_height": "650"
+            });
+
+            // Widget 3 - NASDAQ por defecto
+            new TradingView.widget({
+                "container_id": "tradingview-chart3",
+                "width": "100%",
+                "height": "100%",
+                "symbol": "NASDAQ",
+                "interval": "D",
+                "timezone": "America/Mexico_City",
+                "theme": "dark",
+                "style": "1",
+                "locale": "es",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "hide_side_toolbar": false,
+                "allow_symbol_change": true,
+                "save_image": false,
+                "studies": ["Volume@tv-basicstudies"],
+                "show_popup_button": true,
+                "popup_width": "1000",
+                "popup_height": "650"
+            });
+
+            // Widget 4 - BTCUSD por defecto
+            new TradingView.widget({
+                "container_id": "tradingview-chart4",
+                "width": "100%",
+                "height": "100%",
+                "symbol": "BTCUSD",
+                "interval": "D",
+                "timezone": "America/Mexico_City",
+                "theme": "dark",
+                "style": "1",
+                "locale": "es",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "hide_side_toolbar": false,
+                "allow_symbol_change": true,
+                "save_image": false,
+                "studies": ["Volume@tv-basicstudies"],
+                "show_popup_button": true,
+                "popup_width": "1000",
+                "popup_height": "650"
+            });
+
+            // Botones de cambio de símbolo
+            setupSymbolButtons();
+        }
+
+        function setupSymbolButtons() {
+            const widgets = [
+                { container: 'tradingview-chart1', defaultSymbol: 'SPY' },
+                { container: 'tradingview-chart2', defaultSymbol: 'QQQ' },
+                { container: 'tradingview-chart3', defaultSymbol: 'NASDAQ' },
+                { container: 'tradingview-chart4', defaultSymbol: 'BTCUSD' }
+            ];
+
+            document.querySelectorAll('.symbol-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const parent = this.closest('.tradingview-card');
+                    if (!parent) return;
+                    
+                    // Determinar qué widget está en esta card
+                    const widgetId = parent.querySelector('[id^="tradingview-chart"]').id;
+                    const symbol = this.dataset.symbol;
+                    
+                    // Actualizar botones activos en esta card
+                    parent.querySelectorAll('.symbol-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Recrear widget con nuevo símbolo (simplificado - en producción usar API de TradingView para cambiar símbolo)
+                    // Por simplicidad, recargamos el iframe (en una implementación real se usaría widget.chart().setSymbol())
+                    const container = document.getElementById(widgetId);
+                    container.innerHTML = ''; // Limpiar
+                    
+                    new TradingView.widget({
+                        "container_id": widgetId,
+                        "width": "100%",
+                        "height": "100%",
+                        "symbol": symbol,
+                        "interval": "D",
+                        "timezone": "America/Mexico_City",
+                        "theme": "dark",
+                        "style": "1",
+                        "locale": "es",
+                        "toolbar_bg": "#f1f3f6",
+                        "enable_publishing": false,
+                        "hide_side_toolbar": false,
+                        "allow_symbol_change": true,
+                        "save_image": false,
+                        "studies": ["Volume@tv-basicstudies"],
+                        "show_popup_button": true,
+                        "popup_width": "1000",
+                        "popup_height": "650"
+                    });
+                });
+            });
+        }
+
+        // Inicializar TradingView cuando se carga la página
+        window.addEventListener('load', function() {
+            if (typeof TradingView !== 'undefined') {
+                initTradingViewWidgets();
+            } else {
+                console.error('TradingView library not loaded');
+            }
+        });
     </script>
 </body>
 </html>
