@@ -162,6 +162,16 @@ function renderCurrentLevel() {
     document.getElementById('view-form-cuenta').classList.add('hidden');
     document.getElementById('view-form-programa').classList.add('hidden');
 
+    // Toggle main element layout for tarea_detail (needs its own scroll + sticky header)
+    var mainEl = document.querySelector('main');
+    if (currentNavLevel === 'tarea_detail') {
+        mainEl.classList.remove('overflow-y-auto');
+        mainEl.classList.add('overflow-hidden', 'flex', 'flex-col');
+    } else {
+        mainEl.classList.remove('overflow-hidden', 'flex', 'flex-col');
+        mainEl.classList.add('overflow-y-auto');
+    }
+
     if (currentNavLevel === 'home') {
         document.getElementById('view-global-tasks').classList.remove('hidden');
         renderGlobalTasksList();
@@ -237,7 +247,7 @@ function updateHeaderActions() {
 
 function updateFilterBar() {
     const bar = document.getElementById('filter-bar');
-    if (currentNavLevel === 'subproyecto' || currentNavLevel === 'tarea_detail') {
+    if (currentNavLevel === 'subproyecto') {
         bar.classList.remove('hidden');
         bar.style.display = 'block';
     } else {
@@ -474,8 +484,10 @@ function selectTareaDetalle(tareaId) {
 
 function renderTareaDetalle() {
     const container = document.getElementById('tarea-detalle-content');
+    const header = document.getElementById('tarea-doc-header');
     if (!container) return;
     if (!currentTarea) {
+        if (header) header.innerHTML = '';
         container.innerHTML = '<p class="text-slate-400">Selecciona una tarea en la barra lateral</p>';
         return;
     }
@@ -490,89 +502,94 @@ function renderTareaDetalle() {
     const canEdit = user && (user.role === 'director' || user.role === 'supervisor');
     const isSupervisor = user && (user.role === 'supervisor' || user.role === 'director');
     const isDirector = user && user.role === 'director';
-    const editBtn = canEdit
-        ? '<button onclick="openInlineEditForm(\'' + t.id + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">Editar</button>'
-        : '';
-    const duplicateBtn = isDirector
-        ? '<button onclick="duplicateTarea(\'' + t.id + '\')" class="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-amber-200">⧉ Duplicar</button>'
-        : '';
     const commentCount = comentarios.filter(function (c) { return c.id_tarea === t.id; }).length;
 
-    // Action buttons based on status
+    // ── Document header (sticky bar) ──────────────────────────────────────────
+    if (header) {
+        var editBtn = canEdit
+            ? '<button onclick="openInlineEditForm(\'' + t.id + '\')" class="ml-auto flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors flex-shrink-0">' +
+              '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>' +
+              'Editar</button>'
+            : '';
+        var dupBtn = isDirector
+            ? '<button onclick="duplicateTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-200 flex-shrink-0">⧉ Duplicar</button>'
+            : '';
+
+        header.innerHTML =
+            '<button onclick="navigateTo(\'subproyecto\')" class="flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 font-medium text-xs transition-colors flex-shrink-0 mr-1">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>Tablero</button>' +
+            '<span class="text-slate-200 text-sm">|</span>' +
+            '<span class="text-xs px-2 py-1 rounded-full font-bold flex-shrink-0 ' + prioColor + '">' + prioIcon + ' ' + (t.prioridad || 'media') + '</span>' +
+            '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex-shrink-0 ' + statusBadge.class + '">' + statusBadge.label + '</span>' +
+            '<span class="text-xs text-slate-600 flex-shrink-0 hidden sm:flex items-center gap-1">👤 ' + escapeHtml(respNombre) + '</span>' +
+            (t.fecha_limite ? '<span class="text-xs text-slate-500 flex-shrink-0 hidden sm:flex items-center gap-1">📅 ' + escapeHtml(t.fecha_limite) + '</span>' : '') +
+            dupBtn + editBtn;
+    }
+
+    // ── Action buttons based on status ────────────────────────────────────────
     let actionBtns = '';
     const isLocked = t.estatus === 'bloqueada';
     if (isLocked) {
-        if (isSupervisor) {
-            actionBtns = '<button onclick="desbloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 px-4 py-2 rounded-lg text-sm font-semibold">🔓 Desbloquear</button>';
-        } else {
-            actionBtns = '<span class="text-sm text-red-500 font-medium">🔒 Tarea bloqueada</span>';
-        }
+        actionBtns = isSupervisor
+            ? '<button onclick="desbloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-green-100 text-green-700 hover:bg-green-200 px-4 py-2 rounded-lg text-sm font-semibold">🔓 Desbloquear</button>'
+            : '<span class="text-sm text-red-500 font-medium">🔒 Tarea bloqueada</span>';
     } else if (t.estatus === 'pendiente') {
         actionBtns = '<button onclick="quickChangeEstatus(\'' + t.id + '\', \'en_curso\')" class="flex items-center gap-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 px-4 py-2 rounded-lg text-sm font-semibold">▶ Iniciar</button>';
-        if (isSupervisor) {
-            actionBtns += '<button onclick="bloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg text-sm font-semibold">🔒 Bloquear</button>';
-        }
+        if (isSupervisor) actionBtns += '<button onclick="bloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg text-sm font-semibold">🔒 Bloquear</button>';
     } else if (t.estatus === 'en_curso') {
         actionBtns = '<button onclick="quickChangeEstatus(\'' + t.id + '\', \'pendiente\')" class="flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-lg text-sm font-semibold">⏸ Pausar</button>' +
             '<button onclick="quickChangeEstatus(\'' + t.id + '\', \'en_revision\')" class="flex items-center gap-1.5 bg-amber-100 text-amber-700 hover:bg-amber-200 px-4 py-2 rounded-lg text-sm font-semibold">🔍 Enviar a revisión</button>';
-        if (isSupervisor) {
-            actionBtns += '<button onclick="bloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg text-sm font-semibold">🔒 Bloquear</button>';
-        }
-    } else if (t.estatus === 'en_revision') {
-        if (isSupervisor) {
-            actionBtns = '<button onclick="openAprobacionModal(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-4 py-2 rounded-lg text-sm font-semibold">✅ Aprobar / Rechazar</button>';
-        }
+        if (isSupervisor) actionBtns += '<button onclick="bloquearTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg text-sm font-semibold">🔒 Bloquear</button>';
+    } else if (t.estatus === 'en_revision' && isSupervisor) {
+        actionBtns = '<button onclick="openAprobacionModal(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-4 py-2 rounded-lg text-sm font-semibold">✅ Aprobar / Rechazar</button>';
     }
 
+    // ── Entregables section ────────────────────────────────────────────────────
     var entregables = Array.isArray(t.entregables) ? t.entregables : [];
-    var medioEntregaLabel = function (m, otro) {
+    var medioLabel = function (m, otro) {
         return ({ opcore: 'OpCore', drive: 'Drive', whatsapp: 'WhatsApp', correo: 'Correo', fisica: 'Física', otro: otro || 'Otro' })[m] || m;
     };
-    var entregablesHtml = (canEdit || entregables.length > 0) ?
-        '<div class="bg-slate-50 rounded-xl p-4 mb-6">' +
-        '<div class="flex items-center justify-between mb-3">' +
-        '<h3 class="font-semibold text-slate-700 text-sm uppercase tracking-wider">📋 Entregables (' + entregables.length + ')</h3>' +
-        (canEdit ? '<button onclick="openEntregableModal(\'' + t.id + '\')" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-indigo-700">+ Agregar</button>' : '') +
-        '</div>' +
-        (entregables.length > 0 ?
-            '<div class="space-y-2">' +
-            entregables.map(function (en) {
-                var editBtns = canEdit ?
-                    '<div class="flex gap-2 ml-2 flex-shrink-0">' +
-                    '<button onclick="openEntregableModal(\'' + t.id + '\', \'' + en.id + '\')" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Editar</button>' +
-                    '<button onclick="deleteEntregableItem(\'' + t.id + '\', \'' + en.id + '\')" class="text-xs text-red-400 hover:text-red-600 font-medium">✕</button>' +
-                    '</div>' : '';
-                return '<div class="bg-white rounded-lg border border-slate-200 p-3 flex items-start justify-between">' +
+    var entregablesSection = '';
+    if (canEdit || entregables.length > 0) {
+        var entRows = entregables.length > 0
+            ? entregables.map(function (en) {
+                var editBtns = canEdit
+                    ? '<button onclick="openEntregableModal(\'' + t.id + '\', \'' + en.id + '\')" class="opacity-0 group-hover:opacity-100 text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-opacity ml-2">Editar</button>' +
+                      '<button onclick="deleteEntregableItem(\'' + t.id + '\', \'' + en.id + '\')" class="opacity-0 group-hover:opacity-100 text-xs text-red-400 hover:text-red-600 font-medium transition-opacity ml-1">✕</button>'
+                    : '';
+                return '<div class="flex items-start gap-2.5 py-1.5 group">' +
+                    '<input type="checkbox" disabled class="mt-0.5 w-4 h-4 text-indigo-600 rounded flex-shrink-0 cursor-default">' +
                     '<div class="flex-1 min-w-0">' +
-                    '<p class="text-sm text-slate-700 font-medium leading-snug">' + escapeHtml(en.descripcion_entregable || '') + '</p>' +
-                    '<div class="flex flex-wrap gap-2 mt-1.5">' +
-                    (en.formato_requerido ? '<span class="inline-flex items-center text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">' + escapeHtml(en.formato_requerido) + '</span>' : '') +
-                    (en.medio_entrega ? '<span class="inline-flex items-center text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">📤 ' + escapeHtml(medioEntregaLabel(en.medio_entrega, en.medio_otro)) + '</span>' : '') +
-                    '</div>' +
+                    '<span class="text-sm text-slate-700">' + escapeHtml(en.descripcion_entregable || '') + '</span>' +
+                    (en.formato_requerido || en.medio_entrega ? '<span class="block text-xs text-slate-400 mt-0.5">' + (en.formato_requerido ? escapeHtml(en.formato_requerido) + ' · ' : '') + (en.medio_entrega ? medioLabel(en.medio_entrega, en.medio_otro) : '') + '</span>' : '') +
                     '</div>' + editBtns + '</div>';
-            }).join('') +
-            '</div>' : '<p class="text-sm text-slate-400 italic">Sin entregables definidos</p>') +
-        '</div>' : '';
+            }).join('')
+            : '<p class="text-sm text-slate-400 italic py-1">Sin entregables definidos</p>';
 
+        entregablesSection = '<div class="mb-6 pb-6 border-b border-slate-100">' +
+            '<div class="flex items-center justify-between mb-2">' +
+            '<h3 class="font-semibold text-slate-700 text-xs uppercase tracking-wider">📋 Entregables (' + entregables.length + ')</h3>' +
+            (canEdit ? '<button onclick="openEntregableModal(\'' + t.id + '\')" class="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-2 py-1 rounded-lg font-semibold">+ Agregar</button>' : '') +
+            '</div>' +
+            entRows +
+            '</div>';
+    }
+
+    // ── Document content ───────────────────────────────────────────────────────
     container.innerHTML =
-        '<div class="flex items-start justify-between mb-6">' +
-        '<div>' +
-        '<h2 class="text-2xl font-bold text-slate-800">' + (t.detalles || 'Sin título') + '</h2>' +
-        (t.asignacion ? '<p class="text-xs text-slate-400 font-mono mt-1">#' + t.asignacion + '</p>' : '') +
-        '</div>' +
-        '<div class="flex gap-2">' + editBtn + duplicateBtn + '</div>' +
-        '</div>' +
-        '<div class="flex flex-wrap gap-3 mb-6">' +
-        '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Prioridad</span><span class="text-xs px-2 py-0.5 rounded-full font-bold ' + prioColor + '">' + prioIcon + ' ' + (t.prioridad || 'media') + '</span></div>' +
-        '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Estado</span><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></div>' +
-        '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Responsable</span><span class="text-sm text-slate-700 font-medium">' + respNombre + '</span></div>' +
-        (t.fecha_limite ? '<div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"><span class="text-xs text-slate-500 font-medium">Vencimiento</span><span class="text-sm text-slate-700">📅 ' + t.fecha_limite + '</span></div>' : '') +
-        '</div>' +
-        (actionBtns ? '<div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-slate-200">' + actionBtns + '</div>' : '') +
-        (t.descripcion ? '<div class="bg-slate-50 rounded-xl p-4 mb-6"><h3 class="font-semibold text-slate-700 mb-2 text-sm uppercase tracking-wider">Descripción</h3><p class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">' + t.descripcion + '</p></div>' : '') +
+        // Big document title
+        '<h2 class="text-3xl font-bold text-slate-800 leading-tight mb-4">' + escapeHtml(t.detalles || 'Sin título') + '</h2>' +
+        (t.asignacion ? '<p class="text-xs text-slate-400 font-mono mb-4">#' + escapeHtml(t.asignacion) + '</p>' : '') +
+        // Action buttons
+        (actionBtns ? '<div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-slate-100">' + actionBtns + '</div>' : '') +
+        // Entregables (above description)
+        entregablesSection +
+        // Description
+        (t.descripcion ? '<div class="mb-6"><div class="text-slate-700 text-base leading-relaxed doc-editor" style="pointer-events:none">' + t.descripcion + '</div></div>' : '') +
+        // Attachments
         buildAdjuntosHtml_(t, isSupervisor) +
-        entregablesHtml +
-        '<div class="pt-4 border-t border-slate-200">' +
+        // Comments button
+        '<div class="pt-4 border-t border-slate-100">' +
         '<button onclick="showTareaComments(\'' + t.id + '\')" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">' +
         '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' +
         'Ver Comentarios (' + commentCount + ')' +
@@ -598,9 +615,10 @@ function openInlineEditForm(id) {
         alert('Esta tarea está bloqueada y no puede ser modificada.');
         return;
     }
+
     var respOptions = '<option value="">Sin asignar</option>';
     responsables.forEach(function (r) {
-        respOptions += '<option value="' + r.id + '"' + (t.id_responsable === r.id ? ' selected' : '') + '>' + r.nombre + ' (' + (r.rol || '') + ')</option>';
+        respOptions += '<option value="' + r.id + '"' + (t.id_responsable === r.id ? ' selected' : '') + '>' + escapeHtml(r.nombre) + '</option>';
     });
     var statusOpts =
         '<option value="pendiente"' + (t.estatus === 'pendiente' ? ' selected' : '') + '>Pendiente</option>' +
@@ -608,60 +626,107 @@ function openInlineEditForm(id) {
         '<option value="en_revision"' + (t.estatus === 'en_revision' ? ' selected' : '') + '>En Revisión</option>' +
         (isPrivileged ? '<option value="completado"' + (t.estatus === 'completado' ? ' selected' : '') + '>Completado</option><option value="bloqueada"' + (t.estatus === 'bloqueada' ? ' selected' : '') + '>🔒 Bloqueada</option>' : '');
 
+    // ── Sticky doc header ─────────────────────────────────────────────────────
+    var header = document.getElementById('tarea-doc-header');
+    if (header) {
+        var selectClass = 'px-2 py-1 rounded-md border border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:outline-none bg-white text-xs font-medium text-slate-700 cursor-pointer';
+        header.innerHTML =
+            '<button type="button" onclick="renderTareaDetalle()" class="flex items-center gap-1 text-slate-500 hover:text-slate-700 font-medium text-xs transition-colors flex-shrink-0 mr-1">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>Cancelar</button>' +
+            '<span class="text-slate-200 text-sm flex-shrink-0">|</span>' +
+            '<select id="inline_responsable" class="' + selectClass + '">' + respOptions + '</select>' +
+            '<select id="inline_prioridad" class="' + selectClass + '">' +
+            '<option value="alta"' + (t.prioridad === 'alta' ? ' selected' : '') + '>🔴 Alta</option>' +
+            '<option value="media"' + ((t.prioridad === 'media' || !t.prioridad) ? ' selected' : '') + '>🟡 Media</option>' +
+            '<option value="baja"' + (t.prioridad === 'baja' ? ' selected' : '') + '>🟢 Baja</option>' +
+            '</select>' +
+            '<select id="inline_estatus" class="' + selectClass + '">' + statusOpts + '</select>' +
+            '<input type="date" id="inline_fecha_limite" value="' + escapeHtml(t.fecha_limite || '') + '" class="' + selectClass + '">' +
+            '<button type="button" onclick="saveInlineTareaBtn(\'' + id + '\')" id="btn-save-inline-tarea" class="ml-auto flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex-shrink-0">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Guardar</button>';
+    }
+
+    // ── Inline entregables list ────────────────────────────────────────────────
+    var entregables = Array.isArray(t.entregables) ? t.entregables : [];
+    var inputClass = 'flex-1 bg-transparent border-b border-transparent hover:border-slate-200 focus:border-indigo-400 focus:outline-none text-sm py-1.5 text-slate-700 transition-colors';
+    var entRowsHtml = entregables.map(function (en) {
+        return '<div class="flex items-center gap-2 group" data-ent-row="1" data-ent-id="' + escapeHtml(en.id) + '" data-formato="' + escapeHtml(en.formato_requerido || '') + '" data-medio="' + escapeHtml(en.medio_entrega || 'opcore') + '" data-medio-otro="' + escapeHtml(en.medio_otro || '') + '">' +
+            '<input type="checkbox" class="w-4 h-4 text-indigo-600 rounded cursor-pointer flex-shrink-0">' +
+            '<input type="text" value="' + escapeHtml(en.descripcion_entregable || '') + '" placeholder="Describir entregable..." class="' + inputClass + '">' +
+            '<button type="button" onclick="this.closest(\'[data-ent-row]\').remove()" class="text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 text-sm leading-none">✕</button>' +
+            '</div>';
+    }).join('');
+
+    // ── Rich text editor: load existing description ───────────────────────────
+    var descContent = t.descripcion || '';
+
+    // ── Document content ───────────────────────────────────────────────────────
     var container = document.getElementById('tarea-detalle-content');
     container.innerHTML =
-        '<div class="flex items-center justify-between mb-6">' +
-        '<h2 class="text-xl font-bold text-slate-800">Editar Tarea</h2>' +
-        '<button type="button" onclick="renderTareaDetalle()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
+        // Big document title
+        '<textarea id="inline_detalles" class="doc-title mb-6" rows="2" placeholder="Título de la tarea..." required>' + escapeHtml(t.detalles || '') + '</textarea>' +
+        // Entregables section
+        '<div class="mb-6 pb-6 border-b border-slate-100">' +
+        '<div class="flex items-center justify-between mb-2">' +
+        '<h3 class="font-semibold text-slate-700 text-xs uppercase tracking-wider">📋 Entregables</h3>' +
         '</div>' +
-        '<form class="space-y-4" onsubmit="saveInlineTarea(event, \'' + id + '\')">' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Título / Detalles</label>' +
-        '<textarea id="inline_detalles" required rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none">' + (t.detalles || '') + '</textarea>' +
+        '<div id="inline-entregables-list" class="space-y-0.5">' + entRowsHtml + '</div>' +
+        '<button type="button" onclick="addInlineEntregable()" class="mt-2 flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-700 font-medium">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>' +
+        'Agregar entregable</button>' +
         '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción (larga, opcional)</label>' +
-        '<textarea id="inline_descripcion" rows="4" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none">' + (t.descripcion || '') + '</textarea>' +
+        // Rich text toolbar
+        '<div class="mb-2 pb-2 border-b border-slate-100 flex items-center gap-1">' +
+        '<button type="button" onclick="execFormatCmd(\'bold\')" class="toolbar-btn font-bold" title="Negrita">B</button>' +
+        '<button type="button" onclick="execFormatCmd(\'italic\')" class="toolbar-btn italic" title="Cursiva">I</button>' +
+        '<span class="text-slate-200 text-sm mx-1">|</span>' +
+        '<button type="button" onclick="execFormatCmd(\'insertUnorderedList\')" class="toolbar-btn" title="Lista">• Lista</button>' +
+        '<button type="button" onclick="execFormatCmd(\'insertOrderedList\')" class="toolbar-btn" title="Lista numerada">1. Lista</button>' +
         '</div>' +
+        // Contenteditable description
+        '<div id="inline_descripcion_rich" contenteditable="true" data-placeholder="Descripción, contexto, instrucciones…" class="doc-editor mb-6 text-slate-700 min-h-[160px]">' + descContent + '</div>' +
+        // Adjuntos
         buildInlineAdjuntosHtml(t, isPrivileged) +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Responsable</label>' +
-        '<select id="inline_responsable" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + respOptions + '</select>' +
-        '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Prioridad</label>' +
-        '<select id="inline_prioridad" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' +
-        '<option value="alta"' + (t.prioridad === 'alta' ? ' selected' : '') + '>🔴 Alta</option>' +
-        '<option value="media"' + ((t.prioridad === 'media' || !t.prioridad) ? ' selected' : '') + '>🟡 Media</option>' +
-        '<option value="baja"' + (t.prioridad === 'baja' ? ' selected' : '') + '>🟢 Baja</option>' +
-        '</select>' +
-        '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Estado</label>' +
-        '<select id="inline_estatus" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + statusOpts + '</select>' +
-        '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Fecha Límite</label>' +
-        '<input type="date" id="inline_fecha_limite" value="' + (t.fecha_limite || '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">' +
-        '</div>' +
-        '<div class="flex gap-3 pt-2">' +
-        '<button type="button" onclick="renderTareaDetalle()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
-        '<button type="submit" id="btn-save-inline-tarea" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>' +
-        '</div>' +
-        '<button type="button" onclick="deleteTareaInline(\'' + id + '\')" class="w-full mt-2 text-red-500 text-sm font-medium hover:underline' + (isPrivileged ? '' : ' hidden') + '">Eliminar Tarea</button>' +
-        '</form>';
+        // Delete (privileged)
+        (isPrivileged ? '<button type="button" onclick="deleteTareaInline(\'' + id + '\')" class="w-full mt-4 text-red-400 text-sm font-medium hover:text-red-600 hover:underline">Eliminar Tarea</button>' : '');
+
+    // Auto-resize title textarea
+    var titleEl = document.getElementById('inline_detalles');
+    if (titleEl) {
+        titleEl.style.height = 'auto';
+        titleEl.style.height = titleEl.scrollHeight + 'px';
+        titleEl.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
+    }
 }
 
 async function saveInlineTarea(e, id) {
     e.preventDefault();
+    await _doSaveInlineTarea(id);
+}
+
+async function saveInlineTareaBtn(id) {
+    await _doSaveInlineTarea(id);
+}
+
+async function _doSaveInlineTarea(id) {
     var t = tareas.find(function (x) { return x.id === id; });
     if (!t) return;
-    var id_responsable = document.getElementById('inline_responsable').value;
-    var prioridad = document.getElementById('inline_prioridad').value;
-    var estatus = document.getElementById('inline_estatus').value;
-    var detalles = document.getElementById('inline_detalles').value;
-    var descripcion = document.getElementById('inline_descripcion').value;
-    var fecha_limite = document.getElementById('inline_fecha_limite').value;
+    var id_responsable = document.getElementById('inline_responsable') ? document.getElementById('inline_responsable').value : t.id_responsable;
+    var prioridad = document.getElementById('inline_prioridad') ? document.getElementById('inline_prioridad').value : t.prioridad;
+    var estatus = document.getElementById('inline_estatus') ? document.getElementById('inline_estatus').value : t.estatus;
+    var detalles = document.getElementById('inline_detalles') ? document.getElementById('inline_detalles').value : t.detalles;
+    var fecha_limite = document.getElementById('inline_fecha_limite') ? document.getElementById('inline_fecha_limite').value : t.fecha_limite;
+    // Read rich text content
+    var descripcionEl = document.getElementById('inline_descripcion_rich');
+    var descripcion = descripcionEl ? normalizeRichTextContent(descripcionEl.innerHTML) : (document.getElementById('inline_descripcion') ? document.getElementById('inline_descripcion').value : t.descripcion);
+
+    if (!detalles || !detalles.trim()) {
+        alert('El título de la tarea no puede estar vacío.');
+        return;
+    }
 
     var data = {
         id: id,
@@ -687,6 +752,16 @@ async function saveInlineTarea(e, id) {
         if (estatusAnterior && estatusAnterior !== estatus) {
             sendWhatsAppNotification('🔄 TAREA ACTUALIZADA: *' + (detalles || id) + '*\n📊 Estado: ' + estatusAnterior + ' → ' + estatus + '\n📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
         }
+
+        // Sync inline entregables
+        var newEntregables = getInlineEntregables();
+        if (newEntregables !== null) {
+            var originalEntregables = Array.isArray(t.entregables) ? t.entregables : [];
+            await syncInlineEntregables(id, originalEntregables, newEntregables);
+            tareas[idx].entregables = newEntregables;
+            currentTarea = tareas[idx];
+        }
+
         renderTareasBoard();
         renderTareasList();
         var inlineAdjEl = document.getElementById('inline_adjuntos');
@@ -698,6 +773,98 @@ async function saveInlineTarea(e, id) {
         }
     } finally {
         showLoading(false);
+        setButtonLoading('btn-save-inline-tarea', false);
+    }
+}
+
+// ============================================
+// DOCUMENT EDITOR HELPERS
+// ============================================
+
+// Normalize rich text content — returns empty string for visually-empty editors
+function normalizeRichTextContent(html) {
+    if (!html) return '';
+    // Create a temporary element to get the plain text content
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    if (!tmp.textContent.trim()) return '';
+    return html;
+}
+
+// Execute rich text format command
+function execFormatCmd(cmd) {
+    document.getElementById('inline_descripcion_rich').focus();
+    document.execCommand(cmd, false, null);
+}
+
+// Add a new entregable row to the inline list
+function addInlineEntregable() {
+    var list = document.getElementById('inline-entregables-list');
+    if (!list) return;
+    var inputClass = 'flex-1 bg-transparent border-b border-transparent hover:border-slate-200 focus:border-indigo-400 focus:outline-none text-sm py-1.5 text-slate-700 transition-colors';
+    var row = document.createElement('div');
+    row.className = 'flex items-center gap-2 group';
+    row.setAttribute('data-ent-row', '1');
+    row.setAttribute('data-ent-id', '');
+    row.setAttribute('data-formato', '');
+    row.setAttribute('data-medio', 'opcore');
+    row.setAttribute('data-medio-otro', '');
+    row.innerHTML =
+        '<input type="checkbox" class="w-4 h-4 text-indigo-600 rounded cursor-pointer flex-shrink-0">' +
+        '<input type="text" placeholder="Describir entregable..." class="' + inputClass + '">' +
+        '<button type="button" onclick="this.closest(\'[data-ent-row]\').remove()" class="text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 text-sm leading-none">✕</button>';
+    list.appendChild(row);
+    var inp = row.querySelector('input[type="text"]');
+    if (inp) inp.focus();
+}
+
+// Read entregables from the inline edit form
+function getInlineEntregables() {
+    var list = document.getElementById('inline-entregables-list');
+    if (!list) return null;
+    var rows = list.querySelectorAll('[data-ent-row]');
+    return Array.from(rows).map(function (row) {
+        var inp = row.querySelector('input[type="text"]');
+        var chk = row.querySelector('input[type="checkbox"]');
+        var entId = row.getAttribute('data-ent-id');
+        return {
+            id: entId || ('ent_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)),
+            descripcion_entregable: inp ? inp.value.trim() : '',
+            completado: chk ? chk.checked : false,
+            formato_requerido: row.getAttribute('data-formato') || '',
+            medio_entrega: row.getAttribute('data-medio') || 'opcore',
+            medio_otro: row.getAttribute('data-medio-otro') || ''
+        };
+    }).filter(function (e) { return e.descripcion_entregable; });
+}
+
+// Sync entregables between original and new arrays
+async function syncInlineEntregables(tareaId, originalEntregables, newEntregables) {
+    var user = getCurrentUser();
+    var origIds = originalEntregables.map(function (e) { return e.id; });
+    var newIds = newEntregables.filter(function (e) { return e.id; }).map(function (e) { return e.id; });
+
+    // Delete removed
+    for (var orig of originalEntregables) {
+        if (!newIds.includes(orig.id)) {
+            await postToBackend('tarea_entregable_delete', { id_tarea: tareaId, entregableId: orig.id, id_actor: user ? user.id : '' });
+        }
+    }
+    // Add new or update changed
+    for (var newEnt of newEntregables) {
+        if (origIds.includes(newEnt.id)) {
+            var origEnt = originalEntregables.find(function (e) { return e.id === newEnt.id; });
+            if (origEnt && origEnt.descripcion_entregable !== newEnt.descripcion_entregable) {
+                // Preserve original fields, only update description
+                var updated = Object.assign({}, origEnt, { descripcion_entregable: newEnt.descripcion_entregable });
+                await postToBackend('tarea_entregable_update', { id_tarea: tareaId, entregable: updated, id_actor: user ? user.id : '' });
+                newEnt.formato_requerido = origEnt.formato_requerido;
+                newEnt.medio_entrega = origEnt.medio_entrega;
+                newEnt.medio_otro = origEnt.medio_otro;
+            }
+        } else {
+            await postToBackend('tarea_entregable_add', { id_tarea: tareaId, entregable: newEnt, id_actor: user ? user.id : '' });
+        }
     }
 }
 
@@ -722,7 +889,8 @@ function renderSubproyectos() {
         return;
     }
 
-    container.innerHTML = subs.map(function (s) {
+    container.innerHTML = '<div class="col-span-full mb-4"><button onclick="navigateTo(\'home\')" class="flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 font-medium text-sm transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg> Cuentas</button></div>' +
+    subs.map(function (s) {
         const taskCount = tareas.filter(function (t) { return t.id_subproyecto === s.id; }).length;
         const completadoCount = tareas.filter(function (t) { return t.id_subproyecto === s.id && t.estatus === 'completado'; }).length;
         const enRevisionCount = tareas.filter(function (t) { return t.id_subproyecto === s.id && t.estatus === 'en_revision'; }).length;
@@ -1396,56 +1564,70 @@ function openInlineNewTareaForm() {
 
     var respOptions = '<option value="">Sin asignar</option>';
     responsables.forEach(function (r) {
-        respOptions += '<option value="' + r.id + '">' + escapeHtml(r.nombre) + ' (' + escapeHtml(r.rol || '') + ')</option>';
+        respOptions += '<option value="' + r.id + '">' + escapeHtml(r.nombre) + '</option>';
     });
     var statusOpts = '<option value="pendiente">Pendiente</option><option value="en_curso">En Curso</option><option value="en_revision">En Revisión</option>' +
         (isPrivileged ? '<option value="completado">Completado</option><option value="bloqueada">🔒 Bloqueada</option>' : '');
 
+    var selectClass = 'px-2 py-1 rounded-md border border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:outline-none bg-white text-xs font-medium text-slate-700 cursor-pointer';
+
+    // Sticky doc header
+    var header = document.getElementById('tarea-doc-header');
+    if (header) {
+        header.innerHTML =
+            '<button type="button" onclick="closeTareaModal()" class="flex items-center gap-1 text-slate-500 hover:text-slate-700 font-medium text-xs transition-colors flex-shrink-0 mr-1">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>Cancelar</button>' +
+            '<span class="text-slate-200 text-sm flex-shrink-0">|</span>' +
+            '<select id="new_responsable" class="' + selectClass + '">' + respOptions + '</select>' +
+            '<select id="new_prioridad" class="' + selectClass + '">' +
+            '<option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option>' +
+            '</select>' +
+            '<select id="new_estatus" class="' + selectClass + '">' + statusOpts + '</select>' +
+            '<input type="date" id="new_fecha_limite" class="' + selectClass + '">' +
+            '<button type="button" onclick="saveInlineNewTareaBtn()" id="btn-save-new-tarea" class="ml-auto flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex-shrink-0">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>Guardar</button>';
+    }
+
+    var inputClass = 'flex-1 bg-transparent border-b border-transparent hover:border-slate-200 focus:border-indigo-400 focus:outline-none text-sm py-1.5 text-slate-700 transition-colors';
+
     var container = document.getElementById('tarea-detalle-content');
     container.innerHTML =
-        '<div class="flex items-center justify-between mb-6">' +
-        '<h2 class="text-xl font-bold text-slate-800">Nueva Tarea</h2>' +
-        '<button type="button" onclick="closeTareaModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
+        // Big title
+        '<textarea id="new_detalles" class="doc-title mb-6" rows="2" placeholder="Título de la nueva tarea..." required></textarea>' +
+        // Entregables
+        '<div class="mb-6 pb-6 border-b border-slate-100">' +
+        '<div class="flex items-center justify-between mb-2">' +
+        '<h3 class="font-semibold text-slate-700 text-xs uppercase tracking-wider">📋 Entregables</h3>' +
         '</div>' +
-        '<form class="space-y-4" onsubmit="saveInlineNewTarea(event)">' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Título / Detalles</label>' +
-        '<textarea id="new_detalles" required rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Describe la tarea..."></textarea>' +
+        '<div id="inline-entregables-list" class="space-y-0.5"></div>' +
+        '<button type="button" onclick="addInlineEntregable()" class="mt-2 flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-700 font-medium">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>' +
+        'Agregar entregable</button>' +
         '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción (larga, opcional)</label>' +
-        '<textarea id="new_descripcion" rows="4" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Información extendida, pasos, contexto, etc."></textarea>' +
+        // Rich text toolbar
+        '<div class="mb-2 pb-2 border-b border-slate-100 flex items-center gap-1">' +
+        '<button type="button" onclick="execFormatCmd(\'bold\')" class="toolbar-btn font-bold" title="Negrita">B</button>' +
+        '<button type="button" onclick="execFormatCmd(\'italic\')" class="toolbar-btn italic" title="Cursiva">I</button>' +
+        '<span class="text-slate-200 text-sm mx-1">|</span>' +
+        '<button type="button" onclick="execFormatCmd(\'insertUnorderedList\')" class="toolbar-btn" title="Lista">• Lista</button>' +
+        '<button type="button" onclick="execFormatCmd(\'insertOrderedList\')" class="toolbar-btn" title="Lista numerada">1. Lista</button>' +
         '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Adjuntos (opcional)</label>' +
+        // Contenteditable description
+        '<div id="inline_descripcion_rich" contenteditable="true" data-placeholder="Descripción, contexto, instrucciones…" class="doc-editor mb-6 text-slate-700 min-h-[160px]"></div>' +
+        // Adjuntos
+        '<div><label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Adjuntos (opcional)</label>' +
         '<input type="file" id="new_adjuntos" multiple class="w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">' +
-        '<p class="text-xs text-slate-400 mt-1">Los archivos nuevos se subirán a Drive al guardar</p>' +
-        '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Responsable</label>' +
-        '<select id="new_responsable" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + respOptions + '</select>' +
-        '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Prioridad</label>' +
-        '<select id="new_prioridad" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' +
-        '<option value="alta">🔴 Alta</option>' +
-        '<option value="media" selected>🟡 Media</option>' +
-        '<option value="baja">🟢 Baja</option>' +
-        '</select>' +
-        '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Estado</label>' +
-        '<select id="new_estatus" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">' + statusOpts + '</select>' +
-        '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Fecha Límite</label>' +
-        '<input type="date" id="new_fecha_limite" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">' +
-        '</div>' +
-        '<div class="flex gap-3 pt-2">' +
-        '<button type="button" onclick="closeTareaModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
-        '<button type="submit" id="btn-save-new-tarea" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>' +
-        '</div>' +
-        '</form>';
+        '<p class="text-xs text-slate-400 mt-1">Los archivos se subirán a Drive al guardar</p></div>';
+
+    var titleEl = document.getElementById('new_detalles');
+    if (titleEl) {
+        titleEl.style.height = 'auto';
+        titleEl.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
+        titleEl.focus();
+    }
 }
 
 function closeTareaModal() {
@@ -1457,13 +1639,23 @@ function closeTareaModal() {
 }
 
 async function saveInlineNewTarea(e) {
-    e.preventDefault();
-    var id_responsable = document.getElementById('new_responsable').value;
-    var prioridad = document.getElementById('new_prioridad').value;
-    var estatus = document.getElementById('new_estatus').value;
-    var detalles = document.getElementById('new_detalles').value;
-    var descripcion = document.getElementById('new_descripcion').value;
-    var fecha_limite = document.getElementById('new_fecha_limite').value;
+    if (e) e.preventDefault();
+    await saveInlineNewTareaBtn();
+}
+
+async function saveInlineNewTareaBtn() {
+    var id_responsable = document.getElementById('new_responsable') ? document.getElementById('new_responsable').value : '';
+    var prioridad = document.getElementById('new_prioridad') ? document.getElementById('new_prioridad').value : 'media';
+    var estatus = document.getElementById('new_estatus') ? document.getElementById('new_estatus').value : 'pendiente';
+    var detalles = document.getElementById('new_detalles') ? document.getElementById('new_detalles').value : '';
+    var fecha_limite = document.getElementById('new_fecha_limite') ? document.getElementById('new_fecha_limite').value : '';
+    var descripcionEl = document.getElementById('inline_descripcion_rich');
+    var descripcion = descripcionEl ? normalizeRichTextContent(descripcionEl.innerHTML) : '';
+
+    if (!detalles || !detalles.trim()) {
+        alert('El título de la tarea no puede estar vacío.');
+        return;
+    }
 
     var timestamp = Date.now();
     var detallesClean = detalles.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20);
@@ -1498,6 +1690,13 @@ async function saveInlineNewTarea(e) {
         await postToBackend('tarea_add', data);
         sendWhatsAppNotification('📋 NUEVA TAREA: *' + (detalles || nuevoId) + '*\n' + (currentSubproyecto ? '📁 Programa: ' + currentSubproyecto.nombre + '\n' : '') + '📅 ' + new Date().toLocaleString('es-ES') + '\n🔗 ' + PANEL_URL);
 
+        // Save inline entregables
+        var newEntregables = getInlineEntregables();
+        if (newEntregables && newEntregables.length > 0) {
+            await syncInlineEntregables(nuevoId, [], newEntregables);
+            data.entregables = newEntregables;
+        }
+
         var adjuntosEl = document.getElementById('new_adjuntos');
         if (adjuntosEl && adjuntosEl.files && adjuntosEl.files.length > 0) {
             await uploadAttachments(nuevoId, adjuntosEl.files);
@@ -1509,6 +1708,7 @@ async function saveInlineNewTarea(e) {
         }
     } finally {
         showLoading(false);
+        setButtonLoading('btn-save-new-tarea', false);
     }
 }
 
@@ -1552,6 +1752,15 @@ function openEntregableModal(tareaId, entId) {
     var medioValue = en ? (en.medio_entrega || 'opcore') : 'opcore';
     var otroValue = en ? (en.medio_otro || '') : '';
     var showOtro = medioValue === 'otro';
+
+    // Update doc header with minimal cancel button
+    var header = document.getElementById('tarea-doc-header');
+    if (header) {
+        header.innerHTML =
+            '<button type="button" onclick="closeEntregableModal()" class="flex items-center gap-1 text-slate-500 hover:text-slate-700 font-medium text-xs transition-colors flex-shrink-0">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>' +
+            '← ' + (entId ? 'Editar Entregable' : 'Nuevo Entregable') + '</button>';
+    }
 
     var container = document.getElementById('tarea-detalle-content');
     container.innerHTML =
@@ -1680,6 +1889,15 @@ function showTareaComments(tareaId) {
         renderCurrentLevel();
     }
 
+    // Update doc header
+    var header = document.getElementById('tarea-doc-header');
+    if (header) {
+        header.innerHTML =
+            '<button type="button" onclick="closeCommentsModal()" class="flex items-center gap-1 text-slate-500 hover:text-slate-700 font-medium text-xs transition-colors flex-shrink-0">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>← Volver a tarea</button>' +
+            '<span class="text-slate-500 text-xs ml-2 truncate">' + escapeHtml((tarea.detalles || '').substring(0, 50)) + '</span>';
+    }
+
     const tareaComments = comentarios.filter(function (c) { return c.id_tarea === tareaId; });
 
     const commentsHtml = tareaComments.length === 0
@@ -1697,16 +1915,11 @@ function showTareaComments(tareaId) {
 
     const container = document.getElementById('tarea-detalle-content');
     container.innerHTML =
-        '<div class="flex items-center justify-between mb-6">' +
-        '<h2 class="text-xl font-bold text-slate-800">Comentarios</h2>' +
-        '<button type="button" onclick="closeCommentsModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cerrar</button>' +
-        '</div>' +
-        '<p class="text-sm text-slate-500 mb-4">' + escapeHtml((tarea.detalles || '').substring(0, 60)) + '</p>' +
-        '<div class="space-y-3 max-h-[50vh] overflow-y-auto mb-4">' + commentsHtml + '</div>' +
+        '<h3 class="font-bold text-slate-800 text-lg mb-4">Comentarios</h3>' +
+        '<div class="space-y-3 mb-4">' + commentsHtml + '</div>' +
         '<div class="border-t border-slate-200 pt-4">' +
         '<textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm" placeholder="Escribe tu comentario..."></textarea>' +
-        '<div class="flex justify-between mt-2">' +
-        '<button onclick="closeCommentsModal()" class="text-sm text-slate-400 hover:text-slate-600 font-medium">← Volver a tarea</button>' +
+        '<div class="flex justify-end mt-2">' +
         '<button onclick="addTareaComment(\'' + tareaId + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Enviar</button>' +
         '</div>' +
         '</div>';
@@ -1751,15 +1964,20 @@ function openAprobacionModal(tareaId) {
         renderCurrentLevel();
     }
 
+    // Update doc header
+    var header = document.getElementById('tarea-doc-header');
+    if (header) {
+        header.innerHTML =
+            '<button type="button" onclick="closeAprobacionModal()" class="flex items-center gap-1 text-slate-500 hover:text-slate-700 font-medium text-xs transition-colors flex-shrink-0">' +
+            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>← Revisar Tarea</button>' +
+            '<span class="text-slate-500 text-xs ml-2 font-medium truncate">' + escapeHtml((tarea.detalles || '').substring(0, 50)) + '</span>';
+    }
+
     const container = document.getElementById('tarea-detalle-content');
     container.innerHTML =
-        '<div class="flex items-center justify-between mb-6">' +
-        '<h2 class="text-xl font-bold text-slate-800">Revisar Tarea</h2>' +
-        '<button type="button" onclick="closeAprobacionModal()" class="text-slate-400 hover:text-slate-600 text-sm font-medium">✕ Cancelar</button>' +
-        '</div>' +
+        '<h3 class="font-bold text-slate-800 text-lg mb-4">Revisar Tarea</h3>' +
         '<div class="space-y-4">' +
         '<input type="hidden" id="aprobacionTareaId" value="' + escapeHtml(tareaId) + '">' +
-        '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm text-slate-700">' + escapeHtml(tarea.detalles || '') + '</div>' +
         '<div>' +
         '<label class="block text-sm font-bold text-slate-700 mb-1">Observaciones (opcional)</label>' +
         '<textarea id="aprobacionObservaciones" rows="3" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Añade observaciones..."></textarea>' +
