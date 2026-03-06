@@ -247,12 +247,7 @@ function updateHeaderActions() {
 
 function updateFilterBar() {
     const bar = document.getElementById('filter-bar');
-    if (currentNavLevel === 'subproyecto') {
-        bar.classList.remove('hidden');
-        bar.style.display = 'block';
-    } else {
-        bar.classList.add('hidden');
-    }
+    if (bar) bar.classList.add('hidden');
 }
 
 // ============================================
@@ -580,21 +575,56 @@ function renderTareaDetalle() {
         // Big document title
         '<h2 class="text-3xl font-bold text-slate-800 leading-tight mb-4">' + escapeHtml(t.detalles || 'Sin título') + '</h2>' +
         (t.asignacion ? '<p class="text-xs text-slate-400 font-mono mb-4">#' + escapeHtml(t.asignacion) + '</p>' : '') +
-        // Action buttons
-        (actionBtns ? '<div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-slate-100">' + actionBtns + '</div>' : '') +
+        // Action buttons (right-aligned)
+        (actionBtns ? '<div class="flex flex-wrap gap-2 mb-6 pb-6 border-b border-slate-100 justify-end">' + actionBtns + '</div>' : '') +
         // Entregables (above description)
         entregablesSection +
         // Description
         (t.descripcion ? '<div class="mb-6"><div class="text-slate-700 text-base leading-relaxed doc-editor" style="pointer-events:none">' + t.descripcion + '</div></div>' : '') +
         // Attachments
-        buildAdjuntosHtml_(t, isSupervisor) +
-        // Comments button
-        '<div class="pt-4 border-t border-slate-100">' +
-        '<button onclick="showTareaComments(\'' + t.id + '\')" class="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium">' +
-        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>' +
-        'Ver Comentarios (' + commentCount + ')' +
-        '</button>' +
-        '</div>';
+        buildAdjuntosHtml_(t, isSupervisor);
+
+    // ── Comments panel (right column) ─────────────────────────────────────────
+    renderTareaCommentsPanel(t.id);
+}
+
+function renderTareaCommentsPanel(tareaId) {
+    var listEl = document.getElementById('tarea-comments-list');
+    var inputEl = document.getElementById('tarea-comments-input-area');
+    var countEl = document.getElementById('tarea-comments-count');
+    if (!listEl) return;
+
+    if (!tareaId) {
+        listEl.innerHTML = '<p class="text-center text-slate-400 text-sm py-4">Selecciona una tarea</p>';
+        if (inputEl) inputEl.innerHTML = '';
+        if (countEl) countEl.textContent = '';
+        return;
+    }
+
+    var tareaComments = comentarios.filter(function (c) { return c.id_tarea === tareaId; });
+
+    if (countEl) countEl.textContent = tareaComments.length + ' comentario' + (tareaComments.length !== 1 ? 's' : '');
+
+    listEl.innerHTML = tareaComments.length === 0
+        ? '<p class="text-center text-slate-400 text-sm py-4">No hay comentarios aún</p>'
+        : tareaComments.map(function (c) {
+            var resp = responsables.find(function (r) { return r.id === c.id_responsable; });
+            return '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200">' +
+                '<div class="flex justify-between items-start mb-1">' +
+                '<span class="font-bold text-xs text-indigo-600">' + escapeHtml(resp ? resp.nombre : c.id_responsable) + '</span>' +
+                '<span class="text-[10px] text-slate-400">' + escapeHtml(c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span>' +
+                '</div>' +
+                '<p class="text-sm text-slate-700">' + escapeHtml(c.comentario) + '</p>' +
+                '</div>';
+        }).join('');
+
+    if (inputEl) {
+        inputEl.innerHTML =
+            '<textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm resize-none" placeholder="Escribe tu comentario..."></textarea>' +
+            '<div class="flex justify-end mt-2">' +
+            '<button onclick="addTareaComment(\'' + tareaId + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Enviar</button>' +
+            '</div>';
+    }
 }
 
 function selectTareaDetalleAndEdit(tareaId) {
@@ -944,7 +974,8 @@ function getTareasActuales() {
 }
 
 function renderTareasBoard() {
-    const cols = ['en_curso', 'pendiente', 'en_revision', 'completado', 'bloqueada'];
+    const cols = ['en_curso', 'en_revision', 'completado', 'pendiente', 'bloqueada'];
+    const priorityOrder = { alta: 0, media: 1, baja: 2 };
     const tareasActuales = getTareasActuales();
     const user = getCurrentUser();
     const isSupervisor = user && user.role === 'supervisor';
@@ -955,6 +986,9 @@ function renderTareasBoard() {
         if (!container) return;
         container.innerHTML = '';
         const filtered = tareasActuales.filter(function (t) { return t.estatus === col; });
+        filtered.sort(function (a, b) {
+            return (priorityOrder[a.prioridad] ?? 3) - (priorityOrder[b.prioridad] ?? 3);
+        });
         document.getElementById('count-' + col).innerText = filtered.length;
         filtered.forEach(function (tarea) {
             const card = createTareaCard(tarea, isSupervisor, isDirector);
@@ -1889,40 +1923,12 @@ function showTareaComments(tareaId) {
         renderCurrentLevel();
     }
 
-    // Update doc header
-    var header = document.getElementById('tarea-doc-header');
-    if (header) {
-        header.innerHTML =
-            '<button type="button" onclick="closeCommentsModal()" class="flex items-center gap-1 text-slate-500 hover:text-slate-700 font-medium text-xs transition-colors flex-shrink-0">' +
-            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>← Volver a tarea</button>' +
-            '<span class="text-slate-500 text-xs ml-2 truncate">' + escapeHtml((tarea.detalles || '').substring(0, 50)) + '</span>';
+    // Focus the comment input in the side panel
+    var inputEl = document.getElementById('tarea-comments-input-area');
+    if (inputEl) {
+        var textarea = inputEl.querySelector('textarea');
+        if (textarea) textarea.focus();
     }
-
-    const tareaComments = comentarios.filter(function (c) { return c.id_tarea === tareaId; });
-
-    const commentsHtml = tareaComments.length === 0
-        ? '<p class="text-center text-slate-400 py-4">No hay comentarios aún</p>'
-        : tareaComments.map(function (c) {
-            const resp = responsables.find(function (r) { return r.id === c.id_responsable; });
-            return '<div class="bg-slate-50 p-3 rounded-lg border border-slate-200">' +
-                '<div class="flex justify-between items-start mb-1">' +
-                '<span class="font-bold text-xs text-indigo-600">' + escapeHtml(resp ? resp.nombre : c.id_responsable) + '</span>' +
-                '<span class="text-[10px] text-slate-400">' + escapeHtml(c.fecha ? new Date(c.fecha).toLocaleString() : '') + '</span>' +
-                '</div>' +
-                '<p class="text-sm text-slate-700">' + escapeHtml(c.comentario) + '</p>' +
-                '</div>';
-        }).join('');
-
-    const container = document.getElementById('tarea-detalle-content');
-    container.innerHTML =
-        '<h3 class="font-bold text-slate-800 text-lg mb-4">Comentarios</h3>' +
-        '<div class="space-y-3 mb-4">' + commentsHtml + '</div>' +
-        '<div class="border-t border-slate-200 pt-4">' +
-        '<textarea id="new-comment" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm" placeholder="Escribe tu comentario..."></textarea>' +
-        '<div class="flex justify-end mt-2">' +
-        '<button onclick="addTareaComment(\'' + tareaId + '\')" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Enviar</button>' +
-        '</div>' +
-        '</div>';
 }
 
 async function addTareaComment(tareaId) {
@@ -1941,14 +1947,27 @@ async function addTareaComment(tareaId) {
     try {
         await postToBackend('comentario_add', commentData);
         comentarios.push(commentData);
-        showTareaComments(tareaId);
+
+        // WhatsApp notification for new comment
+        const tarea = tareas.find(function (t) { return t.id === tareaId; });
+        const senderName = resp ? resp.nombre : (currentUser ? currentUser.name : 'Alguien');
+        sendWhatsAppNotification(
+            '💬 NUEVO COMENTARIO\n' +
+            '📋 Tarea: *' + (tarea ? tarea.detalles : tareaId) + '*\n' +
+            '👤 De: ' + senderName + '\n' +
+            '💬 ' + text + '\n' +
+            '📅 ' + new Date().toLocaleString('es-ES') + '\n' +
+            '🔗 ' + PANEL_URL
+        );
+
+        renderTareaCommentsPanel(tareaId);
     } finally {
         showLoading(false);
     }
 }
 
 function closeCommentsModal() {
-    if (currentNavLevel === 'tarea_detail') renderTareaDetalle();
+    // Comments are now always visible in the side panel; nothing to close
 }
 
 // ============================================
