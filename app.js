@@ -27,11 +27,24 @@ let currentUserFilter = '';
 let currentPriorityFilter = '';
 let currentStatusFilter = '';
 
+// Portapapeles de tareas (copy-paste entre programas/cuentas)
+let tareaClipboard = null;
+
 // ============================================
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', function () {
     checkCurrentUser();
+    // Restaurar portapapeles desde localStorage
+    try {
+        var stored = localStorage.getItem('tareaClipboard');
+        if (stored) {
+            var parsed = JSON.parse(stored);
+            if (parsed && typeof parsed === 'object' && typeof parsed.detalles === 'string') {
+                tareaClipboard = parsed;
+            }
+        }
+    } catch (e) { tareaClipboard = null; }
     renderCurrentLevel(); // Render initial state immediately
     refreshData();        // Then load data from backend
     const ganttScrollArea = document.getElementById('gantt-scroll-area');
@@ -239,7 +252,10 @@ function updateHeaderActions() {
     if (currentNavLevel === 'proyecto' && isDirector) {
         extraBtns = '<button onclick="openSubproyectoModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nuevo Programa</button>';
     } else if ((currentNavLevel === 'subproyecto' || currentNavLevel === 'tarea_detail') && isDirector) {
-        extraBtns = '<button onclick="openTareaModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nueva Tarea</button>';
+        var pasteBtn = tareaClipboard
+            ? '<button onclick="pasteTareaFromClipboard()" id="btn-pegar-tarea" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm" title="Pegar tarea copiada: ' + escapeHtml(tareaClipboard.detalles || '') + '"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg> Pegar Tarea</button>'
+            : '';
+        extraBtns = pasteBtn + '<button onclick="openTareaModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg> Nueva Tarea</button>';
     }
 
     container.innerHTML = extraBtns + '<button onclick="refreshData()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-medium shadow-sm transition-all text-sm">Actualizar</button><a href="admin.html" class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Usuarios</a><a href="index.html" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1">📄 Documentación</a>';
@@ -509,6 +525,9 @@ function renderTareaDetalle() {
         var dupBtn = isDirector
             ? '<button onclick="duplicateTarea(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-200 flex-shrink-0">⧉ Duplicar</button>'
             : '';
+        var copyBtn = isDirector
+            ? '<button onclick="copyTareaToClipboard(\'' + t.id + '\')" class="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-slate-200 flex-shrink-0" title="Copiar tarea para pegar en otro programa"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg> Copiar</button>'
+            : '';
 
         header.innerHTML =
             '<button onclick="navigateTo(\'subproyecto\')" class="flex items-center gap-1.5 text-slate-500 hover:text-indigo-600 font-medium text-xs transition-colors flex-shrink-0 mr-1">' +
@@ -518,7 +537,7 @@ function renderTareaDetalle() {
             '<span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex-shrink-0 ' + statusBadge.class + '">' + statusBadge.label + '</span>' +
             '<span class="text-xs text-slate-600 flex-shrink-0 hidden sm:flex items-center gap-1">👤 ' + escapeHtml(respNombre) + '</span>' +
             (t.fecha_limite ? '<span class="text-xs text-slate-500 flex-shrink-0 hidden sm:flex items-center gap-1">📅 ' + escapeHtml(t.fecha_limite) + '</span>' : '') +
-            dupBtn + editBtn;
+            dupBtn + copyBtn + editBtn;
     }
 
     // ── Action buttons based on status ────────────────────────────────────────
@@ -1021,6 +1040,7 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
     const isSupervisorOrDirector = isSupervisor || isDirector;
     const canEdit = isSupervisorOrDirector && !isLocked;
     const duplicateBtnHtml = isDirector ? '<button onclick="event.stopPropagation(); duplicateTarea(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-amber-100 hover:text-amber-600 p-1 rounded" title="Duplicar">⧉</button>' : '';
+    const copyBtnHtml = isDirector ? '<button onclick="event.stopPropagation(); copyTareaToClipboard(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-200 hover:text-slate-700 p-1 rounded" title="Copiar tarea"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg></button>' : '';
 
     // NUEVO: botón de descripción
     const hasDesc = (tarea.descripcion || '').trim().length > 0;
@@ -1056,7 +1076,7 @@ function createTareaCard(tarea, isSupervisor, isDirector) {
     card.innerHTML =
         '<div class="flex items-start justify-between mb-2">' +
         '<span class="text-xs font-bold px-2 py-0.5 rounded-full ' + prioColor + '">' + prioIcon + ' ' + (tarea.prioridad || 'media') + '</span>' +
-        '<div class="flex gap-1">' + descBtnHtml + commentBtnHtml + lockBtnHtml + unlockBtnHtml + editBtnHtml + duplicateBtnHtml + '</div>' +
+        '<div class="flex gap-1">' + descBtnHtml + commentBtnHtml + lockBtnHtml + unlockBtnHtml + editBtnHtml + duplicateBtnHtml + copyBtnHtml + '</div>' +
         '</div>' +
         '<p class="text-sm text-slate-700 mb-1 leading-snug">' + (tarea.detalles || 'Sin detalles') + '</p>' +
         asignacionHtml +
@@ -1096,6 +1116,10 @@ function renderTareasList() {
             ? '<button onclick="event.stopPropagation(); duplicateTarea(\'' + tarea.id + '\')" class="text-amber-600 hover:bg-amber-50 p-2 rounded-lg text-xs font-bold uppercase">Duplicar</button>'
             : '';
 
+        const copyBtn = isDirector
+            ? '<button onclick="event.stopPropagation(); copyTareaToClipboard(\'' + tarea.id + '\')" class="text-slate-600 hover:bg-slate-100 p-2 rounded-lg text-xs font-bold uppercase">Copiar</button>'
+            : '';
+
         const hasDesc = (tarea.descripcion || '').trim().length > 0;
         const descBtn = hasDesc
             ? '<button onclick="event.stopPropagation(); showTareaDescripcion(\'' + tarea.id + '\')" class="text-slate-400 hover:bg-slate-100 p-2 rounded-lg" title="Ver descripción">📝</button>'
@@ -1115,7 +1139,7 @@ function renderTareasList() {
             '<td class="p-4 text-center"><span class="text-xs px-2 py-1 rounded-full font-bold ' + prioColor + '">' + getPriorityIcon(tarea.prioridad) + ' ' + (tarea.prioridad || 'media') + '</span></td>' +
             '<td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ' + statusBadge.class + '">' + statusBadge.label + '</span></td>' +
             '<td class="p-4 text-center text-slate-500 text-sm">' + (tarea.fecha_limite || '-') + '</td>' +
-            '<td class="p-4 text-right"><div class="flex gap-1 justify-end">' + descBtn + editBtn + duplicateBtn + '</div></td>';
+            '<td class="p-4 text-right"><div class="flex gap-1 justify-end">' + descBtn + editBtn + duplicateBtn + copyBtn + '</div></td>';
 
         container.appendChild(tr);
     });
@@ -2106,6 +2130,121 @@ async function duplicateTarea(tareaId) {
         showLoading(false);
     }
 }
+
+// ============================================
+// PORTAPAPELES DE TAREAS (COPY-PASTE)
+// ============================================
+
+function copyTareaToClipboard(tareaId) {
+    const user = getCurrentUser();
+    if (!user || user.role !== 'director') {
+        alert('Solo el director puede copiar tareas.');
+        return;
+    }
+    const tarea = tareas.find(function (t) { return t.id === tareaId; });
+    if (!tarea) return;
+
+    // Guardar copia en portapapeles (sin adjuntos, solo datos de la tarea)
+    tareaClipboard = {
+        detalles: tarea.detalles || '',
+        descripcion: tarea.descripcion || '',
+        prioridad: tarea.prioridad || 'media',
+        id_responsable: tarea.id_responsable || '',
+        fecha_limite: tarea.fecha_limite || '',
+        entregables: Array.isArray(tarea.entregables) ? JSON.parse(JSON.stringify(tarea.entregables)) : [],
+        _origen_id: tarea.id,
+        _origen_subproyecto: tarea.id_subproyecto || ''
+    };
+
+    try { localStorage.setItem('tareaClipboard', JSON.stringify(tareaClipboard)); } catch (e) {}
+
+    // Actualizar botón de pegar en el header
+    updateHeaderActions();
+
+    // Feedback visual
+    alert('✅ Tarea "' + (tarea.detalles || tarea.id) + '" copiada al portapapeles.\nNavega a otro programa y usa "Pegar Tarea" para insertarla.');
+}
+
+async function pasteTareaFromClipboard() {
+    const user = getCurrentUser();
+    if (!user || user.role !== 'director') {
+        alert('Solo el director puede pegar tareas.');
+        return;
+    }
+    if (!tareaClipboard) {
+        alert('No hay ninguna tarea en el portapapeles. Primero copia una tarea.');
+        return;
+    }
+    if (!currentSubproyecto) {
+        alert('Selecciona un programa de destino antes de pegar.');
+        return;
+    }
+
+    const destNombre = currentSubproyecto.nombre || currentSubproyecto.id;
+    const origenInfo = tareaClipboard._origen_subproyecto
+        ? (function () {
+            const sub = subproyectos.find(function (s) { return s.id === tareaClipboard._origen_subproyecto; });
+            if (!sub) return '';
+            const proy = proyectos.find(function (p) { return p.id === sub.id_proyecto; });
+            return ' (origen: ' + (proy ? proy.nombre + ' > ' : '') + sub.nombre + ')';
+        }())
+        : '';
+
+    if (!confirm('¿Pegar la tarea "' + tareaClipboard.detalles + '"' + origenInfo + ' en el programa "' + destNombre + '"?')) return;
+
+    const timestamp = Date.now();
+    const detallesClean = (tareaClipboard.detalles || '').toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20);
+    var nuevoId = [
+        currentProyecto ? currentProyecto.id : 'sin_proyecto',
+        currentSubproyecto.id,
+        timestamp,
+        tareaClipboard.id_responsable || 'sin_responsable',
+        tareaClipboard.prioridad || 'media',
+        'pendiente',
+        detallesClean || 'sin_detalles'
+    ].join('.');
+    if (tareaIdExists(nuevoId)) nuevoId = nuevoId + '.' + timestamp;
+
+    const nuevaTarea = {
+        id: nuevoId,
+        id_subproyecto: currentSubproyecto.id,
+        id_responsable: tareaClipboard.id_responsable || '',
+        prioridad: tareaClipboard.prioridad || 'media',
+        estatus: 'pendiente',
+        detalles: tareaClipboard.detalles + ' (pegada)',
+        descripcion: tareaClipboard.descripcion || '',
+        adjuntos: [],
+        entregables: [],
+        fecha_inicio: new Date().toISOString().split('T')[0],
+        fecha_limite: tareaClipboard.fecha_limite || ''
+    };
+
+    showLoading(true);
+    try {
+        tareas.push(nuevaTarea);
+        await postToBackend('tarea_add', nuevaTarea);
+
+        // Copiar entregables si los hay
+        if (tareaClipboard.entregables && tareaClipboard.entregables.length > 0) {
+            var entBase = Date.now();
+            var entregablesCopy = tareaClipboard.entregables.map(function (en, idx) {
+                return Object.assign({}, en, { id: 'ent_' + entBase + '_' + idx });
+            });
+            await syncInlineEntregables(nuevoId, [], entregablesCopy);
+            nuevaTarea.entregables = entregablesCopy;
+        }
+
+        currentTarea = nuevaTarea;
+        currentNavLevel = 'tarea_detail';
+        renderCurrentLevel();
+        renderTareasBoard();
+        renderTareasList();
+    } finally {
+        showLoading(false);
+    }
+}
+
+
 function updateUserFilterSelect() {
     const select = document.getElementById('filterUser');
     if (!select) return;
