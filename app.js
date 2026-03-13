@@ -47,6 +47,11 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (e) { tareaClipboard = null; }
     renderCurrentLevel(); // Render initial state immediately
     refreshData();        // Then load data from backend
+    // Fetch version from version.json
+    fetch('version.json').then(function (r) { return r.json(); }).then(function (v) {
+        var el = document.getElementById('app-version-display');
+        if (el && v && v.version) el.textContent = 'OPCore v' + v.version;
+    }).catch(function (e) { console.warn('No se pudo cargar version.json:', e); });
     const ganttScrollArea = document.getElementById('gantt-scroll-area');
     if (ganttScrollArea) {
         ganttScrollArea.addEventListener('scroll', function (e) {
@@ -421,16 +426,26 @@ function renderGlobalTasksList() {
     const container = document.getElementById('view-global-tasks');
     if (!container) return;
 
-    if (tareas.length === 0) {
-        container.innerHTML = '<div class="text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay tareas aún</p><p class="text-sm">Selecciona una cuenta y abre un programa para empezar</p></div>';
+    // Exclude completed and blocked tasks; order: en_revision → en_curso → pendiente
+    const statusOrder = { en_revision: 0, en_curso: 1, pendiente: 2 };
+    const visibleTareas = tareas
+        .filter(function (t) { return t.estatus !== 'completado' && t.estatus !== 'bloqueada'; })
+        .sort(function (a, b) {
+            var oa = statusOrder[a.estatus] !== undefined ? statusOrder[a.estatus] : 99;
+            var ob = statusOrder[b.estatus] !== undefined ? statusOrder[b.estatus] : 99;
+            return oa - ob;
+        });
+
+    if (visibleTareas.length === 0) {
+        container.innerHTML = '<div class="text-center py-16 text-slate-400"><p class="text-lg mb-2">No hay tareas activas</p><p class="text-sm">Selecciona una cuenta y abre un programa para empezar</p></div>';
         return;
     }
 
     container.innerHTML =
         '<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">' +
         '<div class="p-4 border-b border-slate-200 flex items-center justify-between">' +
-        '<div><h2 class="font-bold text-slate-700 text-lg">Todas las Tareas</h2>' +
-        '<p class="text-sm text-slate-400 mt-0.5">' + tareas.length + ' tarea' + (tareas.length !== 1 ? 's' : '') + ' en total</p></div>' +
+        '<div><h2 class="font-bold text-slate-700 text-lg">Tareas Activas</h2>' +
+        '<p class="text-sm text-slate-400 mt-0.5">' + visibleTareas.length + ' tarea' + (visibleTareas.length !== 1 ? 's' : '') + ' activa' + (visibleTareas.length !== 1 ? 's' : '') + '</p></div>' +
         '</div>' +
         '<div class="overflow-x-auto">' +
         '<table class="w-full text-left border-collapse">' +
@@ -446,7 +461,7 @@ function renderGlobalTasksList() {
         '</table></div></div>';
 
     const tbody = document.getElementById('global-tasks-content');
-    tareas.forEach(function (tarea) {
+    visibleTareas.forEach(function (tarea) {
         const resp = responsables.find(function (r) { return r.id === tarea.id_responsable; });
         const respNombre = resp ? resp.nombre : 'Sin asignar';
         const prioColor = getPriorityColor(tarea.prioridad);
@@ -2236,6 +2251,9 @@ async function pasteTareaFromClipboard() {
 
         currentTarea = nuevaTarea;
         currentNavLevel = 'tarea_detail';
+        // Clear clipboard after successful paste so button disappears
+        tareaClipboard = null;
+        try { localStorage.removeItem('tareaClipboard'); } catch (e) {}
         renderCurrentLevel();
         renderTareasBoard();
         renderTareasList();
