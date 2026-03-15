@@ -21,6 +21,7 @@
             .no-print { display: none !important; }
             #rendimiento-section { display: block !important; }
             #responsables-section { display: none !important; }
+            #finanzas-section { display: none !important; }
             .print-only { display: block !important; }
             #pdf-report-header { display: block !important; }
             #loading { display: none !important; }
@@ -91,6 +92,10 @@
             <button onclick="switchTab('rendimiento')" id="tab-btn-rendimiento"
                     class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all text-slate-600 hover:text-slate-900">
                 📊 Rendimiento Operativo
+            </button>
+            <button onclick="switchTab('finanzas')" id="tab-btn-finanzas"
+                    class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all text-slate-600 hover:text-slate-900">
+                💰 Finanzas
             </button>
         </nav>
 
@@ -239,6 +244,124 @@
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center" id="rend-totals-grid"></div>
             </div>
         </div>
+
+        <!-- TAB: Finanzas -->
+        <div id="finanzas-section" class="hidden">
+
+            <!-- Finance Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6" id="finanzas-summary-cards">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Ingresos</p>
+                    <p class="text-2xl font-extrabold text-emerald-600" id="fin-total-ingresos">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Egresos</p>
+                    <p class="text-2xl font-extrabold text-red-500" id="fin-total-egresos">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Balance</p>
+                    <p class="text-2xl font-extrabold text-indigo-600" id="fin-balance">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1"># Ingresos</p>
+                    <p class="text-2xl font-extrabold text-slate-800" id="fin-count-ingresos">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1"># Egresos</p>
+                    <p class="text-2xl font-extrabold text-slate-800" id="fin-count-egresos">—</p>
+                </div>
+            </div>
+
+            <!-- Finance Filters -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Fecha desde</label>
+                        <input type="date" id="fin-filter-desde"
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Fecha hasta</label>
+                        <input type="date" id="fin-filter-hasta"
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Tipo</label>
+                        <select id="fin-filter-tipo"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                            <option value="ingreso">Ingreso</option>
+                            <option value="egreso">Egreso</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Categoría</label>
+                        <select id="fin-filter-categoria"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Proyecto</label>
+                        <select id="fin-filter-proyecto"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Responsable</label>
+                        <select id="fin-filter-responsable"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="applyFinanzasFilters()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                        Aplicar filtros
+                    </button>
+                    <button onclick="clearFinanzasFilters()"
+                            class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                        Limpiar
+                    </button>
+                    <button onclick="openFinanzaModal()"
+                            class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Nuevo Registro
+                    </button>
+                </div>
+            </div>
+
+            <!-- Finance Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+                    <h2 class="font-bold text-slate-700">Registros de Ingresos y Egresos</h2>
+                    <span id="fin-table-count" class="text-sm text-slate-400"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="p-3 font-semibold text-slate-600">Fecha</th>
+                                <th class="p-3 font-semibold text-slate-600">Tipo</th>
+                                <th class="p-3 font-semibold text-slate-600">Concepto</th>
+                                <th class="p-3 font-semibold text-slate-600">Categoría</th>
+                                <th class="p-3 font-semibold text-slate-600">Proyecto</th>
+                                <th class="p-3 font-semibold text-slate-600">Responsable</th>
+                                <th class="p-3 font-semibold text-slate-600 text-right">Monto</th>
+                                <th class="p-3 font-semibold text-slate-600 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="finanzas-table-body">
+                            <tr><td colspan="8" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
 
@@ -324,6 +447,112 @@
         </div>
     </div>
 
+    <!-- MODAL Finanza -->
+    <div id="finanzaModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="fin-modal-title" class="text-xl font-bold text-slate-800">Nuevo Registro</h3>
+                <button onclick="closeFinanzaModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="finanzaForm" class="p-6 space-y-4" onsubmit="saveFinanza(event)">
+                <input type="hidden" id="finanzaId" />
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Tipo</label>
+                    <select id="finanzaTipo" required
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="egreso">Egreso</option>
+                        <option value="ingreso">Ingreso</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Monto</label>
+                    <input type="number" id="finanzaMonto" required min="0" step="0.01" placeholder="0.00"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Concepto</label>
+                    <input type="text" id="finanzaConcepto" required placeholder="Descripción del movimiento"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Categoría</label>
+                    <select id="finanzaCategoria"
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="">Sin categoría</option>
+                        <optgroup label="Ingresos">
+                            <option value="Venta">Venta</option>
+                            <option value="Subvención">Subvención</option>
+                            <option value="Donación">Donación</option>
+                            <option value="Transferencia">Transferencia</option>
+                        </optgroup>
+                        <optgroup label="Egresos">
+                            <option value="Servicios">Servicios</option>
+                            <option value="Materiales">Materiales</option>
+                            <option value="Personal">Personal</option>
+                            <option value="Transporte">Transporte</option>
+                            <option value="Equipamiento">Equipamiento</option>
+                        </optgroup>
+                        <option value="Otros">Otros</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Fecha</label>
+                    <input type="date" id="finanzaFecha" required
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Proyecto (opcional)</label>
+                    <select id="finanzaProyecto"
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="">Sin proyecto</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Responsable (opcional)</label>
+                    <select id="finanzaResponsable"
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="">Sin responsable</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeFinanzaModal()"
+                            class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="fin-btn-save"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                        <span id="fin-btn-save-text">Guardar</span>
+                        <span id="fin-btn-save-spinner" class="hidden">
+                            <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+
+                <button type="button" id="fin-btn-delete"
+                        onclick="deleteCurrentFinanza()"
+                        class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">
+                    Eliminar Registro
+                </button>
+            </form>
+        </div>
+    </div>
+
     <script>
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxmPBIboe_Evn45ZHjtkjydbmlPRMuSax_sEiTc2iN8cqqi2i4-Pf_lOd6875cQXEd_yg/exec';
 
@@ -334,9 +563,12 @@
         let allTareas = [];
         let allProyectos = [];
         let allSubproyectos = [];
+        let allFinanzas = [];
         let rendimientoFiltered = [];
+        let finanzasFiltered = [];
         let activeTab = 'responsables';
         let fullDataLoaded = false;
+        let finanzasDataLoaded = false;
 
         document.addEventListener('DOMContentLoaded', loadResponsables);
 
@@ -374,6 +606,7 @@
             activeTab = tab;
             document.getElementById('responsables-section').classList.toggle('hidden', tab !== 'responsables');
             document.getElementById('rendimiento-section').classList.toggle('hidden', tab !== 'rendimiento');
+            document.getElementById('finanzas-section').classList.toggle('hidden', tab !== 'finanzas');
             document.getElementById('btn-nuevo-responsable').classList.toggle('hidden', tab !== 'responsables');
 
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -388,6 +621,11 @@
                 loadFullData();
             } else if (tab === 'rendimiento' && fullDataLoaded) {
                 renderRendimiento();
+            } else if (tab === 'finanzas' && !finanzasDataLoaded) {
+                loadFullData();
+            } else if (tab === 'finanzas' && finanzasDataLoaded) {
+                populateFinanzasFilterSelects();
+                renderFinanzas();
             }
         }
 
@@ -411,6 +649,11 @@
                     fullDataLoaded = true;
                 }
 
+                if (Array.isArray(data.finanzas)) {
+                    allFinanzas = data.finanzas;
+                    finanzasDataLoaded = true;
+                }
+
                 renderResponsables();
                 populateFilterSelects();
             } catch (error) {
@@ -430,13 +673,22 @@
                 allTareas = data.tareas || [];
                 allProyectos = data.proyectos || [];
                 allSubproyectos = data.subproyectos || [];
+                allFinanzas = data.finanzas || [];
                 fullDataLoaded = true;
+                finanzasDataLoaded = true;
                 populateFilterSelects();
-                renderRendimiento();
+                if (activeTab === 'rendimiento') {
+                    renderRendimiento();
+                } else if (activeTab === 'finanzas') {
+                    populateFinanzasFilterSelects();
+                    renderFinanzas();
+                }
             } catch (error) {
                 console.error('Error cargando datos:', error);
                 document.getElementById('rendimiento-table-body').innerHTML =
                     '<tr><td colspan="7" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
+                document.getElementById('finanzas-table-body').innerHTML =
+                    '<tr><td colspan="8" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
             } finally {
                 showLoading(false);
             }
@@ -821,6 +1073,286 @@
             document.getElementById('pdf-periodo-filtrado').textContent = periodo;
 
             window.print();
+        }
+
+        // ============================================================
+        // FINANZAS
+        // ============================================================
+
+        const FMT_MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+
+        function formatMonto(n) {
+            return FMT_MXN.format(parseFloat(n) || 0);
+        }
+
+        function populateFinanzasFilterSelects() {
+            const selProyecto = document.getElementById('fin-filter-proyecto');
+            const selResp = document.getElementById('fin-filter-responsable');
+            const selCategoria = document.getElementById('fin-filter-categoria');
+
+            selProyecto.innerHTML = '<option value="">Todos</option>';
+            allProyectos.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.nombre || p.id;
+                selProyecto.appendChild(opt);
+            });
+
+            selResp.innerHTML = '<option value="">Todos</option>';
+            responsables.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.nombre || r.id;
+                selResp.appendChild(opt);
+            });
+
+            // Build dynamic category list from existing records + fixed list
+            const knownCats = new Set(['Venta', 'Subvención', 'Donación', 'Transferencia', 'Servicios', 'Materiales', 'Personal', 'Transporte', 'Equipamiento', 'Otros']);
+            allFinanzas.forEach(f => { if (f.categoria) knownCats.add(f.categoria); });
+            selCategoria.innerHTML = '<option value="">Todas</option>';
+            [...knownCats].sort((a, b) => a.localeCompare(b, 'es')).forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                selCategoria.appendChild(opt);
+            });
+        }
+
+        function applyFinanzasFilters() {
+            const desde = document.getElementById('fin-filter-desde').value;
+            const hasta = document.getElementById('fin-filter-hasta').value;
+            const tipo = document.getElementById('fin-filter-tipo').value;
+            const categoria = document.getElementById('fin-filter-categoria').value;
+            const proyId = document.getElementById('fin-filter-proyecto').value;
+            const respId = document.getElementById('fin-filter-responsable').value;
+
+            finanzasFiltered = allFinanzas.filter(f => {
+                if (tipo && f.tipo !== tipo) return false;
+                if (categoria && f.categoria !== categoria) return false;
+                if (proyId && f.id_proyecto !== proyId) return false;
+                if (respId && f.id_responsable !== respId) return false;
+                if (f.fecha) {
+                    if (desde && f.fecha < desde) return false;
+                    if (hasta && f.fecha > hasta) return false;
+                }
+                return true;
+            });
+
+            renderFinanzasTable(finanzasFiltered);
+            updateFinanzasSummary(finanzasFiltered);
+        }
+
+        function clearFinanzasFilters() {
+            document.getElementById('fin-filter-desde').value = '';
+            document.getElementById('fin-filter-hasta').value = '';
+            document.getElementById('fin-filter-tipo').value = '';
+            document.getElementById('fin-filter-categoria').value = '';
+            document.getElementById('fin-filter-proyecto').value = '';
+            document.getElementById('fin-filter-responsable').value = '';
+            renderFinanzas();
+        }
+
+        function renderFinanzas() {
+            finanzasFiltered = [...allFinanzas];
+            renderFinanzasTable(finanzasFiltered);
+            updateFinanzasSummary(finanzasFiltered);
+        }
+
+        function updateFinanzasSummary(registros) {
+            const ingresos = registros.filter(f => f.tipo === 'ingreso');
+            const egresos = registros.filter(f => f.tipo === 'egreso');
+            const totalIngresos = ingresos.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0);
+            const totalEgresos = egresos.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0);
+            const balance = totalIngresos - totalEgresos;
+
+            document.getElementById('fin-total-ingresos').textContent = formatMonto(totalIngresos);
+            document.getElementById('fin-total-egresos').textContent = formatMonto(totalEgresos);
+            const balEl = document.getElementById('fin-balance');
+            balEl.textContent = formatMonto(balance);
+            balEl.className = 'text-2xl font-extrabold ' + (balance >= 0 ? 'text-emerald-600' : 'text-red-500');
+            document.getElementById('fin-count-ingresos').textContent = ingresos.length;
+            document.getElementById('fin-count-egresos').textContent = egresos.length;
+        }
+
+        function renderFinanzasTable(registros) {
+            const tbody = document.getElementById('finanzas-table-body');
+            const countEl = document.getElementById('fin-table-count');
+            tbody.innerHTML = '';
+
+            if (registros.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">No hay registros con los filtros aplicados</td></tr>';
+                countEl.textContent = '0 registros';
+                return;
+            }
+
+            countEl.textContent = registros.length + ' registro' + (registros.length !== 1 ? 's' : '');
+
+            const sorted = [...registros].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+            sorted.forEach(f => {
+                const proy = allProyectos.find(p => p.id === f.id_proyecto);
+                const resp = responsables.find(r => r.id === f.id_responsable);
+                const proyNombre = proy ? escapeHtml(proy.nombre || proy.id) : '<span class="text-slate-400">—</span>';
+                const respNombre = resp ? escapeHtml(resp.nombre || resp.id) : '<span class="text-slate-400">—</span>';
+
+                const tipoCls = f.tipo === 'ingreso'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-red-100 text-red-700';
+                const tipoLabel = f.tipo === 'ingreso' ? '▲ Ingreso' : '▼ Egreso';
+                const montoCls = f.tipo === 'ingreso' ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold';
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="p-3 text-slate-600 text-xs">${escapeHtml(f.fecha || '—')}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${tipoCls}">${tipoLabel}</span>
+                    </td>
+                    <td class="p-3 text-slate-700">${escapeHtml(f.concepto || '—')}</td>
+                    <td class="p-3 text-slate-600 text-xs">${escapeHtml(f.categoria || '—')}</td>
+                    <td class="p-3 text-slate-600">${proyNombre}</td>
+                    <td class="p-3 text-slate-600">${respNombre}</td>
+                    <td class="p-3 text-right ${montoCls}">${formatMonto(f.monto)}</td>
+                    <td class="p-3 text-right whitespace-nowrap">
+                        <button onclick="editFinanza('${escapeHtml(f.id)}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-1">Editar</button>
+                        <button onclick="deleteFinanza('${escapeHtml(f.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function populateFinanzaModalSelects() {
+            const selProy = document.getElementById('finanzaProyecto');
+            const selResp = document.getElementById('finanzaResponsable');
+
+            selProy.innerHTML = '<option value="">Sin proyecto</option>';
+            allProyectos.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.nombre || p.id;
+                selProy.appendChild(opt);
+            });
+
+            selResp.innerHTML = '<option value="">Sin responsable</option>';
+            responsables.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.nombre || r.id;
+                selResp.appendChild(opt);
+            });
+        }
+
+        function openFinanzaModal(finanza = null) {
+            populateFinanzaModalSelects();
+            document.getElementById('finanzaForm').reset();
+            const btnDel = document.getElementById('fin-btn-delete');
+
+            if (finanza) {
+                document.getElementById('fin-modal-title').textContent = 'Editar Registro';
+                document.getElementById('finanzaId').value = finanza.id;
+                document.getElementById('finanzaTipo').value = finanza.tipo || 'egreso';
+                document.getElementById('finanzaMonto').value = finanza.monto || '';
+                document.getElementById('finanzaConcepto').value = finanza.concepto || '';
+                document.getElementById('finanzaCategoria').value = finanza.categoria || '';
+                document.getElementById('finanzaFecha').value = finanza.fecha || '';
+                document.getElementById('finanzaProyecto').value = finanza.id_proyecto || '';
+                document.getElementById('finanzaResponsable').value = finanza.id_responsable || '';
+                btnDel.classList.remove('hidden');
+            } else {
+                document.getElementById('fin-modal-title').textContent = 'Nuevo Registro';
+                document.getElementById('finanzaId').value = '';
+                // Default date to today
+                document.getElementById('finanzaFecha').value = new Date().toISOString().split('T')[0];
+                btnDel.classList.add('hidden');
+            }
+
+            document.getElementById('finanzaModal').classList.remove('hidden');
+        }
+
+        function closeFinanzaModal() {
+            document.getElementById('finanzaModal').classList.add('hidden');
+        }
+
+        function setFinanzaLoading(loading) {
+            const btn = document.getElementById('fin-btn-save');
+            const btnText = document.getElementById('fin-btn-save-text');
+            const btnSpinner = document.getElementById('fin-btn-save-spinner');
+            btn.disabled = loading;
+            btn.classList.toggle('opacity-75', loading);
+            btn.classList.toggle('cursor-not-allowed', loading);
+            btnText.classList.toggle('hidden', loading);
+            btnSpinner.classList.toggle('hidden', !loading);
+        }
+
+        async function saveFinanza(e) {
+            e.preventDefault();
+            if (document.getElementById('fin-btn-save').disabled) return;
+            setFinanzaLoading(true);
+            try {
+                const id = document.getElementById('finanzaId').value;
+                const payload = {
+                    id: id || ('fin_' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)))),
+                    tipo: document.getElementById('finanzaTipo').value,
+                    monto: parseFloat(document.getElementById('finanzaMonto').value) || 0,
+                    concepto: document.getElementById('finanzaConcepto').value.trim(),
+                    categoria: document.getElementById('finanzaCategoria').value,
+                    fecha: document.getElementById('finanzaFecha').value,
+                    id_proyecto: document.getElementById('finanzaProyecto').value,
+                    id_responsable: document.getElementById('finanzaResponsable').value
+                };
+                const action = id ? 'finanza_update' : 'finanza_add';
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, data: payload })
+                });
+                closeFinanzaModal();
+                // Optimistic update: apply change locally and re-render without full reload
+                if (id) {
+                    const idx = allFinanzas.findIndex(x => x.id === id);
+                    if (idx !== -1) allFinanzas[idx] = payload; else allFinanzas.push(payload);
+                } else {
+                    allFinanzas.push(payload);
+                }
+                populateFinanzasFilterSelects();
+                renderFinanzas();
+            } catch (error) {
+                console.error('Error guardando registro:', error);
+                alert('Error al guardar registro');
+            } finally {
+                setFinanzaLoading(false);
+            }
+        }
+
+        function editFinanza(id) {
+            const f = allFinanzas.find(x => x.id === id);
+            if (f) openFinanzaModal(f);
+        }
+
+        async function deleteFinanza(id) {
+            if (!confirm('¿Estás seguro de eliminar este registro?')) return;
+            showLoading(true);
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'finanza_delete', data: { id } })
+                });
+                // Optimistic update: remove locally and re-render
+                allFinanzas = allFinanzas.filter(x => x.id !== id);
+                populateFinanzasFilterSelects();
+                renderFinanzas();
+            } catch (error) {
+                console.error('Error eliminando registro:', error);
+                alert('Error al eliminar registro');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteCurrentFinanza() {
+            const id = document.getElementById('finanzaId').value;
+            if (!id) return;
+            closeFinanzaModal();
+            await deleteFinanza(id);
         }
     </script>
 </body>
