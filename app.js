@@ -1458,6 +1458,7 @@ async function deleteProyecto() {
 // ============================================
 function openSubproyectoModal(id) {
     const s = id ? subproyectos.find(function (x) { return x.id === id; }) : null;
+    const todayStr = new Date().toISOString().slice(0, 10);
     currentNavLevel = 'programa_form';
     renderCurrentLevel();
 
@@ -1477,16 +1478,7 @@ function openSubproyectoModal(id) {
         '<label class="block text-sm font-bold text-slate-700 mb-1">Descripción</label>' +
         '<textarea id="subproyectoDesc" rows="2" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Descripción...">' + (s ? escapeHtml(s.descripcion || '') : '') + '</textarea>' +
         '</div>' +
-        '<div class="grid grid-cols-2 gap-4">' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Fecha Inicio</label>' +
-        '<input type="date" id="subproyectoFechaInicio" value="' + (s ? (s.fecha_inicio || '') : '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">' +
-        '</div>' +
-        '<div>' +
-        '<label class="block text-sm font-bold text-slate-700 mb-1">Fecha Fin Estimada</label>' +
-        '<input type="date" id="subproyectoFechaFin" value="' + (s ? (s.fecha_fin_estimada || '') : '') + '" class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none">' +
-        '</div>' +
-        '</div>' +
+        '<input type="hidden" id="subproyectoFechaInicio" value="' + (s ? (s.fecha_inicio || '') : todayStr) + '">' +
         '<div class="flex gap-3 pt-2">' +
         '<button type="button" onclick="closeSubproyectoModal()" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>' +
         '<button type="submit" id="btn-save-subproyecto" class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><span>Guardar</span></button>' +
@@ -1509,8 +1501,7 @@ async function saveSubproyecto(e) {
         id_proyecto: currentProyecto ? currentProyecto.id : null,
         nombre: document.getElementById('subproyectoNombre').value,
         descripcion: document.getElementById('subproyectoDesc').value,
-        fecha_inicio: document.getElementById('subproyectoFechaInicio').value,
-        fecha_fin_estimada: document.getElementById('subproyectoFechaFin').value
+        fecha_inicio: document.getElementById('subproyectoFechaInicio').value
     };
     showLoading(true);
     setButtonLoading('btn-save-subproyecto', true);
@@ -1701,6 +1692,13 @@ function openInlineNewTareaForm() {
         });
         titleEl.focus();
     }
+
+    var listEl = document.getElementById('tarea-comments-list');
+    if (listEl) listEl.innerHTML = '<p class="text-center text-slate-400 text-sm py-4">Aquí aparecerán los comentarios</p>';
+    var commentsInputEl = document.getElementById('tarea-comments-input-area');
+    if (commentsInputEl) commentsInputEl.innerHTML = '';
+    var countEl = document.getElementById('tarea-comments-count');
+    if (countEl) countEl.textContent = '';
 }
 
 function closeTareaModal() {
