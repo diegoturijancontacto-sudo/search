@@ -1,63 +1,107 @@
 /**
+
 * Backend para Google Sheets (DB)
+
 *
+
 * Hojas (nombres exactos):
+
 * - Proyectos
+
 * - Subproyectos
+
 * - Tareas
+
 * - Responsables
+
 * - Comentarios
+
 * - HistorialAprobaciones
-* - Finanzas (NUEVA HOJA: Ingresos y Egresos)
+
+* - Finanzas (Ingresos y Egresos)
+
+* - RegistrosObra (NUEVA HOJA: Ficha técnica de obras)
+
 *
+
 * Asignación consecutiva:
+
 * - Proyecto: 1,2,3... (Proyectos!F)
+
 * - Subproyecto: 1.1, 1.2... (Subproyectos!H) según proyecto
+
 * - Tarea: 1.1.1DT (Tareas!K) según subproyecto + iniciales Responsable (Responsables!G)
+
 * donde DT sale de Responsables!Identificador (col G) en MAYÚSCULAS.
+
 * - En tarea_update: si cambia responsable, se actualiza sufijo sin cambiar consecutivo.
+
 *
+
 * Estructura Tareas (con Entregables estructurados):
+
 * A ID
+
 * B ID Subproyecto
+
 * C ID Responsable
+
 * D Prioridad
+
 * E Estatus
+
 * F Detalles
+
 * G Descripción
+
 * H Adjuntos (JSON) <-- incluye adjuntos y evidencias/entregables-subidos
+
 * I Fecha Creación
+
 * J Fecha Límite
+
 * K asignacion
+
 * L Entregables (JSON) <-- entregables estructurados (definición)
+
 *
-* BLOQUEADAS:
-* - Estado adicional: "bloqueada"
-* - Solo supervisor/director puede bloquear/desbloquear
-*
-* ADJUNTOS / ENTREGABLES (estructura + evidencia):
-* - Tareas!H guarda JSON:
-* [
-* { id, name, url, kind, uploadedBy, createdAt }
-* ]
-* kind: "adjunto" | "entregable"
-*
-* ENTREGABLES ESTRUCTURADOS:
-* - Tareas!L guarda JSON:
-* [
-* {
-* id: "ent_...",
-* descripcion_entregable: "...", // Resultado concreto esperado
-* formato_requerido: "PDF|JPG|link|físico|...",
-* medio_entrega: "opcore|drive|whatsapp|correo|fisica|otro",
-* medio_otro: "..." // solo si medio_entrega = "otro"
-* }
-* ]
-*
-* PERMISOS (recomendados):
-* - Definir/editar entregables (Tareas!L): supervisor/director
-* - Subir archivo kind="entregable": responsable de la tarea o supervisor/director
-* - Eliminar archivo (Drive->Papelera + quitar de Tareas!H): supervisor/director
+
+* ESTRUCTURA REGISTROS OBRA (Ficha técnica):
+
+* A ID
+
+* B Nombre Obra
+
+* C Ubicación (dirección, ciudad, coordenadas)
+
+* D Estatus (Consolidación | Bodega | Vendida)
+
+* E Tipo de Obra
+
+* F Superficie (m²)
+
+* G Precio Lista
+
+* H Precio Venta
+
+* I Fecha Registro
+
+* J Fecha Adquisición
+
+* K Fecha Venta
+
+* L Cliente
+
+* M Documentos (JSON) - escrituras, planos, permisos
+
+* N Observaciones
+
+* O Adjuntos (JSON) - fotos, videos, documentos adicionales
+
+* P ID Responsable (quien registró/administra)
+
+* Q Asignación interna (formato obra-XXX)
+
 */
 
 const SHEET_PROYECTOS = 'Proyectos';
@@ -66,26 +110,46 @@ const SHEET_TAREAS = 'Tareas';
 const SHEET_RESPONSABLES = 'Responsables';
 const SHEET_COMENTARIOS = 'Comentarios';
 const SHEET_HISTORIAL = 'HistorialAprobaciones';
-const SHEET_FINANZAS = 'Finanzas'; // NUEVA HOJA PARA INGRESOS Y EGRESOS
+const SHEET_FINANZAS = 'Finanzas';
+const SHEET_REGISTROS_OBRA = 'RegistrosObra'; // NUEVA HOJA
 
 // Carpeta en Drive donde se guardan archivos
 const DRIVE_ATTACHMENTS_FOLDER_ID = '1IKdpJc0ezb6ZwtUzXJm6I91WZIO3s7FS';
 
 // Índices de columnas (1-based) en hoja Tareas
-const COL_TAREA_ADJUNTOS = 8;     // H
+const COL_TAREA_ADJUNTOS = 8; // H
 const COL_TAREA_ENTREGABLES = 12; // L
-const COL_TAREA_ASIGNACION = 11;  // K
+const COL_TAREA_ASIGNACION = 11; // K
+
+// Índices de columnas (1-based) en hoja RegistrosObra
+const COL_REGISTROS_NOMBRE = 2; // B
+const COL_REGISTROS_UBICACION = 3; // C
+const COL_REGISTROS_ESTATUS = 4; // D
+const COL_REGISTROS_TIPO = 5; // E
+const COL_REGISTROS_SUPERFICIE = 6; // F
+const COL_REGISTROS_PRECIO_LISTA = 7; // G
+const COL_REGISTROS_PRECIO_VENTA = 8; // H
+const COL_REGISTROS_FECHA_REGISTRO = 9; // I
+const COL_REGISTROS_FECHA_ADQUISICION = 10; // J
+const COL_REGISTROS_FECHA_VENTA = 11; // K
+const COL_REGISTROS_CLIENTE = 12; // L
+const COL_REGISTROS_DOCUMENTOS = 13; // M (JSON)
+const COL_REGISTROS_OBSERVACIONES = 14; // N
+const COL_REGISTROS_ADJUNTOS = 15; // O (JSON)
+const COL_REGISTROS_ID_RESPONSABLE = 16; // P
+const COL_REGISTROS_ASIGNACION = 17; // Q
 
 // ======================================================
 // INIT / VALIDACIÓN DE ESQUEMA
 // ======================================================
+
 function ensureSchema_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   getOrCreateSheet_(ss, SHEET_PROYECTOS, ['ID', 'Nombre', 'Descripción', 'Fecha Creación', 'Estado', 'asignacion']);
   getOrCreateSheet_(ss, SHEET_SUBPROYECTOS, ['ID', 'ID Proyecto', 'Nombre', 'Descripción', 'Fecha Inicio', 'Fecha Fin Estimada', 'Fecha Creación', 'asignacion']);
 
-  // Importante: agregamos "Entregables" al final (col L) para no romper tu estructura previa
+  // Tareas
   getOrCreateSheet_(ss, SHEET_TAREAS, [
     'ID', 'ID Subproyecto', 'ID Responsable', 'Prioridad', 'Estatus',
     'Detalles', 'Descripción', 'Adjuntos', 'Fecha Creación', 'Fecha Límite', 'asignacion',
@@ -95,9 +159,14 @@ function ensureSchema_() {
   getOrCreateSheet_(ss, SHEET_RESPONSABLES, ['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro', 'Identificador']);
   getOrCreateSheet_(ss, SHEET_COMENTARIOS, ['ID', 'ID Tarea', 'ID Responsable', 'Comentario', 'Fecha']);
   getOrCreateSheet_(ss, SHEET_HISTORIAL, ['ID', 'ID Tarea', 'ID Supervisor', 'Estado Anterior', 'Estado Nuevo', 'Fecha', 'Observaciones']);
-  
-  // NUEVA HOJA DE FINANZAS
   getOrCreateSheet_(ss, SHEET_FINANZAS, ['ID', 'Tipo', 'Monto', 'Concepto', 'Fecha', 'Categoria', 'ID Proyecto', 'ID Responsable', 'Fecha Registro']);
+  
+  // NUEVA HOJA DE REGISTROS OBRA (Ficha técnica)
+  getOrCreateSheet_(ss, SHEET_REGISTROS_OBRA, [
+    'ID', 'Nombre Obra', 'Ubicación', 'Estatus', 'Tipo de Obra', 'Superficie (m²)',
+    'Precio Lista', 'Precio Venta', 'Fecha Registro', 'Fecha Adquisición', 'Fecha Venta',
+    'Cliente', 'Documentos', 'Observaciones', 'Adjuntos', 'ID Responsable', 'Asignación'
+  ]);
 
   // Asegurar columna Identificador en Responsables y rellenar vacíos
   const shR = ss.getSheetByName(SHEET_RESPONSABLES);
@@ -115,10 +184,13 @@ function ensureSchema_() {
     }
   }
 
-  // Forzar columnas asignacion como TEXTO (evita 1.1 => 1/1/26)
-  forceTextColumn_(ss.getSheetByName(SHEET_PROYECTOS), 6); // F
-  forceTextColumn_(ss.getSheetByName(SHEET_SUBPROYECTOS), 8); // H
-  forceTextColumn_(ss.getSheetByName(SHEET_TAREAS), COL_TAREA_ASIGNACION); // K
+  // Forzar columnas asignacion como TEXTO
+  forceTextColumn_(ss.getSheetByName(SHEET_PROYECTOS), 6);
+  forceTextColumn_(ss.getSheetByName(SHEET_SUBPROYECTOS), 8);
+  forceTextColumn_(ss.getSheetByName(SHEET_TAREAS), COL_TAREA_ASIGNACION);
+  
+  // Forzar columna Asignación en RegistrosObra como TEXTO
+  forceTextColumn_(ss.getSheetByName(SHEET_REGISTROS_OBRA), COL_REGISTROS_ASIGNACION);
 }
 
 function getOrCreateSheet_(ss, name, headers) {
@@ -141,7 +213,7 @@ function getOrCreateSheet_(ss, name, headers) {
     return sh;
   }
 
-  // Asegurar que existan todas las cabeceras (no destructivo)
+  // Asegurar que existan todas las cabeceras
   const lastCol = Math.max(sh.getLastColumn(), 1);
   const row1 = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(v => (v || '').toString().trim());
 
@@ -183,6 +255,7 @@ function forceTextColumn_(sh, colIndex) {
 // ======================================================
 // UTILIDADES
 // ======================================================
+
 function generarIdentificador(nombre) {
   if (!nombre) return 'xxx';
   const palabras = nombre.toLowerCase().split(' ');
@@ -208,9 +281,26 @@ function normalizeAsignacion_(v) {
   return s;
 }
 
+function generateObraAsignacion_(ss) {
+  const sh = ss.getSheetByName(SHEET_REGISTROS_OBRA);
+  const rows = sh.getDataRange().getValues();
+  let maxNum = 0;
+  
+  for (let i = 1; i < rows.length; i++) {
+    const asignacion = normalizeAsignacion_(rows[i][COL_REGISTROS_ASIGNACION - 1]);
+    const match = asignacion.match(/^obra-(\d+)$/);
+    if (match) {
+      maxNum = Math.max(maxNum, parseInt(match[1], 10));
+    }
+  }
+  
+  return `obra-${maxNum + 1}`;
+}
+
 // ======================================================
 // ROLES / PERMISOS
 // ======================================================
+
 function getResponsableRolById_(ss, responsableId) {
   if (!responsableId) return '';
   const sh = ss.getSheetByName(SHEET_RESPONSABLES);
@@ -218,7 +308,7 @@ function getResponsableRolById_(ss, responsableId) {
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if ((rows[i][0] || '').toString() === responsableId.toString()) {
-      return (rows[i][4] || '').toString(); // col E = Rol
+      return (rows[i][4] || '').toString();
     }
   }
   return '';
@@ -250,7 +340,7 @@ function assertCanUploadEntregable_(ss, tareaId, actorId) {
   const tarea = getTareaById_(ss, tareaId);
   if (!tarea) throw new Error('Tarea no encontrada');
 
-  const tareaResponsableId = (tarea.values[2] || '').toString(); // col C
+  const tareaResponsableId = (tarea.values[2] || '').toString();
   if (isPrivileged_(ss, actorId)) return;
 
   if (!actorId || actorId.toString() !== tareaResponsableId.toString()) {
@@ -259,32 +349,25 @@ function assertCanUploadEntregable_(ss, tareaId, actorId) {
 }
 
 function assertCanUploadAdjunto_(ss, tareaId, actorId) {
-  // Por defecto igual que entregable (puedes relajarlo si quieres)
   return assertCanUploadEntregable_(ss, tareaId, actorId);
 }
 
 // ======================================================
 // ADJUNTOS: JSON en celda (Tareas!H)
 // ======================================================
+
 function parseAdjuntosCell_(cellValue) {
   const raw = (cellValue || '').toString().trim();
   if (!raw) return [];
 
-  // JSON
   if (raw.startsWith('[') || raw.startsWith('{')) {
     try {
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
-    } catch (_) {
-      // cae a CSV viejo
-    }
+    } catch (_) {}
   }
 
-  // CSV viejo de URLs
-  return raw
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
+  return raw.split(',').map(s => s.trim()).filter(Boolean)
     .map(url => ({ id: '', name: '', url, kind: 'adjunto', uploadedBy: '', createdAt: '' }));
 }
 
@@ -295,6 +378,7 @@ function stringifyAdjuntosCell_(adjuntos) {
 // ======================================================
 // ENTREGABLES ESTRUCTURADOS: JSON en celda (Tareas!L)
 // ======================================================
+
 function parseEntregablesCell_(cellValue) {
   const raw = (cellValue || '').toString().trim();
   if (!raw) return [];
@@ -316,21 +400,67 @@ function validateMedioEntrega_(medio) {
 }
 
 // ======================================================
+// FUNCIONES PARA REGISTROS OBRA
+// ======================================================
+
+function parseDocumentosObra_(cellValue) {
+  const raw = (cellValue || '').toString().trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function stringifyDocumentosObra_(documentos) {
+  return JSON.stringify(documentos || []);
+}
+
+function parseAdjuntosObra_(cellValue) {
+  const raw = (cellValue || '').toString().trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function stringifyAdjuntosObra_(adjuntos) {
+  return JSON.stringify(adjuntos || []);
+}
+
+function getRegistroObraById_(ss, obraId) {
+  const sh = ss.getSheetByName(SHEET_REGISTROS_OBRA);
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if ((rows[i][0] || '').toString() === obraId.toString()) {
+      return { rowIndex: i + 1, values: rows[i], sh: sh };
+    }
+  }
+  return null;
+}
+
+// ======================================================
 // DRIVE
 // ======================================================
+
 function getAttachmentsFolder_() {
   if (!DRIVE_ATTACHMENTS_FOLDER_ID) throw new Error('Falta DRIVE_ATTACHMENTS_FOLDER_ID');
   return DriveApp.getFolderById(DRIVE_ATTACHMENTS_FOLDER_ID);
 }
 
 function ensureFileIsShareable_(file) {
-  // Público por link
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 }
 
 // ======================================================
 // ASIGNACIONES
 // ======================================================
+
 function getResponsableInicialesById_(ss, responsableId) {
   if (!responsableId) return '';
   const sh = ss.getSheetByName(SHEET_RESPONSABLES);
@@ -352,7 +482,7 @@ function getNextProyectoAsignacion_(ss) {
   const sh = ss.getSheetByName(SHEET_PROYECTOS);
   const rows = sh.getDataRange().getValues();
   let maxA = 0;
-  for (let i = 1; i < rows.length; i++) maxA = Math.max(maxA, toIntSafe(rows[i][5])); // F
+  for (let i = 1; i < rows.length; i++) maxA = Math.max(maxA, toIntSafe(rows[i][5]));
   return (maxA + 1).toString();
 }
 
@@ -360,7 +490,7 @@ function getProyectoAsignacionById_(ss, proyectoId) {
   const sh = ss.getSheetByName(SHEET_PROYECTOS);
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0]?.toString() === proyectoId.toString()) return normalizeAsignacion_(rows[i][5]); // F
+    if (rows[i][0]?.toString() === proyectoId.toString()) return normalizeAsignacion_(rows[i][5]);
   }
   return '';
 }
@@ -375,7 +505,7 @@ function getNextSubproyectoAsignacion_(ss, proyectoId) {
   let maxSub = 0;
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][1]?.toString() === proyectoId.toString()) {
-      const asign = normalizeAsignacion_(rows[i][7]); // H
+      const asign = normalizeAsignacion_(rows[i][7]);
       const parts = asign.split('.');
       if (parts.length === 2 && parts[0] === proyectoAsign) {
         maxSub = Math.max(maxSub, toIntSafe(parts[1]));
@@ -389,13 +519,13 @@ function getSubproyectoAsignacionById_(ss, subproyectoId) {
   const sh = ss.getSheetByName(SHEET_SUBPROYECTOS);
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0]?.toString() === subproyectoId.toString()) return normalizeAsignacion_(rows[i][7]); // H
+    if (rows[i][0]?.toString() === subproyectoId.toString()) return normalizeAsignacion_(rows[i][7]);
   }
   return '';
 }
 
 function getNextTareaAsignacion_(ss, subproyectoId, responsableId) {
-  const subAsign = normalizeAsignacion_(getSubproyectoAsignacionById_(ss, subproyectoId)); // "1.1"
+  const subAsign = normalizeAsignacion_(getSubproyectoAsignacionById_(ss, subproyectoId));
   if (!subAsign) return '';
 
   const sh = ss.getSheetByName(SHEET_TAREAS);
@@ -403,8 +533,8 @@ function getNextTareaAsignacion_(ss, subproyectoId, responsableId) {
 
   let maxT = 0;
   for (let i = 1; i < rows.length; i++) {
-    if ((rows[i][1] || '').toString() === subproyectoId.toString()) { // B = ID Subproyecto
-      const asign = normalizeAsignacion_(rows[i][10]); // K = asignacion
+    if ((rows[i][1] || '').toString() === subproyectoId.toString()) {
+      const asign = normalizeAsignacion_(rows[i][10]);
       const m = asign.match(/^(\d+)\.(\d+)\.(\d+)([A-Z]*)$/);
       if (m) {
         const prefix = `${m[1]}.${m[2]}`;
@@ -420,6 +550,7 @@ function getNextTareaAsignacion_(ss, subproyectoId, responsableId) {
 // ======================================================
 // GET
 // ======================================================
+
 function doGet() {
   try {
     ensureSchema_();
@@ -465,7 +596,7 @@ function doGet() {
       fecha_creacion: r[8] ? new Date(r[8]).toISOString().split('T')[0] : '',
       fecha_limite: r[9] ? new Date(r[9]).toISOString().split('T')[0] : '',
       asignacion: normalizeAsignacion_(r[10]),
-      entregables: parseEntregablesCell_(r[11]) // col L
+      entregables: parseEntregablesCell_(r[11])
     }));
 
     const shR = ss.getSheetByName(SHEET_RESPONSABLES);
@@ -502,8 +633,7 @@ function doGet() {
       fecha: r[5] || '',
       observaciones: r[6] || ''
     }));
-    
-    // DATOS DE FINANZAS
+
     const shF = ss.getSheetByName(SHEET_FINANZAS);
     const finanzasData = shF.getDataRange().getValues();
     const finanzas = finanzasData.slice(1).map(r => ({
@@ -518,8 +648,40 @@ function doGet() {
       fecha_registro: r[8] || ''
     }));
 
+    // NUEVO: DATOS DE REGISTROS OBRA
+    const shO = ss.getSheetByName(SHEET_REGISTROS_OBRA);
+    const registrosData = shO.getDataRange().getValues();
+    const registrosObra = registrosData.slice(1).map(r => ({
+      id: (r[0] || '').toString(),
+      nombre_obra: r[1] || '',
+      ubicacion: r[2] || '',
+      estatus: r[3] || 'Consolidación',
+      tipo_obra: r[4] || '',
+      superficie: parseFloat(r[5]) || 0,
+      precio_lista: parseFloat(r[6]) || 0,
+      precio_venta: parseFloat(r[7]) || 0,
+      fecha_registro: r[8] ? new Date(r[8]).toISOString().split('T')[0] : '',
+      fecha_adquisicion: r[9] ? new Date(r[9]).toISOString().split('T')[0] : '',
+      fecha_venta: r[10] ? new Date(r[10]).toISOString().split('T')[0] : '',
+      cliente: r[11] || '',
+      documentos: parseDocumentosObra_(r[12]),
+      observaciones: r[13] || '',
+      adjuntos: parseAdjuntosObra_(r[14]),
+      id_responsable: (r[15] || '').toString(),
+      asignacion: normalizeAsignacion_(r[16])
+    }));
+
     return ContentService
-      .createTextOutput(JSON.stringify({ proyectos, subproyectos, tareas, responsables, comentarios, historial, finanzas }))
+      .createTextOutput(JSON.stringify({ 
+        proyectos, 
+        subproyectos, 
+        tareas, 
+        responsables, 
+        comentarios, 
+        historial, 
+        finanzas,
+        registrosObra 
+      }))
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
@@ -531,7 +693,8 @@ function doGet() {
       responsables: [],
       comentarios: [],
       historial: [],
-      finanzas: []
+      finanzas: [],
+      registrosObra: []
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
@@ -539,6 +702,7 @@ function doGet() {
 // ======================================================
 // POST
 // ======================================================
+
 function doPost(e) {
   try {
     ensureSchema_();
@@ -548,7 +712,7 @@ function doPost(e) {
     const data = body.data || {};
 
     // ======================================================
-    // 1) ENTREGABLES ESTRUCTURADOS (CRUD) => Tareas!L
+    // ENTREGABLES ESTRUCTURADOS (CRUD) => Tareas!L
     // ======================================================
     if (action === 'tarea_entregables_set') {
       const idTarea = (data.id_tarea || '').toString().trim();
@@ -647,12 +811,12 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 2) SUBIR ARCHIVO (Adjunto o Entregable como archivo) => Tareas!H
+    // SUBIR ARCHIVO (Adjunto o Entregable) => Tareas!H
     // ======================================================
     else if (action === 'tarea_upload_adjunto') {
       const idTarea = (data.id_tarea || '').toString().trim();
       const actorId = (data.id_actor || '').toString().trim();
-      const kind = (data.kind || 'adjunto').toString().trim(); 
+      const kind = (data.kind || 'adjunto').toString().trim();
 
       if (!idTarea) throw new Error('Falta data.id_tarea');
       if (!actorId) throw new Error('Falta data.id_actor');
@@ -695,7 +859,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 3) ELIMINAR ARCHIVO (Drive->Papelera + quitar de Tareas!H)
+    // ELIMINAR ARCHIVO (Drive->Papelera + quitar de Tareas!H)
     // ======================================================
     else if (action === 'tarea_adjunto_eliminar') {
       const idTarea = (data.id_tarea || '').toString().trim();
@@ -722,7 +886,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 4) PROYECTOS (CRUD)
+    // PROYECTOS (CRUD)
     // ======================================================
     else if (action === 'proyecto_add' || action === 'proyecto_update' || action === 'proyecto_delete') {
       const sh = ss.getSheetByName(SHEET_PROYECTOS);
@@ -755,7 +919,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 5) SUBPROYECTOS (CRUD)
+    // SUBPROYECTOS (CRUD)
     // ======================================================
     else if (action === 'subproyecto_add' || action === 'subproyecto_update' || action === 'subproyecto_delete') {
       const sh = ss.getSheetByName(SHEET_SUBPROYECTOS);
@@ -770,13 +934,12 @@ function doPost(e) {
           data.fecha_inicio || '',
           data.fecha_fin_estimada || '',
           new Date().toISOString(),
-          '' // asignacion (H)
+          ''
         ]);
         const lastRow = sh.getLastRow();
-        sh.getRange(lastRow, 8).setNumberFormat('@STRING@'); // H
+        sh.getRange(lastRow, 8).setNumberFormat('@STRING@');
         sh.getRange(lastRow, 8).setValue(String(asignacion || ''));
-      }
-      else if (action === 'subproyecto_update') {
+      } else if (action === 'subproyecto_update') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
@@ -788,8 +951,7 @@ function doPost(e) {
             break;
           }
         }
-      }
-      else if (action === 'subproyecto_delete') {
+      } else if (action === 'subproyecto_delete') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
@@ -801,7 +963,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 6) TAREAS (CRUD normal)
+    // TAREAS (CRUD normal)
     // ======================================================
     else if (action === 'tarea_add' || action === 'tarea_update' || action === 'tarea_delete') {
       const sh = ss.getSheetByName(SHEET_TAREAS);
@@ -816,10 +978,10 @@ function doPost(e) {
           data.estatus || 'pendiente',
           data.detalles || '',
           data.descripcion || '',
-          '', // Adjuntos (H)
+          '',
           new Date().toISOString(),
           data.fecha_limite || '',
-          '' // asignacion (K)
+          ''
         ]);
 
         const lastRow = sh.getLastRow();
@@ -830,8 +992,7 @@ function doPost(e) {
         if (lastCol >= COL_TAREA_ENTREGABLES) {
           sh.getRange(lastRow, COL_TAREA_ENTREGABLES).setValue('[]');
         }
-      }
-      else if (action === 'tarea_update') {
+      } else if (action === 'tarea_update') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
@@ -850,7 +1011,7 @@ function doPost(e) {
 
             sh.getRange(i + 1, 10).setValue(data.fecha_limite || '');
 
-            const prevAsign = normalizeAsignacion_(rows[i][10]); 
+            const prevAsign = normalizeAsignacion_(rows[i][10]);
             const ini = getResponsableInicialesById_(ss, data.id_responsable);
             const m = prevAsign.match(/^(\d+\.\d+\.\d+)([A-Z]*)$/);
             const newAsign = m ? `${m[1]}${ini}` : getNextTareaAsignacion_(ss, data.id_subproyecto, data.id_responsable);
@@ -860,8 +1021,7 @@ function doPost(e) {
             break;
           }
         }
-      }
-      else if (action === 'tarea_delete') {
+      } else if (action === 'tarea_delete') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
@@ -873,7 +1033,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 7) RESPONSABLES (CRUD)
+    // RESPONSABLES (CRUD)
     // ======================================================
     else if (action === 'responsable_add' || action === 'responsable_update' || action === 'responsable_delete') {
       const sh = ss.getSheetByName(SHEET_RESPONSABLES);
@@ -916,7 +1076,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 8) COMENTARIOS (add/delete)
+    // COMENTARIOS (add/delete)
     // ======================================================
     else if (action === 'comentario_add' || action === 'comentario_delete') {
       const sh = ss.getSheetByName(SHEET_COMENTARIOS);
@@ -935,7 +1095,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 9) APROBACIONES + HISTORIAL (+ bloquear/desbloquear)
+    // APROBACIONES + HISTORIAL (+ bloquear/desbloquear)
     // ======================================================
     else if (
       action === 'tarea_revisar' ||
@@ -961,7 +1121,7 @@ function doPost(e) {
 
       for (let i = 1; i < rows.length; i++) {
         if ((rows[i][0] || '').toString() === (data.id_tarea || '').toString()) {
-          const estadoAnterior = rows[i][4]; 
+          const estadoAnterior = rows[i][4];
           shT.getRange(i + 1, 5).setValue(nuevoEstado);
 
           shH.appendRow([
@@ -979,7 +1139,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // 10) FINANZAS / INGRESOS Y EGRESOS (CRUD)
+    // FINANZAS / INGRESOS Y EGRESOS (CRUD)
     // ======================================================
     else if (action === 'finanza_add' || action === 'finanza_update' || action === 'finanza_delete') {
       const sh = ss.getSheetByName(SHEET_FINANZAS);
@@ -987,7 +1147,7 @@ function doPost(e) {
       if (action === 'finanza_add') {
         sh.appendRow([
           data.id || ('fin_' + Date.now().toString()),
-          data.tipo || 'egreso', // ingreso o egreso
+          data.tipo || 'egreso',
           data.monto || 0,
           data.concepto || '',
           data.fecha || new Date().toISOString().split('T')[0],
@@ -996,8 +1156,7 @@ function doPost(e) {
           data.id_responsable || '',
           new Date().toISOString()
         ]);
-      } 
-      else if (action === 'finanza_update') {
+      } else if (action === 'finanza_update') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
@@ -1011,8 +1170,7 @@ function doPost(e) {
             break;
           }
         }
-      } 
-      else if (action === 'finanza_delete') {
+      } else if (action === 'finanza_delete') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
           if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
@@ -1021,6 +1179,243 @@ function doPost(e) {
           }
         }
       }
+    }
+
+    // ======================================================
+    // REGISTROS OBRA / FICHA TÉCNICA (CRUD)
+    // ======================================================
+    else if (action === 'registro_obra_add' || action === 'registro_obra_update' || action === 'registro_obra_delete') {
+      const sh = ss.getSheetByName(SHEET_REGISTROS_OBRA);
+
+      if (action === 'registro_obra_add') {
+        const asignacion = generateObraAsignacion_(ss);
+        const fechaRegistro = data.fecha_registro || new Date().toISOString().split('T')[0];
+        
+        sh.appendRow([
+          data.id,
+          data.nombre_obra || '',
+          data.ubicacion || '',
+          data.estatus || 'Consolidación',
+          data.tipo_obra || '',
+          data.superficie || 0,
+          data.precio_lista || 0,
+          data.precio_venta || 0,
+          fechaRegistro,
+          data.fecha_adquisicion || '',
+          data.fecha_venta || '',
+          data.cliente || '',
+          '[]',  // Documentos (JSON)
+          data.observaciones || '',
+          '[]',  // Adjuntos (JSON)
+          data.id_responsable || '',
+          ''
+        ]);
+
+        const lastRow = sh.getLastRow();
+        sh.getRange(lastRow, COL_REGISTROS_ASIGNACION).setNumberFormat('@STRING@');
+        sh.getRange(lastRow, COL_REGISTROS_ASIGNACION).setValue(String(asignacion));
+        
+        // Inicializar JSON vacíos si no existen
+        if (sh.getLastColumn() >= COL_REGISTROS_DOCUMENTOS) {
+          sh.getRange(lastRow, COL_REGISTROS_DOCUMENTOS).setValue('[]');
+        }
+        if (sh.getLastColumn() >= COL_REGISTROS_ADJUNTOS) {
+          sh.getRange(lastRow, COL_REGISTROS_ADJUNTOS).setValue('[]');
+        }
+        
+      } else if (action === 'registro_obra_update') {
+        const rows = sh.getDataRange().getValues();
+        for (let i = 1; i < rows.length; i++) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
+            if (data.nombre_obra !== undefined) sh.getRange(i + 1, COL_REGISTROS_NOMBRE).setValue(data.nombre_obra);
+            if (data.ubicacion !== undefined) sh.getRange(i + 1, COL_REGISTROS_UBICACION).setValue(data.ubicacion);
+            if (data.estatus !== undefined) sh.getRange(i + 1, COL_REGISTROS_ESTATUS).setValue(data.estatus);
+            if (data.tipo_obra !== undefined) sh.getRange(i + 1, COL_REGISTROS_TIPO).setValue(data.tipo_obra);
+            if (data.superficie !== undefined) sh.getRange(i + 1, COL_REGISTROS_SUPERFICIE).setValue(data.superficie);
+            if (data.precio_lista !== undefined) sh.getRange(i + 1, COL_REGISTROS_PRECIO_LISTA).setValue(data.precio_lista);
+            if (data.precio_venta !== undefined) sh.getRange(i + 1, COL_REGISTROS_PRECIO_VENTA).setValue(data.precio_venta);
+            if (data.fecha_adquisicion !== undefined) sh.getRange(i + 1, COL_REGISTROS_FECHA_ADQUISICION).setValue(data.fecha_adquisicion);
+            if (data.fecha_venta !== undefined) sh.getRange(i + 1, COL_REGISTROS_FECHA_VENTA).setValue(data.fecha_venta);
+            if (data.cliente !== undefined) sh.getRange(i + 1, COL_REGISTROS_CLIENTE).setValue(data.cliente);
+            if (data.observaciones !== undefined) sh.getRange(i + 1, COL_REGISTROS_OBSERVACIONES).setValue(data.observaciones);
+            if (data.id_responsable !== undefined) sh.getRange(i + 1, COL_REGISTROS_ID_RESPONSABLE).setValue(data.id_responsable);
+            
+            // Manejo de JSON (Documentos)
+            if (data.documentos !== undefined) {
+              if (Array.isArray(data.documentos)) {
+                sh.getRange(i + 1, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(data.documentos));
+              } else if (typeof data.documentos === 'string') {
+                sh.getRange(i + 1, COL_REGISTROS_DOCUMENTOS).setValue(data.documentos);
+              }
+            }
+            
+            // Manejo de JSON (Adjuntos)
+            if (data.adjuntos !== undefined) {
+              if (Array.isArray(data.adjuntos)) {
+                sh.getRange(i + 1, COL_REGISTROS_ADJUNTOS).setValue(stringifyAdjuntosObra_(data.adjuntos));
+              } else if (typeof data.adjuntos === 'string') {
+                sh.getRange(i + 1, COL_REGISTROS_ADJUNTOS).setValue(data.adjuntos);
+              }
+            }
+            break;
+          }
+        }
+      } else if (action === 'registro_obra_delete') {
+        const rows = sh.getDataRange().getValues();
+        for (let i = 1; i < rows.length; i++) {
+          if ((rows[i][0] || '').toString() === (data.id || '').toString()) {
+            sh.deleteRow(i + 1);
+            break;
+          }
+        }
+      }
+    }
+    
+    // ======================================================
+    // REGISTROS OBRA - DOCUMENTOS (CRUD sobre JSON)
+    // ======================================================
+    else if (action === 'registro_obra_documentos_set') {
+      const idObra = (data.id_obra || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const documentos = Array.isArray(data.documentos) ? data.documentos : [];
+
+      if (!idObra) throw new Error('Falta data.id_obra');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      assertPrivileged_(ss, actorId);
+
+      const obra = getRegistroObraById_(ss, idObra);
+      if (!obra) throw new Error('Registro de obra no encontrado');
+
+      obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(documentos));
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    else if (action === 'registro_obra_documento_add') {
+      const idObra = (data.id_obra || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const documento = data.documento || {};
+
+      if (!idObra) throw new Error('Falta data.id_obra');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      assertPrivileged_(ss, actorId);
+
+      const obra = getRegistroObraById_(ss, idObra);
+      if (!obra) throw new Error('Registro de obra no encontrado');
+
+      const prev = parseDocumentosObra_(obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).getValue());
+      const newDoc = {
+        id: documento.id || ('doc_' + Date.now().toString()),
+        tipo: (documento.tipo || '').toString(),
+        nombre: (documento.nombre || '').toString(),
+        url: (documento.url || '').toString(),
+        fecha: (documento.fecha || new Date().toISOString().split('T')[0]),
+        uploadedBy: actorId
+      };
+
+      prev.push(newDoc);
+      obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(prev));
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success', documento: newDoc })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    else if (action === 'registro_obra_documento_delete') {
+      const idObra = (data.id_obra || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const documentoId = (data.documentoId || '').toString().trim();
+
+      if (!idObra) throw new Error('Falta data.id_obra');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      if (!documentoId) throw new Error('Falta data.documentoId');
+      assertPrivileged_(ss, actorId);
+
+      const obra = getRegistroObraById_(ss, idObra);
+      if (!obra) throw new Error('Registro de obra no encontrado');
+
+      const prev = parseDocumentosObra_(obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).getValue());
+      const next = prev.filter(doc => (doc.id || '') !== documentoId);
+      obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(next));
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // ======================================================
+    // REGISTROS OBRA - ADJUNTOS ARCHIVOS (Drive)
+    // ======================================================
+    else if (action === 'registro_obra_upload_adjunto') {
+      const idObra = (data.id_obra || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+
+      if (!idObra) throw new Error('Falta data.id_obra');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      if (!data.base64) throw new Error('Falta data.base64');
+
+      // Verificar permisos (solo supervisor/director o responsable asignado)
+      const obra = getRegistroObraById_(ss, idObra);
+      if (!obra) throw new Error('Registro de obra no encontrado');
+      
+      const obraResponsableId = (obra.values[COL_REGISTROS_ID_RESPONSABLE - 1] || '').toString();
+      if (!isPrivileged_(ss, actorId) && actorId !== obraResponsableId) {
+        throw new Error('No autorizado: solo el responsable o supervisor puede subir adjuntos');
+      }
+
+      const folder = getAttachmentsFolder_();
+      const filename = (data.filename || 'adjunto_obra').toString();
+      const mimeType = (data.mimeType || 'application/octet-stream').toString();
+      const base64 = (data.base64 || '').toString();
+
+      const bytes = Utilities.base64Decode(base64);
+      const blob = Utilities.newBlob(bytes, mimeType, filename);
+
+      const finalName = `obra_${idObra}__${filename}`;
+      const file = folder.createFile(blob).setName(finalName);
+      ensureFileIsShareable_(file);
+
+      const fileUrl = file.getUrl();
+      const fileId = file.getId();
+
+      const prevRaw = obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).getValue();
+      const prevAdj = parseAdjuntosObra_(prevRaw);
+      prevAdj.push({
+        id: fileId,
+        name: filename,
+        url: fileUrl,
+        kind: 'adjunto_obra',
+        uploadedBy: actorId,
+        createdAt: new Date().toISOString(),
+        mimeType: mimeType
+      });
+      obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).setValue(stringifyAdjuntosObra_(prevAdj));
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success', fileId, url: fileUrl })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    else if (action === 'registro_obra_adjunto_eliminar') {
+      const idObra = (data.id_obra || '').toString().trim();
+      const fileId = (data.fileId || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+
+      if (!idObra) throw new Error('Falta data.id_obra');
+      if (!fileId) throw new Error('Falta data.fileId');
+      if (!actorId) throw new Error('Falta data.id_actor');
+
+      assertPrivileged_(ss, actorId);
+
+      // Eliminar de Drive
+      try {
+        DriveApp.getFileById(fileId).setTrashed(true);
+      } catch (e) {
+        // El archivo puede no existir, continuar
+      }
+
+      const obra = getRegistroObraById_(ss, idObra);
+      if (obra) {
+        const prevRaw = obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).getValue();
+        const prevAdj = parseAdjuntosObra_(prevRaw);
+        const nextAdj = prevAdj.filter(a => (a.id || '') !== fileId);
+        obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).setValue(stringifyAdjuntosObra_(nextAdj));
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({ result: 'success', message: 'Operación completada' })).setMimeType(ContentService.MimeType.JSON);
@@ -1033,6 +1428,7 @@ function doPost(e) {
 // ======================================================
 // TESTS (opcional)
 // ======================================================
+
 function testAttachmentsFolder() {
   const folder = DriveApp.getFolderById(DRIVE_ATTACHMENTS_FOLDER_ID);
   Logger.log(folder.getName());
