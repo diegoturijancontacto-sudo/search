@@ -763,6 +763,53 @@
                         <textarea id="obraObservaciones" rows="3" placeholder="Notas adicionales…"
                                   class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"></textarea>
                     </div>
+
+                    <!-- DOCUMENTOS (solo en modo edición) -->
+                    <div id="obra-docs-section" class="sm:col-span-2 hidden">
+                        <div class="border border-slate-200 rounded-xl p-4 space-y-3">
+                            <h4 class="text-sm font-bold text-slate-700">
+                                📄 Documentos
+                                <span class="text-xs font-normal text-slate-400 ml-1">(escrituras, planos, permisos)</span>
+                            </h4>
+                            <div id="obra-docs-list" class="space-y-2"></div>
+                            <div class="border-t border-slate-100 pt-3 space-y-2">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <input type="text" id="docTipo" placeholder="Tipo (Escritura, Plano…)"
+                                           class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                                    <input type="text" id="docNombre" placeholder="Nombre del documento"
+                                           class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                                    <input type="url" id="docUrl" placeholder="URL del documento"
+                                           class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                                    <input type="date" id="docFecha"
+                                           class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                                </div>
+                                <button type="button" onclick="addObraDocumento()"
+                                        class="w-full px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-slate-700 transition-colors">
+                                    + Agregar Documento
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ADJUNTOS (solo en modo edición) -->
+                    <div id="obra-adj-section" class="sm:col-span-2 hidden">
+                        <div class="border border-slate-200 rounded-xl p-4 space-y-3">
+                            <h4 class="text-sm font-bold text-slate-700">
+                                📎 Adjuntos
+                                <span class="text-xs font-normal text-slate-400 ml-1">(fotos, videos, documentos adicionales)</span>
+                            </h4>
+                            <div id="obra-adj-list" class="space-y-2"></div>
+                            <div class="border-t border-slate-100 pt-3 space-y-2">
+                                <label class="block text-sm font-bold text-slate-700 mb-1 sr-only" for="obraAdjFile">Seleccionar archivo para adjuntar</label>
+                                <input type="file" id="obraAdjFile"
+                                       class="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                                <button type="button" onclick="uploadObraAdjunto()" id="obra-adj-upload-btn"
+                                        class="w-full px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-sm font-medium text-indigo-700 transition-colors">
+                                    ⬆ Subir Archivo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="flex gap-3 pt-2">
@@ -810,6 +857,9 @@
         let fullDataLoaded = false;
         let finanzasDataLoaded = false;
         let obrasDataLoaded = false;
+        let currentObraId = null;
+        let currentObraDocumentos = [];
+        let currentObraAdjuntos = [];
 
         document.addEventListener('DOMContentLoaded', loadResponsables);
 
@@ -1764,11 +1814,23 @@
                 document.getElementById('obraResponsable').value = obra.id_responsable || '';
                 document.getElementById('obraObservaciones').value = obra.observaciones || '';
                 btnDel.classList.remove('hidden');
+                currentObraId = obra.id;
+                currentObraDocumentos = Array.isArray(obra.documentos) ? [...obra.documentos] : [];
+                currentObraAdjuntos = Array.isArray(obra.adjuntos) ? [...obra.adjuntos] : [];
+                document.getElementById('obra-docs-section').classList.remove('hidden');
+                document.getElementById('obra-adj-section').classList.remove('hidden');
+                renderObraDocumentos();
+                renderObraAdjuntos();
             } else {
                 document.getElementById('obra-modal-title').textContent = 'Nueva Obra';
                 document.getElementById('obraId').value = '';
                 document.getElementById('obraFechaRegistro').value = new Date().toISOString().split('T')[0];
                 btnDel.classList.add('hidden');
+                currentObraId = null;
+                currentObraDocumentos = [];
+                currentObraAdjuntos = [];
+                document.getElementById('obra-docs-section').classList.add('hidden');
+                document.getElementById('obra-adj-section').classList.add('hidden');
             }
 
             document.getElementById('obraModal').classList.remove('hidden');
@@ -1776,6 +1838,192 @@
 
         function closeObraModal() {
             document.getElementById('obraModal').classList.add('hidden');
+        }
+
+        function getActorId() {
+            try {
+                const u = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+                if (u && u.id) return u.id;
+            } catch (_) {}
+            return document.getElementById('obraResponsable').value || '';
+        }
+
+        function renderObraDocumentos() {
+            const list = document.getElementById('obra-docs-list');
+            if (!currentObraDocumentos.length) {
+                list.innerHTML = '<p class="text-slate-400 text-xs">Sin documentos registrados.</p>';
+                return;
+            }
+            list.innerHTML = currentObraDocumentos.map(doc => `
+                <div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                    <div class="flex-1 min-w-0">
+                        <span class="font-medium text-slate-700 text-sm">${escapeHtml(doc.nombre || '—')}</span>
+                        ${doc.tipo ? `<span class="ml-2 text-xs text-slate-400">${escapeHtml(doc.tipo)}</span>` : ''}
+                        ${doc.fecha ? `<span class="ml-2 text-xs text-slate-400">${escapeHtml(doc.fecha)}</span>` : ''}
+                    </div>
+                    ${doc.url ? `<a href="${escapeHtml(doc.url)}" target="_blank" rel="noopener noreferrer" class="text-indigo-500 hover:underline text-xs shrink-0">Ver</a>` : ''}
+                    <button type="button" onclick="deleteObraDocumento('${escapeHtml(doc.id)}')"
+                            class="text-red-400 hover:text-red-600 text-xs shrink-0 ml-1" title="Eliminar">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function renderObraAdjuntos() {
+            const list = document.getElementById('obra-adj-list');
+            if (!currentObraAdjuntos.length) {
+                list.innerHTML = '<p class="text-slate-400 text-xs">Sin adjuntos.</p>';
+                return;
+            }
+            list.innerHTML = currentObraAdjuntos.map(adj => `
+                <div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                    <span class="flex-1 min-w-0 truncate text-slate-700 text-sm">${escapeHtml(adj.name || adj.id || '—')}</span>
+                    ${adj.url ? `<a href="${escapeHtml(adj.url)}" target="_blank" rel="noopener noreferrer" class="text-indigo-500 hover:underline text-xs shrink-0">Ver</a>` : ''}
+                    <button type="button" onclick="deleteObraAdjunto('${escapeHtml(adj.id)}')"
+                            class="text-red-400 hover:text-red-600 text-xs shrink-0 ml-1" title="Eliminar">✕</button>
+                </div>
+            `).join('');
+        }
+
+        async function addObraDocumento() {
+            const tipo = document.getElementById('docTipo').value.trim();
+            const nombre = document.getElementById('docNombre').value.trim();
+            const url = document.getElementById('docUrl').value.trim();
+            const fecha = document.getElementById('docFecha').value;
+            if (!nombre) { alert('El nombre del documento es obligatorio'); return; }
+            const actorId = getActorId();
+            if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
+            try {
+                const resp = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registro_obra_documento_add', data: {
+                        id_obra: currentObraId,
+                        id_actor: actorId,
+                        documento: { tipo, nombre, url, fecha }
+                    }})
+                });
+                const result = await resp.json();
+                if (result.result === 'success') {
+                    currentObraDocumentos.push(result.documento);
+                    const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
+                    if (idx !== -1) allRegistrosObra[idx].documentos = [...currentObraDocumentos];
+                    renderObraDocumentos();
+                    document.getElementById('docTipo').value = '';
+                    document.getElementById('docNombre').value = '';
+                    document.getElementById('docUrl').value = '';
+                    document.getElementById('docFecha').value = '';
+                } else {
+                    alert('Error: ' + (result.message || 'No se pudo agregar el documento'));
+                }
+            } catch (e) {
+                alert('Error al agregar documento');
+            }
+        }
+
+        async function deleteObraDocumento(docId) {
+            if (!confirm('¿Eliminar este documento?')) return;
+            const actorId = getActorId();
+            if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
+            try {
+                const resp = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registro_obra_documento_delete', data: {
+                        id_obra: currentObraId,
+                        id_actor: actorId,
+                        documentoId: docId
+                    }})
+                });
+                const result = await resp.json();
+                if (result.result === 'success') {
+                    currentObraDocumentos = currentObraDocumentos.filter(d => d.id !== docId);
+                    const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
+                    if (idx !== -1) allRegistrosObra[idx].documentos = [...currentObraDocumentos];
+                    renderObraDocumentos();
+                } else {
+                    alert('Error: ' + (result.message || 'No se pudo eliminar el documento'));
+                }
+            } catch (e) {
+                alert('Error al eliminar documento');
+            }
+        }
+
+        async function uploadObraAdjunto() {
+            const fileInput = document.getElementById('obraAdjFile');
+            const file = fileInput.files[0];
+            if (!file) { alert('Selecciona un archivo primero'); return; }
+            const actorId = getActorId();
+            if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
+            const btn = document.getElementById('obra-adj-upload-btn');
+            btn.disabled = true;
+            btn.textContent = 'Subiendo…';
+            try {
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                const resp = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registro_obra_upload_adjunto', data: {
+                        id_obra: currentObraId,
+                        id_actor: actorId,
+                        filename: file.name,
+                        mimeType: file.type || 'application/octet-stream',
+                        base64
+                    }})
+                });
+                const result = await resp.json();
+                if (result.result === 'success') {
+                    const newAdj = {
+                        id: result.fileId,
+                        name: file.name,
+                        url: result.url,
+                        kind: 'adjunto_obra',
+                        uploadedBy: actorId,
+                        createdAt: new Date().toISOString(),
+                        mimeType: file.type || 'application/octet-stream'
+                    };
+                    currentObraAdjuntos.push(newAdj);
+                    const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
+                    if (idx !== -1) allRegistrosObra[idx].adjuntos = [...currentObraAdjuntos];
+                    renderObraAdjuntos();
+                    fileInput.value = '';
+                } else {
+                    alert('Error: ' + (result.message || 'No se pudo subir el archivo'));
+                }
+            } catch (e) {
+                alert('Error al subir archivo');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⬆ Subir Archivo';
+            }
+        }
+
+        async function deleteObraAdjunto(fileId) {
+            if (!confirm('¿Eliminar este adjunto? Se borrará también de Drive.')) return;
+            const actorId = getActorId();
+            if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
+            try {
+                const resp = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registro_obra_adjunto_eliminar', data: {
+                        id_obra: currentObraId,
+                        id_actor: actorId,
+                        fileId
+                    }})
+                });
+                const result = await resp.json();
+                if (result.result === 'success') {
+                    currentObraAdjuntos = currentObraAdjuntos.filter(a => a.id !== fileId);
+                    const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
+                    if (idx !== -1) allRegistrosObra[idx].adjuntos = [...currentObraAdjuntos];
+                    renderObraAdjuntos();
+                } else {
+                    alert('Error: ' + (result.message || 'No se pudo eliminar el adjunto'));
+                }
+            } catch (e) {
+                alert('Error al eliminar adjunto');
+            }
         }
 
         function setObraLoading(loading) {
