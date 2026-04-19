@@ -467,11 +467,12 @@
                                 <th class="p-3 font-semibold text-slate-600 text-right">Precio Lista</th>
                                 <th class="p-3 font-semibold text-slate-600 text-right">Precio Venta</th>
                                 <th class="p-3 font-semibold text-slate-600">Cliente</th>
+                                <th class="p-3 font-semibold text-slate-600">Clave</th>
                                 <th class="p-3 font-semibold text-slate-600 text-right">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="obras-table-body">
-                            <tr><td colspan="10" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
+                            <tr><td colspan="11" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1123,7 +1124,7 @@
                 document.getElementById('finanzas-table-body').innerHTML =
                     '<tr><td colspan="8" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
                 document.getElementById('obras-table-body').innerHTML =
-                    '<tr><td colspan="10" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
+                    '<tr><td colspan="11" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
                 document.getElementById('comisiones-table-body').innerHTML =
                     '<tr><td colspan="3" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
             } finally {
@@ -1869,7 +1870,7 @@
             tbody.innerHTML = '';
 
             if (registros.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-slate-400">No hay obras con los filtros aplicados</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-8 text-slate-400">No hay obras con los filtros aplicados</td></tr>';
                 countEl.textContent = '0 registros';
                 return;
             }
@@ -1900,6 +1901,9 @@
                     <td class="p-3 text-right text-slate-700">${o.precio_lista ? formatMonto(o.precio_lista) : '—'}</td>
                     <td class="p-3 text-right text-slate-700">${o.precio_venta ? formatMonto(o.precio_venta) : '—'}</td>
                     <td class="p-3 text-slate-600">${escapeHtml(o.cliente || '—')}</td>
+                    <td class="p-3">
+                        <span class="font-mono text-xs px-2 py-1 rounded bg-indigo-50 text-indigo-700">${escapeHtml(o.clave || '—')}</span>
+                    </td>
                     <td class="p-3 text-right whitespace-nowrap">
                         <button onclick="editObra('${escapeHtml(o.id)}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-1">Editar</button>
                         <button onclick="deleteObra('${escapeHtml(o.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
@@ -1937,6 +1941,7 @@
             // Attach change listeners for auto-generating clave
             document.getElementById('obraProvenance').onchange = updateObraClave;
             document.getElementById('obraAutor').oninput = updateObraClave;
+            document.getElementById('obraUbicacion').oninput = updateObraClave;
 
             if (obra) {
                 document.getElementById('obra-modal-title').textContent = 'Editar Obra';
@@ -2263,39 +2268,27 @@
         }
 
         // ============================================================
-        // ENCRYPTION HELPERS (XOR + Base64, key = "Atlas")
+        // CLAVE HELPERS (iniciales de provenance + ubicación + porcentaje + autor)
         // ============================================================
-        function encryptClave(provenance, porcentaje, autor) {
-            if (!provenance && !autor) return '';
-            const plain = [provenance, porcentaje, autor].join('|');
-            const encoder = new TextEncoder();
-            const plainBytes = encoder.encode(plain);
-            const keyBytes = encoder.encode('Atlas');
-            const xored = new Uint8Array(plainBytes.length);
-            for (let i = 0; i < plainBytes.length; i++) {
-                xored[i] = plainBytes[i] ^ keyBytes[i % keyBytes.length];
-            }
-            return btoa(String.fromCharCode(...xored));
+        function getInitials(text) {
+            if (!text) return '';
+            return text.trim().split(/\s+/).map(w => w.charAt(0).toUpperCase()).filter(c => c !== '').join('');
         }
 
-        function decryptClave(clave) {
-            if (!clave) return '';
-            try {
-                const bytes = Uint8Array.from(atob(clave), c => c.charCodeAt(0));
-                const keyBytes = new TextEncoder().encode('Atlas');
-                const xored = new Uint8Array(bytes.length);
-                for (let i = 0; i < bytes.length; i++) {
-                    xored[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
-                }
-                return new TextDecoder().decode(xored);
-            } catch (_) {
-                return '';
-            }
+        function generateClave(provenance, ubicacion, porcentaje, autor) {
+            const parts = [
+                getInitials(provenance),
+                getInitials(ubicacion),
+                porcentaje ? String(porcentaje) : '',
+                getInitials(autor)
+            ].filter(p => p !== '');
+            return parts.join('-');
         }
 
         function updateObraClave() {
             const sel = document.getElementById('obraProvenance');
             const autor = (document.getElementById('obraAutor').value || '').trim();
+            const ubicacion = (document.getElementById('obraUbicacion').value || '').trim();
             const provenanceVal = sel ? sel.value : '';
             let porcentaje = '';
             let provName = '';
@@ -2304,7 +2297,7 @@
                 porcentaje = com ? String(com.porcentaje || '') : '';
                 provName = com ? (com.provenance || '') : '';
             }
-            document.getElementById('obraClave').value = encryptClave(provName, porcentaje, autor);
+            document.getElementById('obraClave').value = generateClave(provName, ubicacion, porcentaje, autor);
         }
 
         // ============================================================
