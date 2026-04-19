@@ -1482,3 +1482,9 @@ function testAttachmentsFolder() {
   ensureFileIsShareable_(f);
   Logger.log(f.getUrl());
 }
+
+function verificarScopes() {
+  const authInfo = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);
+  Logger.log('Scopes otorgados:');
+  Logger.log(authInfo.getScopes());
+}
