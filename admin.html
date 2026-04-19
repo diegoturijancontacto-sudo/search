@@ -1923,7 +1923,7 @@
                 selResp.appendChild(opt);
             });
 
-                        const selProv = document.getElementById('obraProvenance');
+            const selProv = document.getElementById('obraProvenance');
             selProv.innerHTML = '<option value="">Sin provenance</option>';
             allComisiones.forEach(c => {
                 const opt = document.createElement('option');
@@ -1959,7 +1959,7 @@
                 document.getElementById('obraFechaVenta').value = obra.fecha_venta || '';
                 document.getElementById('obraResponsable').value = obra.id_responsable || '';
                 document.getElementById('obraAutor').value = obra.autor || '';
-                document.getElementById('obraProvenance').value = obra.provenance || '';
+                document.getElementById('obraProvenance').value = obra.id_comision || '';
                 document.getElementById('obraClave').value = obra.clave || '';
                 document.getElementById('obraObservaciones').value = obra.observaciones || '';
                 btnDel.classList.remove('hidden');
@@ -2192,7 +2192,7 @@
                     fecha_venta: document.getElementById('obraFechaVenta').value,
                     id_responsable: document.getElementById('obraResponsable').value,
                     autor: document.getElementById('obraAutor').value.trim(),
-                    provenance: (document.getElementById('obraProvenance').selectedOptions?.[0]?.textContent || '').trim(),
+                    id_comision: document.getElementById('obraProvenance').value,
                     clave: document.getElementById('obraClave').value.trim(),
                     observaciones: document.getElementById('obraObservaciones').value.trim()
                 };
