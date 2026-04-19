@@ -2199,14 +2199,16 @@
 
                 // Upload pending adjuntos for new obra
                 if (!id && pendingAdjuntos.length) {
-                    const actorId = getActorId() || payload.id_responsable || payload.id;
-                    const uploadedAdjs = [];
-                    for (const file of pendingAdjuntos) {
-                        const adj = await uploadFileToObra(payload.id, file, actorId);
-                        if (adj) uploadedAdjs.push(adj);
-                    }
-                    if (uploadedAdjs.length) {
-                        payload.adjuntos = uploadedAdjs;
+                    const actorId = getActorId() || payload.id_responsable;
+                    if (actorId) {
+                        const uploadedAdjs = [];
+                        for (const file of pendingAdjuntos) {
+                            const adj = await uploadFileToObra(payload.id, file, actorId);
+                            if (adj) uploadedAdjs.push(adj);
+                        }
+                        if (uploadedAdjs.length) {
+                            payload.adjuntos = uploadedAdjs;
+                        }
                     }
                     pendingAdjuntos = [];
                 }
@@ -2263,30 +2265,31 @@
         // ============================================================
         // ENCRYPTION HELPERS (XOR + Base64, key = "Atlas")
         // ============================================================
-        function xorCipher(text, key) {
-            let result = '';
-            for (let i = 0; i < text.length; i++) {
-                result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-            }
-            return result;
-        }
-
         function encryptClave(provenance, porcentaje, autor) {
             if (!provenance && !autor) return '';
             const plain = [provenance, porcentaje, autor].join('|');
-            try {
-                return btoa(unescape(encodeURIComponent(xorCipher(plain, 'Atlas'))));
-            } catch (_) {
-                return btoa(xorCipher(plain, 'Atlas'));
+            const encoder = new TextEncoder();
+            const plainBytes = encoder.encode(plain);
+            const keyBytes = encoder.encode('Atlas');
+            const xored = new Uint8Array(plainBytes.length);
+            for (let i = 0; i < plainBytes.length; i++) {
+                xored[i] = plainBytes[i] ^ keyBytes[i % keyBytes.length];
             }
+            return btoa(String.fromCharCode(...xored));
         }
 
         function decryptClave(clave) {
             if (!clave) return '';
             try {
-                return xorCipher(decodeURIComponent(escape(atob(clave))), 'Atlas');
+                const bytes = Uint8Array.from(atob(clave), c => c.charCodeAt(0));
+                const keyBytes = new TextEncoder().encode('Atlas');
+                const xored = new Uint8Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) {
+                    xored[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
+                }
+                return new TextDecoder().decode(xored);
             } catch (_) {
-                try { return xorCipher(atob(clave), 'Atlas'); } catch (__) { return ''; }
+                return '';
             }
         }
 
@@ -2295,12 +2298,13 @@
             const autor = (document.getElementById('obraAutor').value || '').trim();
             const provenanceVal = sel ? sel.value : '';
             let porcentaje = '';
+            let provName = '';
             if (provenanceVal) {
                 const com = allComisiones.find(c => c.id === provenanceVal);
                 porcentaje = com ? String(com.porcentaje || '') : '';
+                provName = com ? (com.provenance || '') : '';
             }
-            const provLabel = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
-            document.getElementById('obraClave').value = encryptClave(provLabel, porcentaje, autor);
+            document.getElementById('obraClave').value = encryptClave(provName, porcentaje, autor);
         }
 
         // ============================================================
