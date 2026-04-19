@@ -1,50 +1,2478 @@
-function saveComision(event) {
-    // The new fetch call with updated headers and response handling
-    fetch('/your/api/endpoint', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify(event)
-    })
-    .then(res => {
-        if (!res.ok) {
-            throw new Error('Network response was not ok');
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin - Responsables</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes bounce-dot {
+            0%, 100% { transform: translateY(0); opacity: 0.6; }
+            50% { transform: translateY(-12px); opacity: 1; }
         }
-        return res.text();
-    })
-    .then(text => {
-        const json = JSON.parse(text);
-        if (json.result === 'error') {
-            throw new Error('Error from server: ' + json.message);
-        }
-        // Update allComisiones with the new data
-        allComisiones = json.data;
-    })
-    .catch(error => console.error('There was a problem with the fetch operation:', error));
-}
+        .dot-1 { animation: bounce-dot 0.8s infinite; animation-delay: 0ms; }
+        .dot-2 { animation: bounce-dot 0.8s infinite; animation-delay: 160ms; }
+        .dot-3 { animation: bounce-dot 0.8s infinite; animation-delay: 320ms; }
+        .hidden { display: none !important; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-function deleteComision(id) {
-    // The new fetch call with updated headers and response handling
-    fetch('/your/api/endpoint/' + id, {
-        method: 'DELETE',
-        headers: {
-            'Content-Type': 'text/plain;charset=utf-8',
+        @media print {
+            body { background: white !important; }
+            .no-print { display: none !important; }
+            #rendimiento-section { display: block !important; }
+            #responsables-section { display: none !important; }
+            #finanzas-section { display: none !important; }
+            #obras-section { display: none !important; }
+            #comisiones-section { display: none !important; }
+            .print-only { display: block !important; }
+            #pdf-report-header { display: block !important; }
+            #loading { display: none !important; }
+            .bg-slate-50 { background: white !important; }
+            .shadow-sm { box-shadow: none !important; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            thead { display: table-header-group; }
+            @page { size: A4 portrait; margin: 1.5cm; }
         }
-    })
-    .then(res => {
-        if (!res.ok) {
-            throw new Error('Network response was not ok');
+        .print-only { display: none; }
+        #pdf-report-header { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
+
+    <!-- Loading Overlay -->
+    <div id="loading" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center hidden">
+        <div class="flex gap-2 items-center">
+            <div class="w-3 h-3 rounded-full bg-indigo-600 dot-1"></div>
+            <div class="w-3 h-3 rounded-full bg-indigo-600 dot-2"></div>
+            <div class="w-3 h-3 rounded-full bg-indigo-600 dot-3"></div>
+        </div>
+    </div>
+
+    <!-- PDF Report Header (only visible when printing) -->
+    <div id="pdf-report-header" class="print-only p-6 border-b-2 border-slate-800 mb-6">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">OpCore | Dirección de Operaciones</h1>
+                <h2 class="text-lg font-semibold text-slate-700 mt-1">Informe Global de Rendimiento Operativo</h2>
+            </div>
+            <div class="text-right text-sm text-slate-600">
+                <div id="pdf-fecha-generacion"></div>
+                <div id="pdf-periodo-filtrado"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto p-4 md:p-6">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 no-print">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">👥 Administración de Responsables</h1>
+                <p class="text-slate-500">Gestiona responsables (usuarios operativos) del sistema</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button id="btn-nuevo-responsable" onclick="openRespModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z">
+                        </path>
+                    </svg>
+                    Nuevo Responsable
+                </button>
+                <a href="panel.html" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-5 py-2.5 rounded-lg font-medium shadow-sm transition-all">
+                    Volver al Panel
+                </a>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="flex gap-1 bg-slate-200/60 p-1 rounded-xl w-fit mb-6 no-print" id="tab-nav">
+            <button onclick="switchTab('responsables')" id="tab-btn-responsables"
+                    class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all bg-white text-indigo-600 shadow-sm">
+                👥 Responsables
+            </button>
+            <button onclick="switchTab('rendimiento')" id="tab-btn-rendimiento"
+                    class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all text-slate-600 hover:text-slate-900">
+                📊 Rendimiento Operativo
+            </button>
+            <button onclick="switchTab('finanzas')" id="tab-btn-finanzas"
+                    class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all text-slate-600 hover:text-slate-900">
+                💰 Finanzas
+            </button>
+            <button onclick="switchTab('obras')" id="tab-btn-obras"
+                    class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all text-slate-600 hover:text-slate-900">
+                🏗️ Registro de Obra
+            </button>
+            <button onclick="switchTab('comisiones')" id="tab-btn-comisiones"
+                    class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all text-slate-600 hover:text-slate-900">
+                💼 Comisiones
+            </button>
+        </nav>
+
+        <!-- TAB: Responsables -->
+        <div id="responsables-section">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th class="p-4 font-semibold text-slate-600">Nombre</th>
+                            <th class="p-4 font-semibold text-slate-600">Email</th>
+                            <th class="p-4 font-semibold text-slate-600">Departamento</th>
+                            <th class="p-4 font-semibold text-slate-600">Rol</th>
+                            <th class="p-4 font-semibold text-slate-600">Identificador</th>
+                            <th class="p-4 font-semibold text-slate-600 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resp-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: Rendimiento Operativo -->
+        <div id="rendimiento-section" class="hidden">
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6" id="rendimiento-summary-cards">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Activas</p>
+                    <p class="text-3xl font-extrabold text-slate-800" id="rend-total-activas">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Completadas</p>
+                    <p class="text-3xl font-extrabold text-emerald-600" id="rend-total-completadas">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Pendientes</p>
+                    <p class="text-3xl font-extrabold text-amber-500" id="rend-total-pendientes">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Vencidas</p>
+                    <p class="text-3xl font-extrabold text-red-500" id="rend-total-vencidas">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 col-span-2 md:col-span-1">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">% Cumplimiento</p>
+                    <p class="text-3xl font-extrabold text-indigo-600" id="rend-cumplimiento">—</p>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 no-print">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Fecha desde</label>
+                        <input type="date" id="filter-fecha-desde"
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Fecha hasta</label>
+                        <input type="date" id="filter-fecha-hasta"
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Cuenta</label>
+                        <select id="filter-cuenta"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Programa</label>
+                        <select id="filter-programa"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Responsable</label>
+                        <select id="filter-responsable"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Estado</label>
+                        <select id="filter-estado"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="en_curso">En curso</option>
+                            <option value="en_revision">En revisión</option>
+                            <option value="completado">Completada</option>
+                            <option value="bloqueada">Bloqueada</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="applyRendimientoFilters()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                        Aplicar filtros
+                    </button>
+                    <button onclick="clearRendimientoFilters()"
+                            class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                        Limpiar
+                    </button>
+                    <button onclick="exportToPDF()"
+                            class="ml-auto bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Exportar PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Detailed Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+                    <h2 class="font-bold text-slate-700">Detalle de Tareas</h2>
+                    <span id="rend-table-count" class="text-sm text-slate-400"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="p-3 font-semibold text-slate-600">Cuenta</th>
+                                <th class="p-3 font-semibold text-slate-600">Programa</th>
+                                <th class="p-3 font-semibold text-slate-600">Tarea</th>
+                                <th class="p-3 font-semibold text-slate-600">Responsable</th>
+                                <th class="p-3 font-semibold text-slate-600 text-center">Fecha Límite</th>
+                                <th class="p-3 font-semibold text-slate-600 text-center">Estado</th>
+                                <th class="p-3 font-semibold text-slate-600 text-center">Cumplimiento</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rendimiento-table-body">
+                            <tr><td colspan="7" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Totals summary (visible in print too) -->
+            <div id="rend-totals-footer" class="mt-4 bg-slate-50 rounded-xl border border-slate-200 p-4 hidden">
+                <h3 class="font-bold text-slate-700 mb-3">Resumen Final</h3>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-center" id="rend-totals-grid"></div>
+            </div>
+        </div>
+
+        <!-- TAB: Finanzas -->
+        <div id="finanzas-section" class="hidden">
+
+            <!-- Finance Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6" id="finanzas-summary-cards">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Ingresos</p>
+                    <p class="text-2xl font-extrabold text-emerald-600" id="fin-total-ingresos">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Egresos</p>
+                    <p class="text-2xl font-extrabold text-red-500" id="fin-total-egresos">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Balance</p>
+                    <p class="text-2xl font-extrabold text-indigo-600" id="fin-balance">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1"># Ingresos</p>
+                    <p class="text-2xl font-extrabold text-slate-800" id="fin-count-ingresos">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1"># Egresos</p>
+                    <p class="text-2xl font-extrabold text-slate-800" id="fin-count-egresos">—</p>
+                </div>
+            </div>
+
+            <!-- Finance Filters -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Fecha desde</label>
+                        <input type="date" id="fin-filter-desde"
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Fecha hasta</label>
+                        <input type="date" id="fin-filter-hasta"
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Tipo</label>
+                        <select id="fin-filter-tipo"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                            <option value="ingreso">Ingreso</option>
+                            <option value="egreso">Egreso</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Categoría</label>
+                        <select id="fin-filter-categoria"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Proyecto</label>
+                        <select id="fin-filter-proyecto"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Responsable</label>
+                        <select id="fin-filter-responsable"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="applyFinanzasFilters()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                        Aplicar filtros
+                    </button>
+                    <button onclick="clearFinanzasFilters()"
+                            class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                        Limpiar
+                    </button>
+                    <button onclick="openFinanzaModal()"
+                            class="ml-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Nuevo Registro
+                    </button>
+                </div>
+            </div>
+
+            <!-- Finance Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+                    <h2 class="font-bold text-slate-700">Registros de Ingresos y Egresos</h2>
+                    <span id="fin-table-count" class="text-sm text-slate-400"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="p-3 font-semibold text-slate-600">Fecha</th>
+                                <th class="p-3 font-semibold text-slate-600">Tipo</th>
+                                <th class="p-3 font-semibold text-slate-600">Concepto</th>
+                                <th class="p-3 font-semibold text-slate-600">Categoría</th>
+                                <th class="p-3 font-semibold text-slate-600">Proyecto</th>
+                                <th class="p-3 font-semibold text-slate-600">Responsable</th>
+                                <th class="p-3 font-semibold text-slate-600 text-right">Monto</th>
+                                <th class="p-3 font-semibold text-slate-600 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="finanzas-table-body">
+                            <tr><td colspan="8" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Registro de Obra -->
+        <div id="obras-section" class="hidden">
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Obras</p>
+                    <p class="text-3xl font-extrabold text-slate-800" id="obras-total">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Consolidación</p>
+                    <p class="text-3xl font-extrabold text-blue-600" id="obras-consolidacion">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Bodega</p>
+                    <p class="text-3xl font-extrabold text-amber-500" id="obras-bodega">—</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Vendida</p>
+                    <p class="text-3xl font-extrabold text-emerald-600" id="obras-vendida">—</p>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Buscar por nombre</label>
+                        <input type="text" id="obras-filter-nombre" placeholder="Nombre de la obra…"
+                               class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Estatus</label>
+                        <select id="obras-filter-estatus"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                            <option value="Consolidación">Consolidación</option>
+                            <option value="Bodega">Bodega</option>
+                            <option value="Vendida">Vendida</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Tipo de Obra</label>
+                        <select id="obras-filter-tipo"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Responsable</label>
+                        <select id="obras-filter-responsable"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="applyObraFilters()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                        Aplicar filtros
+                    </button>
+                    <button onclick="clearObraFilters()"
+                            class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                        Limpiar
+                    </button>
+                    <button onclick="openObraModal()"
+                            class="ml-auto bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Nueva Obra
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+                    <h2 class="font-bold text-slate-700">Fichas de Registro de Obra</h2>
+                    <span id="obras-table-count" class="text-sm text-slate-400"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="p-3 font-semibold text-slate-600">Asignación</th>
+                                <th class="p-3 font-semibold text-slate-600">Nombre Obra</th>
+                                <th class="p-3 font-semibold text-slate-600">Tipo</th>
+                                <th class="p-3 font-semibold text-slate-600">Ubicación</th>
+                                <th class="p-3 font-semibold text-slate-600 text-center">Estatus</th>
+                                <th class="p-3 font-semibold text-slate-600 text-right">Superficie (m²)</th>
+                                <th class="p-3 font-semibold text-slate-600 text-right">Precio Lista</th>
+                                <th class="p-3 font-semibold text-slate-600 text-right">Precio Venta</th>
+                                <th class="p-3 font-semibold text-slate-600">Cliente</th>
+                                <th class="p-3 font-semibold text-slate-600 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="obras-table-body">
+                            <tr><td colspan="10" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Comisiones -->
+        <div id="comisiones-section" class="hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-slate-700">💼 Tabla de Comisiones</h2>
+                <button onclick="openComisionModal()"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Nueva Comisión
+                </button>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th class="p-4 font-semibold text-slate-600">Provenance</th>
+                            <th class="p-4 font-semibold text-slate-600 text-right">Porcentaje (%)</th>
+                            <th class="p-4 font-semibold text-slate-600 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comisiones-table-body">
+                        <tr><td colspan="3" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL Responsable -->
+    <div id="respModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800">Nuevo Responsable</h3>
+                <button onclick="closeRespModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="respForm" class="p-6 space-y-4" onsubmit="saveResp(event)">
+                <input type="hidden" id="respId" />
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Nombre Completo</label>
+                    <input type="text" id="respNombre" required
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                    <input type="email" id="respEmail"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Departamento</label>
+                    <input type="text" id="respDepto"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Rol</label>
+                    <select id="respRol"
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="responsable">Responsable</option>
+                        <option value="supervisor">Supervisor</option>
+                        <option value="director">Director</option>
+                    </select>
+                    <p class="text-xs text-slate-400 mt-1">
+                        Nota: este rol es el que usa el panel para permisos (crear/editar/aprobar).
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Identificador (iniciales)</label>
+                    <input type="text" id="respIdentificador" placeholder="Ej: DT"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    <p class="text-xs text-slate-400 mt-1">
+                        Si lo dejas vacío, el backend lo genera automáticamente.
+                    </p>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeRespModal()"
+                            class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                        Cancelar
+                    </button>
+
+                    <button type="submit" id="btn-save"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                        <span id="btn-save-text">Guardar</span>
+                        <span id="btn-save-spinner" class="hidden">
+                            <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+
+                <button type="button" id="btn-delete"
+                        onclick="deleteCurrentResp()"
+                        class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">
+                    Eliminar Responsable
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL Finanza -->
+    <div id="finanzaModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="fin-modal-title" class="text-xl font-bold text-slate-800">Nuevo Registro</h3>
+                <button onclick="closeFinanzaModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="finanzaForm" class="p-6 space-y-4" onsubmit="saveFinanza(event)">
+                <input type="hidden" id="finanzaId" />
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Tipo</label>
+                    <select id="finanzaTipo" required
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="egreso">Egreso</option>
+                        <option value="ingreso">Ingreso</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Monto</label>
+                    <input type="number" id="finanzaMonto" required min="0" step="0.01" placeholder="0.00"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Concepto</label>
+                    <input type="text" id="finanzaConcepto" required placeholder="Descripción del movimiento"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Categoría</label>
+                    <select id="finanzaCategoria"
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="">Sin categoría</option>
+                        <optgroup label="Ingresos">
+                            <option value="Venta">Venta</option>
+                            <option value="Subvención">Subvención</option>
+                            <option value="Donación">Donación</option>
+                            <option value="Transferencia">Transferencia</option>
+                        </optgroup>
+                        <optgroup label="Egresos">
+                            <option value="Servicios">Servicios</option>
+                            <option value="Materiales">Materiales</option>
+                            <option value="Personal">Personal</option>
+                            <option value="Transporte">Transporte</option>
+                            <option value="Equipamiento">Equipamiento</option>
+                        </optgroup>
+                        <option value="Otros">Otros</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Fecha</label>
+                    <input type="date" id="finanzaFecha" required
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Proyecto (opcional)</label>
+                    <select id="finanzaProyecto"
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="">Sin proyecto</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Responsable (opcional)</label>
+                    <select id="finanzaResponsable"
+                            class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                        <option value="">Sin responsable</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeFinanzaModal()"
+                            class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="fin-btn-save"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                        <span id="fin-btn-save-text">Guardar</span>
+                        <span id="fin-btn-save-spinner" class="hidden">
+                            <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+
+                <button type="button" id="fin-btn-delete"
+                        onclick="deleteCurrentFinanza()"
+                        class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">
+                    Eliminar Registro
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL Obra -->
+    <div id="obraModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="obra-modal-title" class="text-xl font-bold text-slate-800">Nueva Obra</h3>
+                <button onclick="closeObraModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="obraForm" class="p-6 space-y-4 overflow-y-auto" onsubmit="saveObra(event)">
+                <input type="hidden" id="obraId" />
+
+                <!-- Ficha técnica -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Nombre de la Obra <span class="text-red-500">*</span></label>
+                        <input type="text" id="obraNombre" required placeholder="Ej: Edificio Torres del Sol"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Tipo de Obra</label>
+                        <input type="text" id="obraTipo" placeholder="Ej: Residencial, Comercial…"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Estatus <span class="text-red-500">*</span></label>
+                        <select id="obraEstatus" required
+                                class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="Consolidación">Consolidación</option>
+                            <option value="Bodega">Bodega</option>
+                            <option value="Vendida">Vendida</option>
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Ubicación</label>
+                        <textarea id="obraUbicacion" rows="2" placeholder="Dirección, ciudad, coordenadas…"
+                                  class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Superficie (m²)</label>
+                        <input type="number" id="obraSuperficie" min="0" step="0.01" placeholder="0.00"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Cliente</label>
+                        <input type="text" id="obraCliente" placeholder="Nombre del cliente"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Precio Lista</label>
+                        <input type="number" id="obraPrecioLista" min="0" step="0.01" placeholder="0.00"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Precio Venta</label>
+                        <input type="number" id="obraPrecioVenta" min="0" step="0.01" placeholder="0.00"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Fecha de Registro</label>
+                        <input type="date" id="obraFechaRegistro"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Fecha de Adquisición</label>
+                        <input type="date" id="obraFechaAdquisicion"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Fecha de Venta</label>
+                        <input type="date" id="obraFechaVenta"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Responsable</label>
+                        <select id="obraResponsable"
+                                class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Sin responsable</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Autor</label>
+                        <input type="text" id="obraAutor" placeholder="Nombre del autor"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Provenance</label>
+                        <select id="obraProvenance"
+                                class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Sin provenance</option>
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">
+                            Clave
+                            <span class="text-xs font-normal text-slate-400 ml-1">(generada automáticamente)</span>
+                        </label>
+                        <input type="text" id="obraClave" readonly placeholder="Se genera al seleccionar Provenance y Autor"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 font-mono text-xs focus:outline-none cursor-default" />
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Observaciones</label>
+                        <textarea id="obraObservaciones" rows="3" placeholder="Notas adicionales…"
+                                  class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"></textarea>
+                    </div>
+
+                    <!-- DOCUMENTOS (solo en modo edición) -->
+                    <div id="obra-docs-section" class="sm:col-span-2 hidden">
+                        <div class="border border-slate-200 rounded-xl p-4 space-y-3">
+                            <h4 class="text-sm font-bold text-slate-700">
+                                📄 Documentos
+                                <span class="text-xs font-normal text-slate-400 ml-1">(escrituras, planos, permisos)</span>
+                            </h4>
+                            <div id="obra-docs-list" class="space-y-2"></div>
+                            <div class="border-t border-slate-100 pt-3 space-y-2">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <input type="text" id="docTipo" placeholder="Tipo (Escritura, Plano…)"
+                                           class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                                    <input type="text" id="docNombre" placeholder="Nombre del documento"
+                                           class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                                    <input type="url" id="docUrl" placeholder="URL del documento"
+                                           class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                                    <input type="date" id="docFecha"
+                                           class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                                </div>
+                                <button type="button" onclick="addObraDocumento()"
+                                        class="w-full px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-slate-700 transition-colors">
+                                    + Agregar Documento
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ADJUNTOS (disponible en creación y edición) -->
+                    <div id="obra-adj-section" class="sm:col-span-2">
+                        <div class="border border-slate-200 rounded-xl p-4 space-y-3">
+                            <h4 class="text-sm font-bold text-slate-700">
+                                📎 Adjuntos
+                                <span class="text-xs font-normal text-slate-400 ml-1">(fotos, videos, documentos adicionales)</span>
+                            </h4>
+                            <div id="obra-adj-list" class="space-y-2"></div>
+                            <div class="border-t border-slate-100 pt-3 space-y-2">
+                                <label class="block text-sm font-bold text-slate-700 mb-1 sr-only" for="obraAdjFile">Seleccionar archivo para adjuntar</label>
+                                <input type="file" id="obraAdjFile"
+                                       class="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                                <button type="button" onclick="uploadObraAdjunto()" id="obra-adj-upload-btn"
+                                        class="w-full px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-sm font-medium text-indigo-700 transition-colors">
+                                    ⬆ Subir Archivo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeObraModal()"
+                            class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="obra-btn-save"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                        <span id="obra-btn-save-text">Guardar</span>
+                        <span id="obra-btn-save-spinner" class="hidden">
+                            <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+
+                <button type="button" id="obra-btn-delete"
+                        onclick="deleteCurrentObra()"
+                        class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">
+                    Eliminar Registro de Obra
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL Comisión -->
+    <div id="comisionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="comision-modal-title" class="text-xl font-bold text-slate-800">Nueva Comisión</h3>
+                <button onclick="closeComisionModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="comisionForm" class="p-6 space-y-4" onsubmit="saveComision(event)">
+                <input type="hidden" id="comisionId" />
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Provenance <span class="text-red-500">*</span></label>
+                    <input type="text" id="comisionProvenance" required placeholder="Ej: Galería Norte, Cliente X…"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Porcentaje (%) <span class="text-red-500">*</span></label>
+                    <input type="number" id="comisionPorcentaje" required min="0" max="100" step="0.01" placeholder="0.00"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeComisionModal()"
+                            class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="comision-btn-save"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                        <span id="comision-btn-save-text">Guardar</span>
+                        <span id="comision-btn-save-spinner" class="hidden">
+                            <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+
+                <button type="button" id="comision-btn-delete"
+                        onclick="deleteCurrentComision()"
+                        class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">
+                    Eliminar Comisión
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxmPBIboe_Evn45ZHjtkjydbmlPRMuSax_sEiTc2iN8cqqi2i4-Pf_lOd6875cQXEd_yg/exec';
+
+        // ============================================================
+        // GLOBAL STATE
+        // ============================================================
+        let responsables = [];
+        let allTareas = [];
+        let allProyectos = [];
+        let allSubproyectos = [];
+        let allFinanzas = [];
+        let allRegistrosObra = [];
+        let allComisiones = [];
+        let rendimientoFiltered = [];
+        let finanzasFiltered = [];
+        let obrasFiltered = [];
+        let activeTab = 'responsables';
+        let fullDataLoaded = false;
+        let finanzasDataLoaded = false;
+        let obrasDataLoaded = false;
+        let comisionesDataLoaded = false;
+        let currentObraId = null;
+        let currentObraDocumentos = [];
+        let currentObraAdjuntos = [];
+        let pendingAdjuntos = [];
+
+        document.addEventListener('DOMContentLoaded', loadResponsables);
+
+        // ============================================================
+        // UTILITIES
+        // ============================================================
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('hidden', !show);
         }
-        return res.text();
-    })
-    .then(text => {
-        const json = JSON.parse(text);
-        if (json.result === 'error') {
-            throw new Error('Error from server: ' + json.message);
+
+        function setLoading(loading) {
+            const btn = document.getElementById('btn-save');
+            const btnText = document.getElementById('btn-save-text');
+            const btnSpinner = document.getElementById('btn-save-spinner');
+            btn.disabled = loading;
+            btn.classList.toggle('opacity-75', loading);
+            btn.classList.toggle('cursor-not-allowed', loading);
+            btnText.classList.toggle('hidden', loading);
+            btnSpinner.classList.toggle('hidden', !loading);
         }
-        // Update allComisiones only after successful deletion
-        allComisiones = json.data;
-    })
-    .catch(error => console.error('There was a problem with the fetch operation:', error));
-}
+
+        function escapeHtml(str) {
+            return (str || '').toString()
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        // ============================================================
+        // TAB NAVIGATION
+        // ============================================================
+        function switchTab(tab) {
+            activeTab = tab;
+            document.getElementById('responsables-section').classList.toggle('hidden', tab !== 'responsables');
+            document.getElementById('rendimiento-section').classList.toggle('hidden', tab !== 'rendimiento');
+            document.getElementById('finanzas-section').classList.toggle('hidden', tab !== 'finanzas');
+            document.getElementById('obras-section').classList.toggle('hidden', tab !== 'obras');
+            document.getElementById('comisiones-section').classList.toggle('hidden', tab !== 'comisiones');
+            document.getElementById('btn-nuevo-responsable').classList.toggle('hidden', tab !== 'responsables');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-white', 'text-indigo-600', 'shadow-sm');
+                btn.classList.add('text-slate-600');
+            });
+            const activeBtn = document.getElementById('tab-btn-' + tab);
+            activeBtn.classList.add('bg-white', 'text-indigo-600', 'shadow-sm');
+            activeBtn.classList.remove('text-slate-600');
+
+            if (tab === 'rendimiento' && !fullDataLoaded) {
+                loadFullData();
+            } else if (tab === 'rendimiento' && fullDataLoaded) {
+                renderRendimiento();
+            } else if (tab === 'finanzas' && !finanzasDataLoaded) {
+                loadFullData();
+            } else if (tab === 'finanzas' && finanzasDataLoaded) {
+                populateFinanzasFilterSelects();
+                renderFinanzas();
+            } else if (tab === 'obras' && !obrasDataLoaded) {
+                loadFullData();
+            } else if (tab === 'obras' && obrasDataLoaded) {
+                populateObrasFilterSelects();
+                renderRegistrosObra();
+            } else if (tab === 'comisiones' && !comisionesDataLoaded) {
+                loadFullData();
+            } else if (tab === 'comisiones' && comisionesDataLoaded) {
+                renderComisiones();
+            }
+        }
+
+        // ============================================================
+        // RESPONSABLES MANAGEMENT
+        // ============================================================
+        async function loadResponsables() {
+            showLoading(true);
+            try {
+                const response = await fetch(WEB_APP_URL);
+                const data = await response.json();
+
+                responsables = data.responsables || [];
+                responsables.sort((a, b) => (a.nombre || '').localeCompare((b.nombre || ''), 'es'));
+
+                // Also store the full data for rendimiento tab if available
+                if (Array.isArray(data.tareas) && Array.isArray(data.proyectos) && Array.isArray(data.subproyectos)) {
+                    allTareas = data.tareas;
+                    allProyectos = data.proyectos;
+                    allSubproyectos = data.subproyectos;
+                    fullDataLoaded = true;
+                }
+
+                if (Array.isArray(data.finanzas)) {
+                    allFinanzas = data.finanzas;
+                    finanzasDataLoaded = true;
+                }
+
+                if (Array.isArray(data.registrosObra)) {
+                    allRegistrosObra = data.registrosObra;
+                    obrasDataLoaded = true;
+                }
+
+                if (Array.isArray(data.comisiones)) {
+                    allComisiones = data.comisiones;
+                    comisionesDataLoaded = true;
+                }
+
+                renderResponsables();
+                populateFilterSelects();
+            } catch (error) {
+                console.error('Error cargando responsables:', error);
+                alert('Error al cargar responsables');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function loadFullData() {
+            showLoading(true);
+            try {
+                const response = await fetch(WEB_APP_URL);
+                const data = await response.json();
+                responsables = data.responsables || [];
+                allTareas = data.tareas || [];
+                allProyectos = data.proyectos || [];
+                allSubproyectos = data.subproyectos || [];
+                allFinanzas = data.finanzas || [];
+                allRegistrosObra = data.registrosObra || [];
+                allComisiones = data.comisiones || [];
+                fullDataLoaded = true;
+                finanzasDataLoaded = true;
+                obrasDataLoaded = true;
+                comisionesDataLoaded = true;
+                populateFilterSelects();
+                if (activeTab === 'rendimiento') {
+                    renderRendimiento();
+                } else if (activeTab === 'finanzas') {
+                    populateFinanzasFilterSelects();
+                    renderFinanzas();
+                } else if (activeTab === 'obras') {
+                    populateObrasFilterSelects();
+                    renderRegistrosObra();
+                } else if (activeTab === 'comisiones') {
+                    renderComisiones();
+                }
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+                document.getElementById('rendimiento-table-body').innerHTML =
+                    '<tr><td colspan="7" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
+                document.getElementById('finanzas-table-body').innerHTML =
+                    '<tr><td colspan="8" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
+                document.getElementById('obras-table-body').innerHTML =
+                    '<tr><td colspan="10" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
+                document.getElementById('comisiones-table-body').innerHTML =
+                    '<tr><td colspan="3" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function roleBadgeClass(role) {
+            if (role === 'director') return 'bg-purple-100 text-purple-600';
+            if (role === 'supervisor') return 'bg-blue-100 text-blue-600';
+            return 'bg-gray-100 text-gray-600';
+        }
+
+        function renderResponsables() {
+            const tbody = document.getElementById('resp-table-body');
+            tbody.innerHTML = '';
+
+            responsables.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50';
+                const ident = (r.identificador || '').toString();
+                tr.innerHTML = `
+                  <td class="p-4 font-medium">${escapeHtml(r.nombre || '')}</td>
+                  <td class="p-4 text-slate-600">${escapeHtml(r.email || '-')}</td>
+                  <td class="p-4 text-slate-600">${escapeHtml(r.departamento || '-')}</td>
+                  <td class="p-4">
+                    <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${roleBadgeClass(r.rol)}">
+                      ${escapeHtml(r.rol || 'responsable')}
+                    </span>
+                  </td>
+                  <td class="p-4">
+                    <span class="font-mono text-xs px-2 py-1 rounded bg-slate-100 text-slate-600">${escapeHtml(ident || '-')}</span>
+                  </td>
+                  <td class="p-4 text-right">
+                    <button onclick="editResp('${r.id}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-2">Editar</button>
+                    <button onclick="deleteResp('${r.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
+                  </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openRespModal(resp = null) {
+            const modal = document.getElementById('respModal');
+            const title = document.getElementById('modal-title');
+            const btnDelete = document.getElementById('btn-delete');
+            document.getElementById('respForm').reset();
+
+            if (resp) {
+                title.innerText = 'Editar Responsable';
+                document.getElementById('respId').value = resp.id;
+                document.getElementById('respNombre').value = resp.nombre || '';
+                document.getElementById('respEmail').value = resp.email || '';
+                document.getElementById('respDepto').value = resp.departamento || '';
+                document.getElementById('respRol').value = resp.rol || 'responsable';
+                document.getElementById('respIdentificador').value = resp.identificador || '';
+                btnDelete.classList.remove('hidden');
+            } else {
+                title.innerText = 'Nuevo Responsable';
+                document.getElementById('respId').value = '';
+                btnDelete.classList.add('hidden');
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function closeRespModal() {
+            document.getElementById('respModal').classList.add('hidden');
+        }
+
+        async function saveResp(e) {
+            e.preventDefault();
+            if (document.getElementById('btn-save').disabled) return;
+            setLoading(true);
+            try {
+                const id = document.getElementById('respId').value;
+                const payload = {
+                    id: id || Date.now().toString(),
+                    nombre: document.getElementById('respNombre').value.trim(),
+                    email: document.getElementById('respEmail').value.trim(),
+                    departamento: document.getElementById('respDepto').value.trim(),
+                    rol: document.getElementById('respRol').value,
+                    identificador: document.getElementById('respIdentificador').value.trim()
+                };
+                const action = id ? 'responsable_update' : 'responsable_add';
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, data: payload })
+                });
+                await loadResponsables();
+                closeRespModal();
+            } catch (error) {
+                console.error('Error guardando responsable:', error);
+                alert('Error al guardar responsable');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function editResp(id) {
+            const r = responsables.find(x => x.id === id);
+            if (r) openRespModal(r);
+        }
+
+        async function deleteResp(id) {
+            if (!confirm('¿Estás seguro de eliminar este responsable?')) return;
+            showLoading(true);
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'responsable_delete', data: { id } })
+                });
+                await loadResponsables();
+            } catch (error) {
+                console.error('Error eliminando responsable:', error);
+                alert('Error al eliminar responsable');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteCurrentResp() {
+            const id = document.getElementById('respId').value;
+            if (!id) return;
+            await deleteResp(id);
+            closeRespModal();
+        }
+
+        // ============================================================
+        // RENDIMIENTO OPERATIVO
+        // ============================================================
+
+        function populateFilterSelects() {
+            // Cuentas
+            const selCuenta = document.getElementById('filter-cuenta');
+            const selPrograma = document.getElementById('filter-programa');
+            const selResp = document.getElementById('filter-responsable');
+
+            selCuenta.innerHTML = '<option value="">Todas</option>';
+            allProyectos.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.nombre || p.id;
+                selCuenta.appendChild(opt);
+            });
+
+            selPrograma.innerHTML = '<option value="">Todos</option>';
+            allSubproyectos.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.nombre || s.id;
+                selPrograma.appendChild(opt);
+            });
+
+            selResp.innerHTML = '<option value="">Todos</option>';
+            responsables.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.nombre || r.id;
+                selResp.appendChild(opt);
+            });
+
+            // When cuenta changes, filter program options
+            selCuenta.addEventListener('change', function () {
+                const cuentaId = this.value;
+                selPrograma.innerHTML = '<option value="">Todos</option>';
+                const programas = cuentaId
+                    ? allSubproyectos.filter(s => s.id_proyecto === cuentaId)
+                    : allSubproyectos;
+                programas.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.nombre || s.id;
+                    selPrograma.appendChild(opt);
+                });
+            });
+        }
+
+        function getComplianceIndicator(tarea) {
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            const isCompleted = tarea.estatus === 'completado';
+
+            if (!tarea.fecha_limite) {
+                return isCompleted
+                    ? { label: 'Completada', cls: 'bg-emerald-100 text-emerald-700' }
+                    : { label: 'Sin fecha', cls: 'bg-slate-100 text-slate-500' };
+            }
+
+            const fechaLimite = new Date(tarea.fecha_limite + 'T00:00:00');
+
+            if (isCompleted) {
+                // If there's a completion date, compare; otherwise default to "A tiempo"
+                if (tarea.fecha_completado) {
+                    const fechaComp = new Date(tarea.fecha_completado + 'T00:00:00');
+                    return fechaComp <= fechaLimite
+                        ? { label: '✅ A tiempo', cls: 'bg-emerald-100 text-emerald-700' }
+                        : { label: '⚠️ Fuera de tiempo', cls: 'bg-amber-100 text-amber-700' };
+                }
+                return { label: '✅ A tiempo', cls: 'bg-emerald-100 text-emerald-700' };
+            }
+
+            // Not completed
+            if (fechaLimite < hoy) {
+                return { label: '🔴 Vencida', cls: 'bg-red-100 text-red-700' };
+            }
+            return { label: '🟡 En plazo', cls: 'bg-blue-100 text-blue-700' };
+        }
+
+        function getStatusLabel(estatus) {
+            const map = {
+                pendiente: { label: 'Pendiente', cls: 'bg-slate-100 text-slate-600' },
+                en_curso: { label: 'En curso', cls: 'bg-blue-100 text-blue-700' },
+                en_revision: { label: 'En revisión', cls: 'bg-amber-100 text-amber-700' },
+                completado: { label: 'Completada', cls: 'bg-emerald-100 text-emerald-700' },
+                bloqueada: { label: 'Bloqueada', cls: 'bg-red-100 text-red-700' },
+            };
+            return map[estatus] || { label: estatus || '—', cls: 'bg-slate-100 text-slate-500' };
+        }
+
+        function applyRendimientoFilters() {
+            const fechaDesde = document.getElementById('filter-fecha-desde').value;
+            const fechaHasta = document.getElementById('filter-fecha-hasta').value;
+            const cuentaId = document.getElementById('filter-cuenta').value;
+            const programaId = document.getElementById('filter-programa').value;
+            const respId = document.getElementById('filter-responsable').value;
+            const estado = document.getElementById('filter-estado').value;
+
+            rendimientoFiltered = allTareas.filter(t => {
+                if (estado && t.estatus !== estado) return false;
+                if (respId && t.id_responsable !== respId) return false;
+
+                const sub = allSubproyectos.find(s => s.id === t.id_subproyecto);
+                if (programaId && (!sub || sub.id !== programaId)) return false;
+                if (cuentaId && (!sub || sub.id_proyecto !== cuentaId)) return false;
+
+                if (t.fecha_limite) {
+                    if (fechaDesde && t.fecha_limite < fechaDesde) return false;
+                    if (fechaHasta && t.fecha_limite > fechaHasta) return false;
+                }
+
+                return true;
+            });
+
+            renderRendimientoTable(rendimientoFiltered);
+            updateRendimientoSummary(rendimientoFiltered);
+        }
+
+        function clearRendimientoFilters() {
+            document.getElementById('filter-fecha-desde').value = '';
+            document.getElementById('filter-fecha-hasta').value = '';
+            document.getElementById('filter-cuenta').value = '';
+            document.getElementById('filter-programa').value = '';
+            document.getElementById('filter-responsable').value = '';
+            document.getElementById('filter-estado').value = '';
+
+            // Re-populate programa options
+            const selPrograma = document.getElementById('filter-programa');
+            selPrograma.innerHTML = '<option value="">Todos</option>';
+            allSubproyectos.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.nombre || s.id;
+                selPrograma.appendChild(opt);
+            });
+
+            renderRendimiento();
+        }
+
+        function renderRendimiento() {
+            rendimientoFiltered = [...allTareas];
+            renderRendimientoTable(rendimientoFiltered);
+            updateRendimientoSummary(rendimientoFiltered);
+        }
+
+        function updateRendimientoSummary(tareas) {
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+
+            const totalActivas = tareas.filter(t => t.estatus !== 'completado').length;
+            const totalCompletadas = tareas.filter(t => t.estatus === 'completado').length;
+            const totalPendientes = tareas.filter(t => t.estatus === 'pendiente' || t.estatus === 'en_curso' || t.estatus === 'en_revision').length;
+            const totalVencidas = tareas.filter(t => {
+                if (t.estatus === 'completado') return false;
+                if (!t.fecha_limite) return false;
+                return new Date(t.fecha_limite + 'T00:00:00') < hoy;
+            }).length;
+            const total = tareas.length;
+            const cumplimiento = total > 0 ? Math.round((totalCompletadas / total) * 100) + '%' : 'N/A';
+
+            document.getElementById('rend-total-activas').textContent = totalActivas;
+            document.getElementById('rend-total-completadas').textContent = totalCompletadas;
+            document.getElementById('rend-total-pendientes').textContent = totalPendientes;
+            document.getElementById('rend-total-vencidas').textContent = totalVencidas;
+            document.getElementById('rend-cumplimiento').textContent = cumplimiento;
+
+            // Totals footer
+            const footer = document.getElementById('rend-totals-footer');
+            const grid = document.getElementById('rend-totals-grid');
+            footer.classList.remove('hidden');
+            grid.innerHTML = `
+                <div class="bg-white border border-slate-200 rounded-lg p-3">
+                    <p class="text-xs text-slate-500 uppercase font-bold">Total</p>
+                    <p class="text-2xl font-extrabold text-slate-800">${tareas.length}</p>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-lg p-3">
+                    <p class="text-xs text-slate-500 uppercase font-bold">Activas</p>
+                    <p class="text-2xl font-extrabold text-slate-800">${totalActivas}</p>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-lg p-3">
+                    <p class="text-xs text-slate-500 uppercase font-bold">Completadas</p>
+                    <p class="text-2xl font-extrabold text-emerald-600">${totalCompletadas}</p>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-lg p-3">
+                    <p class="text-xs text-slate-500 uppercase font-bold">Vencidas</p>
+                    <p class="text-2xl font-extrabold text-red-500">${totalVencidas}</p>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-lg p-3">
+                    <p class="text-xs text-slate-500 uppercase font-bold">% Cumplimiento</p>
+                    <p class="text-2xl font-extrabold text-indigo-600">${cumplimiento}</p>
+                </div>
+            `;
+        }
+
+        function renderRendimientoTable(tareas) {
+            const tbody = document.getElementById('rendimiento-table-body');
+            const countEl = document.getElementById('rend-table-count');
+            tbody.innerHTML = '';
+
+            if (tareas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-400">No hay tareas con los filtros aplicados</td></tr>';
+                countEl.textContent = '0 tareas';
+                return;
+            }
+
+            countEl.textContent = tareas.length + ' tarea' + (tareas.length !== 1 ? 's' : '');
+
+            tareas.forEach(t => {
+                const sub = allSubproyectos.find(s => s.id === t.id_subproyecto);
+                const proy = sub ? allProyectos.find(p => p.id === sub.id_proyecto) : null;
+                const resp = responsables.find(r => r.id === t.id_responsable);
+
+                const cuentaNombre = proy ? escapeHtml(proy.nombre || '—') : '<span class="text-slate-400">—</span>';
+                const programaNombre = sub ? escapeHtml(sub.nombre || '—') : '<span class="text-slate-400">—</span>';
+                const respNombre = resp ? escapeHtml(resp.nombre || '—') : '<span class="text-slate-400">Sin asignar</span>';
+
+                const statusInfo = getStatusLabel(t.estatus);
+                const compliance = getComplianceIndicator(t);
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="p-3 text-slate-700">${cuentaNombre}</td>
+                    <td class="p-3 text-slate-700">${programaNombre}</td>
+                    <td class="p-3 text-slate-700 max-w-xs">
+                        <p class="text-sm leading-snug line-clamp-2">${escapeHtml(t.detalles || t.descripcion || '—')}</p>
+                    </td>
+                    <td class="p-3 text-slate-600">${respNombre}</td>
+                    <td class="p-3 text-center text-slate-500 text-xs">${escapeHtml(t.fecha_limite || '—')}</td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${statusInfo.cls}">${statusInfo.label}</span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${compliance.cls}">${compliance.label}</span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ============================================================
+        // PDF EXPORT
+        // ============================================================
+        function exportToPDF() {
+            const fechaDesde = document.getElementById('filter-fecha-desde').value;
+            const fechaHasta = document.getElementById('filter-fecha-hasta').value;
+            const hoy = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+
+            document.getElementById('pdf-fecha-generacion').textContent = 'Generado: ' + hoy;
+
+            let periodo = 'Período: Todos los registros';
+            if (fechaDesde || fechaHasta) {
+                periodo = 'Período: ' + (fechaDesde || '—') + ' al ' + (fechaHasta || '—');
+            }
+            document.getElementById('pdf-periodo-filtrado').textContent = periodo;
+
+            window.print();
+        }
+
+        // ============================================================
+        // FINANZAS
+        // ============================================================
+
+        const FMT_MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+
+        function formatMonto(n) {
+            return FMT_MXN.format(parseFloat(n) || 0);
+        }
+
+        function populateFinanzasFilterSelects() {
+            const selProyecto = document.getElementById('fin-filter-proyecto');
+            const selResp = document.getElementById('fin-filter-responsable');
+            const selCategoria = document.getElementById('fin-filter-categoria');
+
+            selProyecto.innerHTML = '<option value="">Todos</option>';
+            allProyectos.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.nombre || p.id;
+                selProyecto.appendChild(opt);
+            });
+
+            selResp.innerHTML = '<option value="">Todos</option>';
+            responsables.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.nombre || r.id;
+                selResp.appendChild(opt);
+            });
+
+            // Build dynamic category list from existing records + fixed list
+            const knownCats = new Set(['Venta', 'Subvención', 'Donación', 'Transferencia', 'Servicios', 'Materiales', 'Personal', 'Transporte', 'Equipamiento', 'Otros']);
+            allFinanzas.forEach(f => { if (f.categoria) knownCats.add(f.categoria); });
+            selCategoria.innerHTML = '<option value="">Todas</option>';
+            [...knownCats].sort((a, b) => a.localeCompare(b, 'es')).forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                selCategoria.appendChild(opt);
+            });
+        }
+
+        function applyFinanzasFilters() {
+            const desde = document.getElementById('fin-filter-desde').value;
+            const hasta = document.getElementById('fin-filter-hasta').value;
+            const tipo = document.getElementById('fin-filter-tipo').value;
+            const categoria = document.getElementById('fin-filter-categoria').value;
+            const proyId = document.getElementById('fin-filter-proyecto').value;
+            const respId = document.getElementById('fin-filter-responsable').value;
+
+            finanzasFiltered = allFinanzas.filter(f => {
+                if (tipo && f.tipo !== tipo) return false;
+                if (categoria && f.categoria !== categoria) return false;
+                if (proyId && f.id_proyecto !== proyId) return false;
+                if (respId && f.id_responsable !== respId) return false;
+                if (f.fecha) {
+                    if (desde && f.fecha < desde) return false;
+                    if (hasta && f.fecha > hasta) return false;
+                }
+                return true;
+            });
+
+            renderFinanzasTable(finanzasFiltered);
+            updateFinanzasSummary(finanzasFiltered);
+        }
+
+        function clearFinanzasFilters() {
+            document.getElementById('fin-filter-desde').value = '';
+            document.getElementById('fin-filter-hasta').value = '';
+            document.getElementById('fin-filter-tipo').value = '';
+            document.getElementById('fin-filter-categoria').value = '';
+            document.getElementById('fin-filter-proyecto').value = '';
+            document.getElementById('fin-filter-responsable').value = '';
+            renderFinanzas();
+        }
+
+        function renderFinanzas() {
+            finanzasFiltered = [...allFinanzas];
+            renderFinanzasTable(finanzasFiltered);
+            updateFinanzasSummary(finanzasFiltered);
+        }
+
+        function updateFinanzasSummary(registros) {
+            const ingresos = registros.filter(f => f.tipo === 'ingreso');
+            const egresos = registros.filter(f => f.tipo === 'egreso');
+            const totalIngresos = ingresos.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0);
+            const totalEgresos = egresos.reduce((s, f) => s + (parseFloat(f.monto) || 0), 0);
+            const balance = totalIngresos - totalEgresos;
+
+            document.getElementById('fin-total-ingresos').textContent = formatMonto(totalIngresos);
+            document.getElementById('fin-total-egresos').textContent = formatMonto(totalEgresos);
+            const balEl = document.getElementById('fin-balance');
+            balEl.textContent = formatMonto(balance);
+            balEl.className = 'text-2xl font-extrabold ' + (balance >= 0 ? 'text-emerald-600' : 'text-red-500');
+            document.getElementById('fin-count-ingresos').textContent = ingresos.length;
+            document.getElementById('fin-count-egresos').textContent = egresos.length;
+        }
+
+        function renderFinanzasTable(registros) {
+            const tbody = document.getElementById('finanzas-table-body');
+            const countEl = document.getElementById('fin-table-count');
+            tbody.innerHTML = '';
+
+            if (registros.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">No hay registros con los filtros aplicados</td></tr>';
+                countEl.textContent = '0 registros';
+                return;
+            }
+
+            countEl.textContent = registros.length + ' registro' + (registros.length !== 1 ? 's' : '');
+
+            const sorted = [...registros].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+            sorted.forEach(f => {
+                const proy = allProyectos.find(p => p.id === f.id_proyecto);
+                const resp = responsables.find(r => r.id === f.id_responsable);
+                const proyNombre = proy ? escapeHtml(proy.nombre || proy.id) : '<span class="text-slate-400">—</span>';
+                const respNombre = resp ? escapeHtml(resp.nombre || resp.id) : '<span class="text-slate-400">—</span>';
+
+                const tipoCls = f.tipo === 'ingreso'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-red-100 text-red-700';
+                const tipoLabel = f.tipo === 'ingreso' ? '▲ Ingreso' : '▼ Egreso';
+                const montoCls = f.tipo === 'ingreso' ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold';
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="p-3 text-slate-600 text-xs">${escapeHtml(f.fecha || '—')}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${tipoCls}">${tipoLabel}</span>
+                    </td>
+                    <td class="p-3 text-slate-700">${escapeHtml(f.concepto || '—')}</td>
+                    <td class="p-3 text-slate-600 text-xs">${escapeHtml(f.categoria || '—')}</td>
+                    <td class="p-3 text-slate-600">${proyNombre}</td>
+                    <td class="p-3 text-slate-600">${respNombre}</td>
+                    <td class="p-3 text-right ${montoCls}">${formatMonto(f.monto)}</td>
+                    <td class="p-3 text-right whitespace-nowrap">
+                        <button onclick="editFinanza('${escapeHtml(f.id)}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-1">Editar</button>
+                        <button onclick="deleteFinanza('${escapeHtml(f.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function populateFinanzaModalSelects() {
+            const selProy = document.getElementById('finanzaProyecto');
+            const selResp = document.getElementById('finanzaResponsable');
+
+            selProy.innerHTML = '<option value="">Sin proyecto</option>';
+            allProyectos.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.nombre || p.id;
+                selProy.appendChild(opt);
+            });
+
+            selResp.innerHTML = '<option value="">Sin responsable</option>';
+            responsables.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.nombre || r.id;
+                selResp.appendChild(opt);
+            });
+        }
+
+        function openFinanzaModal(finanza = null) {
+            populateFinanzaModalSelects();
+            document.getElementById('finanzaForm').reset();
+            const btnDel = document.getElementById('fin-btn-delete');
+
+            if (finanza) {
+                document.getElementById('fin-modal-title').textContent = 'Editar Registro';
+                document.getElementById('finanzaId').value = finanza.id;
+                document.getElementById('finanzaTipo').value = finanza.tipo || 'egreso';
+                document.getElementById('finanzaMonto').value = finanza.monto || '';
+                document.getElementById('finanzaConcepto').value = finanza.concepto || '';
+                document.getElementById('finanzaCategoria').value = finanza.categoria || '';
+                document.getElementById('finanzaFecha').value = finanza.fecha || '';
+                document.getElementById('finanzaProyecto').value = finanza.id_proyecto || '';
+                document.getElementById('finanzaResponsable').value = finanza.id_responsable || '';
+                btnDel.classList.remove('hidden');
+            } else {
+                document.getElementById('fin-modal-title').textContent = 'Nuevo Registro';
+                document.getElementById('finanzaId').value = '';
+                // Default date to today
+                document.getElementById('finanzaFecha').value = new Date().toISOString().split('T')[0];
+                btnDel.classList.add('hidden');
+            }
+
+            document.getElementById('finanzaModal').classList.remove('hidden');
+        }
+
+        function closeFinanzaModal() {
+            document.getElementById('finanzaModal').classList.add('hidden');
+        }
+
+        function setFinanzaLoading(loading) {
+            const btn = document.getElementById('fin-btn-save');
+            const btnText = document.getElementById('fin-btn-save-text');
+            const btnSpinner = document.getElementById('fin-btn-save-spinner');
+            btn.disabled = loading;
+            btn.classList.toggle('opacity-75', loading);
+            btn.classList.toggle('cursor-not-allowed', loading);
+            btnText.classList.toggle('hidden', loading);
+            btnSpinner.classList.toggle('hidden', !loading);
+        }
+
+        async function saveFinanza(e) {
+            e.preventDefault();
+            if (document.getElementById('fin-btn-save').disabled) return;
+            setFinanzaLoading(true);
+            try {
+                const id = document.getElementById('finanzaId').value;
+                const payload = {
+                    id: id || ('fin_' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)))),
+                    tipo: document.getElementById('finanzaTipo').value,
+                    monto: parseFloat(document.getElementById('finanzaMonto').value) || 0,
+                    concepto: document.getElementById('finanzaConcepto').value.trim(),
+                    categoria: document.getElementById('finanzaCategoria').value,
+                    fecha: document.getElementById('finanzaFecha').value,
+                    id_proyecto: document.getElementById('finanzaProyecto').value,
+                    id_responsable: document.getElementById('finanzaResponsable').value
+                };
+                const action = id ? 'finanza_update' : 'finanza_add';
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, data: payload })
+                });
+                closeFinanzaModal();
+                // Optimistic update: apply change locally and re-render without full reload
+                if (id) {
+                    const idx = allFinanzas.findIndex(x => x.id === id);
+                    if (idx !== -1) allFinanzas[idx] = payload; else allFinanzas.push(payload);
+                } else {
+                    allFinanzas.push(payload);
+                }
+                populateFinanzasFilterSelects();
+                renderFinanzas();
+            } catch (error) {
+                console.error('Error guardando registro:', error);
+                alert('Error al guardar registro');
+            } finally {
+                setFinanzaLoading(false);
+            }
+        }
+
+        function editFinanza(id) {
+            const f = allFinanzas.find(x => x.id === id);
+            if (f) openFinanzaModal(f);
+        }
+
+        async function deleteFinanza(id) {
+            if (!confirm('¿Estás seguro de eliminar este registro?')) return;
+            showLoading(true);
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'finanza_delete', data: { id } })
+                });
+                // Optimistic update: remove locally and re-render
+                allFinanzas = allFinanzas.filter(x => x.id !== id);
+                populateFinanzasFilterSelects();
+                renderFinanzas();
+            } catch (error) {
+                console.error('Error eliminando registro:', error);
+                alert('Error al eliminar registro');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteCurrentFinanza() {
+            const id = document.getElementById('finanzaId').value;
+            if (!id) return;
+            closeFinanzaModal();
+            await deleteFinanza(id);
+        }
+
+        // ============================================================
+        // REGISTRO DE OBRA
+        // ============================================================
+
+        function obraEstatusBadge(estatus) {
+            if (estatus === 'Vendida') return 'bg-emerald-100 text-emerald-700';
+            if (estatus === 'Bodega') return 'bg-amber-100 text-amber-700';
+            return 'bg-blue-100 text-blue-700'; // Consolidación
+        }
+
+        function populateObrasFilterSelects() {
+            const selTipo = document.getElementById('obras-filter-tipo');
+            const selResp = document.getElementById('obras-filter-responsable');
+
+            const tipos = new Set(allRegistrosObra.map(o => o.tipo_obra).filter(Boolean));
+            selTipo.innerHTML = '<option value="">Todos</option>';
+            [...tipos].sort((a, b) => a.localeCompare(b, 'es')).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                selTipo.appendChild(opt);
+            });
+
+            selResp.innerHTML = '<option value="">Todos</option>';
+            responsables.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.nombre || r.id;
+                selResp.appendChild(opt);
+            });
+        }
+
+        function applyObraFilters() {
+            const nombre = (document.getElementById('obras-filter-nombre').value || '').toLowerCase().trim();
+            const estatus = document.getElementById('obras-filter-estatus').value;
+            const tipo = document.getElementById('obras-filter-tipo').value;
+            const respId = document.getElementById('obras-filter-responsable').value;
+
+            obrasFiltered = allRegistrosObra.filter(o => {
+                if (nombre && !(o.nombre_obra || '').toLowerCase().includes(nombre)) return false;
+                if (estatus && o.estatus !== estatus) return false;
+                if (tipo && o.tipo_obra !== tipo) return false;
+                if (respId && o.id_responsable !== respId) return false;
+                return true;
+            });
+
+            renderObrasTable(obrasFiltered);
+            updateObrasSummary(obrasFiltered);
+        }
+
+        function clearObraFilters() {
+            document.getElementById('obras-filter-nombre').value = '';
+            document.getElementById('obras-filter-estatus').value = '';
+            document.getElementById('obras-filter-tipo').value = '';
+            document.getElementById('obras-filter-responsable').value = '';
+            renderRegistrosObra();
+        }
+
+        function renderRegistrosObra() {
+            obrasFiltered = [...allRegistrosObra];
+            renderObrasTable(obrasFiltered);
+            updateObrasSummary(obrasFiltered);
+        }
+
+        function updateObrasSummary(registros) {
+            document.getElementById('obras-total').textContent = registros.length;
+            document.getElementById('obras-consolidacion').textContent = registros.filter(o => o.estatus === 'Consolidación').length;
+            document.getElementById('obras-bodega').textContent = registros.filter(o => o.estatus === 'Bodega').length;
+            document.getElementById('obras-vendida').textContent = registros.filter(o => o.estatus === 'Vendida').length;
+        }
+
+        function renderObrasTable(registros) {
+            const tbody = document.getElementById('obras-table-body');
+            const countEl = document.getElementById('obras-table-count');
+            tbody.innerHTML = '';
+
+            if (registros.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-8 text-slate-400">No hay obras con los filtros aplicados</td></tr>';
+                countEl.textContent = '0 registros';
+                return;
+            }
+
+            countEl.textContent = registros.length + ' registro' + (registros.length !== 1 ? 's' : '');
+
+            const sorted = [...registros].sort((a, b) => (a.nombre_obra || '').localeCompare(b.nombre_obra || '', 'es'));
+            sorted.forEach(o => {
+                const resp = responsables.find(r => r.id === o.id_responsable);
+                const respNombre = resp ? escapeHtml(resp.nombre || resp.id) : '<span class="text-slate-400">—</span>';
+                const estatusCls = obraEstatusBadge(o.estatus);
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="p-3">
+                        <span class="font-mono text-xs px-2 py-1 rounded bg-slate-100 text-slate-600">${escapeHtml(o.asignacion || '—')}</span>
+                    </td>
+                    <td class="p-3 font-medium text-slate-800">${escapeHtml(o.nombre_obra || '—')}</td>
+                    <td class="p-3 text-slate-600 text-xs">${escapeHtml(o.tipo_obra || '—')}</td>
+                    <td class="p-3 text-slate-600 text-xs max-w-xs">
+                        <span class="line-clamp-2">${escapeHtml(o.ubicacion || '—')}</span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold ${estatusCls}">${escapeHtml(o.estatus || '—')}</span>
+                    </td>
+                    <td class="p-3 text-right text-slate-700">${o.superficie ? o.superficie.toLocaleString('es-MX') : '—'}</td>
+                    <td class="p-3 text-right text-slate-700">${o.precio_lista ? formatMonto(o.precio_lista) : '—'}</td>
+                    <td class="p-3 text-right text-slate-700">${o.precio_venta ? formatMonto(o.precio_venta) : '—'}</td>
+                    <td class="p-3 text-slate-600">${escapeHtml(o.cliente || '—')}</td>
+                    <td class="p-3 text-right whitespace-nowrap">
+                        <button onclick="editObra('${escapeHtml(o.id)}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-1">Editar</button>
+                        <button onclick="deleteObra('${escapeHtml(o.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function populateObraModalSelects() {
+            const selResp = document.getElementById('obraResponsable');
+            selResp.innerHTML = '<option value="">Sin responsable</option>';
+            responsables.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.nombre || r.id;
+                selResp.appendChild(opt);
+            });
+
+            const selProv = document.getElementById('obraProvenance');
+            selProv.innerHTML = '<option value="">Sin provenance</option>';
+            allComisiones.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.provenance + ' (' + parseFloat(c.porcentaje || 0).toFixed(2) + '%)';
+                selProv.appendChild(opt);
+            });
+        }
+
+        function openObraModal(obra = null) {
+            populateObraModalSelects();
+            document.getElementById('obraForm').reset();
+            const btnDel = document.getElementById('obra-btn-delete');
+
+            // Attach change listeners for auto-generating clave
+            document.getElementById('obraProvenance').onchange = updateObraClave;
+            document.getElementById('obraAutor').oninput = updateObraClave;
+
+            if (obra) {
+                document.getElementById('obra-modal-title').textContent = 'Editar Obra';
+                document.getElementById('obraId').value = obra.id;
+                document.getElementById('obraNombre').value = obra.nombre_obra || '';
+                document.getElementById('obraTipo').value = obra.tipo_obra || '';
+                document.getElementById('obraEstatus').value = obra.estatus || 'Consolidación';
+                document.getElementById('obraUbicacion').value = obra.ubicacion || '';
+                document.getElementById('obraSuperficie').value = obra.superficie || '';
+                document.getElementById('obraCliente').value = obra.cliente || '';
+                document.getElementById('obraPrecioLista').value = obra.precio_lista || '';
+                document.getElementById('obraPrecioVenta').value = obra.precio_venta || '';
+                document.getElementById('obraFechaRegistro').value = obra.fecha_registro || '';
+                document.getElementById('obraFechaAdquisicion').value = obra.fecha_adquisicion || '';
+                document.getElementById('obraFechaVenta').value = obra.fecha_venta || '';
+                document.getElementById('obraResponsable').value = obra.id_responsable || '';
+                document.getElementById('obraAutor').value = obra.autor || '';
+                document.getElementById('obraProvenance').value = obra.id_comision || '';
+                document.getElementById('obraClave').value = obra.clave || '';
+                document.getElementById('obraObservaciones').value = obra.observaciones || '';
+                btnDel.classList.remove('hidden');
+                currentObraId = obra.id;
+                currentObraDocumentos = Array.isArray(obra.documentos) ? [...obra.documentos] : [];
+                currentObraAdjuntos = Array.isArray(obra.adjuntos) ? [...obra.adjuntos] : [];
+                pendingAdjuntos = [];
+                document.getElementById('obra-docs-section').classList.remove('hidden');
+                renderObraDocumentos();
+                renderObraAdjuntos();
+            } else {
+                document.getElementById('obra-modal-title').textContent = 'Nueva Obra';
+                document.getElementById('obraId').value = '';
+                document.getElementById('obraFechaRegistro').value = new Date().toISOString().split('T')[0];
+                btnDel.classList.add('hidden');
+                currentObraId = null;
+                currentObraDocumentos = [];
+                currentObraAdjuntos = [];
+                pendingAdjuntos = [];
+                document.getElementById('obra-docs-section').classList.add('hidden');
+                renderPendingAdjuntos();
+            }
+
+            document.getElementById('obraModal').classList.remove('hidden');
+        }
+
+        function closeObraModal() {
+            document.getElementById('obraModal').classList.add('hidden');
+        }
+
+        function getActorId() {
+            try {
+                const u = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+                if (u && u.id) return u.id;
+            } catch (_) {}
+            return document.getElementById('obraResponsable').value || '';
+        }
+
+        function renderObraDocumentos() {
+            const list = document.getElementById('obra-docs-list');
+            if (!currentObraDocumentos.length) {
+                list.innerHTML = '<p class="text-slate-400 text-xs">Sin documentos registrados.</p>';
+                return;
+            }
+            list.innerHTML = currentObraDocumentos.map(doc => `
+                <div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                    <div class="flex-1 min-w-0">
+                        <span class="font-medium text-slate-700 text-sm">${escapeHtml(doc.nombre || '—')}</span>
+                        ${doc.tipo ? `<span class="ml-2 text-xs text-slate-400">${escapeHtml(doc.tipo)}</span>` : ''}
+                        ${doc.fecha ? `<span class="ml-2 text-xs text-slate-400">${escapeHtml(doc.fecha)}</span>` : ''}
+                    </div>
+                    ${doc.url ? `<a href="${escapeHtml(doc.url)}" target="_blank" rel="noopener noreferrer" class="text-indigo-500 hover:underline text-xs shrink-0">Ver</a>` : ''}
+                    <button type="button" onclick="deleteObraDocumento('${escapeHtml(doc.id)}')"
+                            class="text-red-400 hover:text-red-600 text-xs shrink-0 ml-1" title="Eliminar">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function renderObraAdjuntos() {
+            const list = document.getElementById('obra-adj-list');
+            if (!currentObraAdjuntos.length) {
+                list.innerHTML = '<p class="text-slate-400 text-xs">Sin adjuntos.</p>';
+                return;
+            }
+            list.innerHTML = currentObraAdjuntos.map(adj => `
+                <div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                    <span class="flex-1 min-w-0 truncate text-slate-700 text-sm">${escapeHtml(adj.name || adj.id || '—')}</span>
+                    ${adj.url ? `<a href="${escapeHtml(adj.url)}" target="_blank" rel="noopener noreferrer" class="text-indigo-500 hover:underline text-xs shrink-0">Ver</a>` : ''}
+                    <button type="button" onclick="deleteObraAdjunto('${escapeHtml(adj.id)}')"
+                            class="text-red-400 hover:text-red-600 text-xs shrink-0 ml-1" title="Eliminar">✕</button>
+                </div>
+            `).join('');
+        }
+
+        async function addObraDocumento() {
+            const tipo = document.getElementById('docTipo').value.trim();
+            const nombre = document.getElementById('docNombre').value.trim();
+            const url = document.getElementById('docUrl').value.trim();
+            const fecha = document.getElementById('docFecha').value;
+            if (!nombre) { alert('El nombre del documento es obligatorio'); return; }
+            const actorId = getActorId();
+            if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
+            try {
+                const resp = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registro_obra_documento_add', data: {
+                        id_obra: currentObraId,
+                        id_actor: actorId,
+                        documento: { tipo, nombre, url, fecha }
+                    }})
+                });
+                const result = await resp.json();
+                if (result.result === 'success') {
+                    currentObraDocumentos.push(result.documento);
+                    const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
+                    if (idx !== -1) allRegistrosObra[idx].documentos = [...currentObraDocumentos];
+                    renderObraDocumentos();
+                    document.getElementById('docTipo').value = '';
+                    document.getElementById('docNombre').value = '';
+                    document.getElementById('docUrl').value = '';
+                    document.getElementById('docFecha').value = '';
+                } else {
+                    alert('Error: ' + (result.message || 'No se pudo agregar el documento'));
+                }
+            } catch (e) {
+                alert('Error al agregar documento');
+            }
+        }
+
+        async function deleteObraDocumento(docId) {
+            if (!confirm('¿Eliminar este documento?')) return;
+            const actorId = getActorId();
+            if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
+            try {
+                const resp = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registro_obra_documento_delete', data: {
+                        id_obra: currentObraId,
+                        id_actor: actorId,
+                        documentoId: docId
+                    }})
+                });
+                const result = await resp.json();
+                if (result.result === 'success') {
+                    currentObraDocumentos = currentObraDocumentos.filter(d => d.id !== docId);
+                    const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
+                    if (idx !== -1) allRegistrosObra[idx].documentos = [...currentObraDocumentos];
+                    renderObraDocumentos();
+                } else {
+                    alert('Error: ' + (result.message || 'No se pudo eliminar el documento'));
+                }
+            } catch (e) {
+                alert('Error al eliminar documento');
+            }
+        }
+
+        async function uploadObraAdjunto() {
+            const fileInput = document.getElementById('obraAdjFile');
+            const file = fileInput.files[0];
+            if (!file) { alert('Selecciona un archivo primero'); return; }
+
+            // In create mode: queue the file for upload after save
+            if (!currentObraId) {
+                pendingAdjuntos.push(file);
+                renderPendingAdjuntos();
+                fileInput.value = '';
+                return;
+            }
+
+            const actorId = getActorId();
+            if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
+            const btn = document.getElementById('obra-adj-upload-btn');
+            btn.disabled = true;
+            btn.textContent = 'Subiendo…';
+            try {
+                const newAdj = await uploadFileToObra(currentObraId, file, actorId);
+                if (newAdj) {
+                    currentObraAdjuntos.push(newAdj);
+                    const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
+                    if (idx !== -1) allRegistrosObra[idx].adjuntos = [...currentObraAdjuntos];
+                    renderObraAdjuntos();
+                    fileInput.value = '';
+                } else {
+                    alert('No se pudo subir el archivo');
+                }
+            } catch (e) {
+                alert('Error al subir archivo');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⬆ Subir Archivo';
+            }
+        }
+
+        async function deleteObraAdjunto(fileId) {
+            if (!confirm('¿Eliminar este adjunto? Se borrará también de Drive.')) return;
+            const actorId = getActorId();
+            if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
+            try {
+                const resp = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registro_obra_adjunto_eliminar', data: {
+                        id_obra: currentObraId,
+                        id_actor: actorId,
+                        fileId
+                    }})
+                });
+                const result = await resp.json();
+                if (result.result === 'success') {
+                    currentObraAdjuntos = currentObraAdjuntos.filter(a => a.id !== fileId);
+                    const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
+                    if (idx !== -1) allRegistrosObra[idx].adjuntos = [...currentObraAdjuntos];
+                    renderObraAdjuntos();
+                } else {
+                    alert('Error: ' + (result.message || 'No se pudo eliminar el adjunto'));
+                }
+            } catch (e) {
+                alert('Error al eliminar adjunto');
+            }
+        }
+
+        function setObraLoading(loading) {
+            const btn = document.getElementById('obra-btn-save');
+            const btnText = document.getElementById('obra-btn-save-text');
+            const btnSpinner = document.getElementById('obra-btn-save-spinner');
+            btn.disabled = loading;
+            btn.classList.toggle('opacity-75', loading);
+            btn.classList.toggle('cursor-not-allowed', loading);
+            btnText.classList.toggle('hidden', loading);
+            btnSpinner.classList.toggle('hidden', !loading);
+        }
+
+        async function saveObra(e) {
+            e.preventDefault();
+            if (document.getElementById('obra-btn-save').disabled) return;
+            setObraLoading(true);
+            try {
+                const id = document.getElementById('obraId').value;
+                const payload = {
+                    id: id || ('obra_' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)))),
+                    nombre_obra: document.getElementById('obraNombre').value.trim(),
+                    tipo_obra: document.getElementById('obraTipo').value.trim(),
+                    estatus: document.getElementById('obraEstatus').value,
+                    ubicacion: document.getElementById('obraUbicacion').value.trim(),
+                    superficie: parseFloat(document.getElementById('obraSuperficie').value) || 0,
+                    cliente: document.getElementById('obraCliente').value.trim(),
+                    precio_lista: parseFloat(document.getElementById('obraPrecioLista').value) || 0,
+                    precio_venta: parseFloat(document.getElementById('obraPrecioVenta').value) || 0,
+                    fecha_registro: document.getElementById('obraFechaRegistro').value,
+                    fecha_adquisicion: document.getElementById('obraFechaAdquisicion').value,
+                    fecha_venta: document.getElementById('obraFechaVenta').value,
+                    id_responsable: document.getElementById('obraResponsable').value,
+                    autor: document.getElementById('obraAutor').value.trim(),
+                    id_comision: document.getElementById('obraProvenance').value,
+                    clave: document.getElementById('obraClave').value.trim(),
+                    observaciones: document.getElementById('obraObservaciones').value.trim()
+                };
+                const action = id ? 'registro_obra_update' : 'registro_obra_add';
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, data: payload })
+                });
+
+                // Upload pending adjuntos for new obra
+                if (!id && pendingAdjuntos.length) {
+                    const actorId = getActorId() || payload.id_responsable;
+                    if (actorId) {
+                        const uploadedAdjs = [];
+                        for (const file of pendingAdjuntos) {
+                            const adj = await uploadFileToObra(payload.id, file, actorId);
+                            if (adj) uploadedAdjs.push(adj);
+                        }
+                        if (uploadedAdjs.length) {
+                            payload.adjuntos = uploadedAdjs;
+                        }
+                    }
+                    pendingAdjuntos = [];
+                }
+
+                closeObraModal();
+                if (id) {
+                    const idx = allRegistrosObra.findIndex(x => x.id === id);
+                    if (idx !== -1) allRegistrosObra[idx] = { ...allRegistrosObra[idx], ...payload };
+                    else allRegistrosObra.push(payload);
+                } else {
+                    allRegistrosObra.push(payload);
+                }
+                populateObrasFilterSelects();
+                renderRegistrosObra();
+            } catch (error) {
+                console.error('Error guardando obra:', error);
+                alert('Error al guardar registro de obra');
+            } finally {
+                setObraLoading(false);
+            }
+        }
+
+        function editObra(id) {
+            const o = allRegistrosObra.find(x => x.id === id);
+            if (o) openObraModal(o);
+        }
+
+        async function deleteObra(id) {
+            if (!confirm('¿Estás seguro de eliminar este registro de obra?')) return;
+            showLoading(true);
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registro_obra_delete', data: { id } })
+                });
+                allRegistrosObra = allRegistrosObra.filter(x => x.id !== id);
+                populateObrasFilterSelects();
+                renderRegistrosObra();
+            } catch (error) {
+                console.error('Error eliminando obra:', error);
+                alert('Error al eliminar registro de obra');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteCurrentObra() {
+            const id = document.getElementById('obraId').value;
+            if (!id) return;
+            closeObraModal();
+            await deleteObra(id);
+        }
+
+        // ============================================================
+        // ENCRYPTION HELPERS (XOR + Base64, key = "Atlas")
+        // ============================================================
+        function encryptClave(provenance, porcentaje, autor) {
+            if (!provenance && !autor) return '';
+            const plain = [provenance, porcentaje, autor].join('|');
+            const encoder = new TextEncoder();
+            const plainBytes = encoder.encode(plain);
+            const keyBytes = encoder.encode('Atlas');
+            const xored = new Uint8Array(plainBytes.length);
+            for (let i = 0; i < plainBytes.length; i++) {
+                xored[i] = plainBytes[i] ^ keyBytes[i % keyBytes.length];
+            }
+            return btoa(String.fromCharCode(...xored));
+        }
+
+        function decryptClave(clave) {
+            if (!clave) return '';
+            try {
+                const bytes = Uint8Array.from(atob(clave), c => c.charCodeAt(0));
+                const keyBytes = new TextEncoder().encode('Atlas');
+                const xored = new Uint8Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) {
+                    xored[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
+                }
+                return new TextDecoder().decode(xored);
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function updateObraClave() {
+            const sel = document.getElementById('obraProvenance');
+            const autor = (document.getElementById('obraAutor').value || '').trim();
+            const provenanceVal = sel ? sel.value : '';
+            let porcentaje = '';
+            let provName = '';
+            if (provenanceVal) {
+                const com = allComisiones.find(c => c.id === provenanceVal);
+                porcentaje = com ? String(com.porcentaje || '') : '';
+                provName = com ? (com.provenance || '') : '';
+            }
+            document.getElementById('obraClave').value = encryptClave(provName, porcentaje, autor);
+        }
+
+        // ============================================================
+        // COMISIONES CRUD
+        // ============================================================
+        function renderComisiones() {
+            const tbody = document.getElementById('comisiones-table-body');
+            tbody.innerHTML = '';
+            if (!allComisiones.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-slate-400">No hay comisiones registradas</td></tr>';
+                return;
+            }
+            const sorted = [...allComisiones].sort((a, b) => (a.provenance || '').localeCompare(b.provenance || '', 'es'));
+            sorted.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50';
+                tr.innerHTML = `
+                    <td class="p-4 font-medium text-slate-800">${escapeHtml(c.provenance || '—')}</td>
+                    <td class="p-4 text-right text-slate-700">${parseFloat(c.porcentaje || 0).toFixed(2)}%</td>
+                    <td class="p-4 text-right whitespace-nowrap">
+                        <button onclick="editComision('${escapeHtml(c.id)}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-1">Editar</button>
+                        <button onclick="deleteComision('${escapeHtml(c.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openComisionModal(comision = null) {
+            document.getElementById('comisionForm').reset();
+            const btnDel = document.getElementById('comision-btn-delete');
+            if (comision) {
+                document.getElementById('comision-modal-title').textContent = 'Editar Comisión';
+                document.getElementById('comisionId').value = comision.id;
+                document.getElementById('comisionProvenance').value = comision.provenance || '';
+                document.getElementById('comisionPorcentaje').value = comision.porcentaje || '';
+                btnDel.classList.remove('hidden');
+            } else {
+                document.getElementById('comision-modal-title').textContent = 'Nueva Comisión';
+                document.getElementById('comisionId').value = '';
+                btnDel.classList.add('hidden');
+            }
+            document.getElementById('comisionModal').classList.remove('hidden');
+        }
+
+        function closeComisionModal() {
+            document.getElementById('comisionModal').classList.add('hidden');
+        }
+
+        function setComisionLoading(loading) {
+            const btn = document.getElementById('comision-btn-save');
+            const btnText = document.getElementById('comision-btn-save-text');
+            const btnSpinner = document.getElementById('comision-btn-save-spinner');
+            btn.disabled = loading;
+            btn.classList.toggle('opacity-75', loading);
+            btn.classList.toggle('cursor-not-allowed', loading);
+            btnText.classList.toggle('hidden', loading);
+            btnSpinner.classList.toggle('hidden', !loading);
+        }
+
+        async function saveComision(e) {
+            e.preventDefault();
+            if (document.getElementById('comision-btn-save').disabled) return;
+            setComisionLoading(true);
+            try {
+                const id = document.getElementById('comisionId').value;
+                const payload = {
+                    id: id || ('com_' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)))),
+                    provenance: document.getElementById('comisionProvenance').value.trim(),
+                    porcentaje: parseFloat(document.getElementById('comisionPorcentaje').value) || 0
+                };
+                const action = id ? 'comision_update' : 'comision_add';
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, data: payload })
+                });
+                if (id) {
+                    const idx = allComisiones.findIndex(x => x.id === id);
+                    if (idx !== -1) allComisiones[idx] = payload; else allComisiones.push(payload);
+                } else {
+                    allComisiones.push(payload);
+                }
+                closeComisionModal();
+                renderComisiones();
+            } catch (error) {
+                console.error('Error guardando comisión:', error);
+                alert('Error al guardar comisión');
+            } finally {
+                setComisionLoading(false);
+            }
+        }
+
+        function editComision(id) {
+            const c = allComisiones.find(x => x.id === id);
+            if (c) openComisionModal(c);
+        }
+
+        async function deleteComision(id) {
+            if (!confirm('¿Estás seguro de eliminar esta comisión?')) return;
+            showLoading(true);
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'comision_delete', data: { id } })
+                });
+                allComisiones = allComisiones.filter(x => x.id !== id);
+                renderComisiones();
+            } catch (error) {
+                console.error('Error eliminando comisión:', error);
+                alert('Error al eliminar comisión');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteCurrentComision() {
+            const id = document.getElementById('comisionId').value;
+            if (!id) return;
+            closeComisionModal();
+            await deleteComision(id);
+        }
+
+        // ============================================================
+        // PENDING ADJUNTOS (for new obra creation)
+        // ============================================================
+        function renderPendingAdjuntos() {
+            const list = document.getElementById('obra-adj-list');
+            if (!pendingAdjuntos.length) {
+                list.innerHTML = '<p class="text-slate-400 text-xs">Sin adjuntos. Los archivos se subirán al guardar.</p>';
+                return;
+            }
+            list.innerHTML = pendingAdjuntos.map((f, i) => `
+                <div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                    <span class="flex-1 min-w-0 truncate text-slate-700 text-sm">${escapeHtml(f.name)}</span>
+                    <button type="button" onclick="removePendingAdjunto(${i})"
+                            class="text-red-400 hover:text-red-600 text-xs shrink-0 ml-1" title="Quitar">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function removePendingAdjunto(i) {
+            pendingAdjuntos.splice(i, 1);
+            renderPendingAdjuntos();
+        }
+
+        async function uploadFileToObra(obraId, file, actorId) {
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = ev => resolve(ev.target.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            const resp = await fetch(WEB_APP_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'registro_obra_upload_adjunto', data: {
+                    id_obra: obraId,
+                    id_actor: actorId,
+                    filename: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    base64
+                }})
+            });
+            const result = await resp.json();
+            if (result.result === 'success') {
+                return { id: result.fileId, name: file.name, url: result.url, kind: 'adjunto_obra', uploadedBy: actorId, createdAt: new Date().toISOString(), mimeType: file.type || 'application/octet-stream' };
+            }
+            return null;
+        }
+    </script>
+</body>
+</html>
