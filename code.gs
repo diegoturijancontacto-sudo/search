@@ -1,108 +1,66 @@
 /**
-
-* Backend para Google Sheets (DB)
-
-*
-
-* Hojas (nombres exactos):
-
-* - Proyectos
-
-* - Subproyectos
-
-* - Tareas
-
-* - Responsables
-
-* - Comentarios
-
-* - HistorialAprobaciones
-
-* - Finanzas (Ingresos y Egresos)
-
-* - RegistrosObra (NUEVA HOJA: Ficha técnica de obras)
-
-*
-
-* Asignación consecutiva:
-
-* - Proyecto: 1,2,3... (Proyectos!F)
-
-* - Subproyecto: 1.1, 1.2... (Subproyectos!H) según proyecto
-
-* - Tarea: 1.1.1DT (Tareas!K) según subproyecto + iniciales Responsable (Responsables!G)
-
-* donde DT sale de Responsables!Identificador (col G) en MAYÚSCULAS.
-
-* - En tarea_update: si cambia responsable, se actualiza sufijo sin cambiar consecutivo.
-
-*
-
-* Estructura Tareas (con Entregables estructurados):
-
-* A ID
-
-* B ID Subproyecto
-
-* C ID Responsable
-
-* D Prioridad
-
-* E Estatus
-
-* F Detalles
-
-* G Descripción
-
-* H Adjuntos (JSON) <-- incluye adjuntos y evidencias/entregables-subidos
-
-* I Fecha Creación
-
-* J Fecha Límite
-
-* K asignacion
-
-* L Entregables (JSON) <-- entregables estructurados (definición)
-
-*
-
-* ESTRUCTURA REGISTROS OBRA (Ficha técnica):
-
-* A ID
-
-* B Nombre Obra
-
-* C Ubicación (dirección, ciudad, coordenadas)
-
-* D Estatus (Consolidación | Bodega | Vendida)
-
-* E Tipo de Obra
-
-* F Superficie (m²)
-
-* G Precio Lista
-
-* H Precio Venta
-
-* I Fecha Registro
-
-* J Fecha Adquisición
-
-* K Fecha Venta
-
-* L Cliente
-
-* M Documentos (JSON) - escrituras, planos, permisos
-
-* N Observaciones
-
-* O Adjuntos (JSON) - fotos, videos, documentos adicionales
-
-* P ID Responsable (quien registró/administra)
-
-* Q Asignación interna (formato obra-XXX)
-
-*/
+ * Backend para Google Sheets (DB)
+ *
+ * Hojas (nombres exactos):
+ * - Proyectos
+ * - Subproyectos
+ * - Tareas
+ * - Responsables
+ * - Comentarios
+ * - HistorialAprobaciones
+ * - Finanzas (Ingresos y Egresos)
+ * - RegistrosObra (Ficha técnica de obras)
+ * - Comisiones (NUEVA HOJA)
+ *
+ * Asignación consecutiva:
+ * - Proyecto: 1,2,3... (Proyectos!F)
+ * - Subproyecto: 1.1, 1.2... (Subproyectos!H) según proyecto
+ * - Tarea: 1.1.1DT (Tareas!K) según subproyecto + iniciales Responsable (Responsables!G)
+ *   donde DT sale de Responsables!Identificador (col G) en MAYÚSCULAS.
+ * - En tarea_update: si cambia responsable, se actualiza sufijo sin cambiar consecutivo.
+ *
+ * Estructura Tareas (con Entregables estructurados):
+ * A ID
+ * B ID Subproyecto
+ * C ID Responsable
+ * D Prioridad
+ * E Estatus
+ * F Detalles
+ * G Descripción
+ * H Adjuntos (JSON) <-- incluye adjuntos y evidencias/entregables-subidos
+ * I Fecha Creación
+ * J Fecha Límite
+ * K asignacion
+ * L Entregables (JSON) <-- entregables estructurados (definición)
+ *
+ * ESTRUCTURA REGISTROS OBRA (Ficha técnica) - ACTUALIZADA:
+ * A ID
+ * B Nombre Obra
+ * C Ubicación (dirección, ciudad, coordenadas)
+ * D Estatus (Consolidación | Bodega | Vendida)
+ * E Tipo de Obra
+ * F Superficie (m²)
+ * G Precio Lista
+ * H Precio Venta
+ * I Fecha Registro
+ * J Fecha Adquisición
+ * K Fecha Venta
+ * L Cliente
+ * M Documentos (JSON) - escrituras, planos, permisos
+ * N Observaciones
+ * O Adjuntos (JSON) - fotos, videos, documentos adicionales
+ * P ID Responsable (quien registró/administra)
+ * Q Autor
+ * R Asignación interna (formato obra-XXX)
+ * S Provenance
+ * T Clave
+ *
+ * ESTRUCTURA COMISIONES:
+ * A ID
+ * B Provenance
+ * C Porcentaje
+ * D Fecha Registro
+ */
 
 const SHEET_PROYECTOS = 'Proyectos';
 const SHEET_SUBPROYECTOS = 'Subproyectos';
@@ -111,7 +69,8 @@ const SHEET_RESPONSABLES = 'Responsables';
 const SHEET_COMENTARIOS = 'Comentarios';
 const SHEET_HISTORIAL = 'HistorialAprobaciones';
 const SHEET_FINANZAS = 'Finanzas';
-const SHEET_REGISTROS_OBRA = 'RegistrosObra'; // NUEVA HOJA
+const SHEET_REGISTROS_OBRA = 'RegistrosObra';
+const SHEET_COMISIONES = 'Comisiones';
 
 // Carpeta en Drive donde se guardan archivos
 const DRIVE_ATTACHMENTS_FOLDER_ID = '1IKdpJc0ezb6ZwtUzXJm6I91WZIO3s7FS';
@@ -121,7 +80,7 @@ const COL_TAREA_ADJUNTOS = 8; // H
 const COL_TAREA_ENTREGABLES = 12; // L
 const COL_TAREA_ASIGNACION = 11; // K
 
-// Índices de columnas (1-based) en hoja RegistrosObra
+// Índices de columnas (1-based) en hoja RegistrosObra (ACTUALIZADO)
 const COL_REGISTROS_NOMBRE = 2; // B
 const COL_REGISTROS_UBICACION = 3; // C
 const COL_REGISTROS_ESTATUS = 4; // D
@@ -137,7 +96,16 @@ const COL_REGISTROS_DOCUMENTOS = 13; // M (JSON)
 const COL_REGISTROS_OBSERVACIONES = 14; // N
 const COL_REGISTROS_ADJUNTOS = 15; // O (JSON)
 const COL_REGISTROS_ID_RESPONSABLE = 16; // P
-const COL_REGISTROS_ASIGNACION = 17; // Q
+const COL_REGISTROS_AUTOR = 17; // Q
+const COL_REGISTROS_ASIGNACION = 18; // R
+const COL_REGISTROS_PROVENANCE = 19; // S
+const COL_REGISTROS_CLAVE = 20; // T
+
+// Índices de columnas (1-based) en hoja Comisiones
+const COL_COMISION_ID = 1; // A
+const COL_COMISION_PROVENANCE = 2; // B
+const COL_COMISION_PORCENTAJE = 3; // C
+const COL_COMISION_FECHA_REGISTRO = 4; // D
 
 // ======================================================
 // INIT / VALIDACIÓN DE ESQUEMA
@@ -160,13 +128,17 @@ function ensureSchema_() {
   getOrCreateSheet_(ss, SHEET_COMENTARIOS, ['ID', 'ID Tarea', 'ID Responsable', 'Comentario', 'Fecha']);
   getOrCreateSheet_(ss, SHEET_HISTORIAL, ['ID', 'ID Tarea', 'ID Supervisor', 'Estado Anterior', 'Estado Nuevo', 'Fecha', 'Observaciones']);
   getOrCreateSheet_(ss, SHEET_FINANZAS, ['ID', 'Tipo', 'Monto', 'Concepto', 'Fecha', 'Categoria', 'ID Proyecto', 'ID Responsable', 'Fecha Registro']);
-  
-  // NUEVA HOJA DE REGISTROS OBRA (Ficha técnica)
+
+  // RegistrosObra (ACTUALIZADO: autor / asignación / provenance / clave)
   getOrCreateSheet_(ss, SHEET_REGISTROS_OBRA, [
     'ID', 'Nombre Obra', 'Ubicación', 'Estatus', 'Tipo de Obra', 'Superficie (m²)',
     'Precio Lista', 'Precio Venta', 'Fecha Registro', 'Fecha Adquisición', 'Fecha Venta',
-    'Cliente', 'Documentos', 'Observaciones', 'Adjuntos', 'ID Responsable', 'Asignación'
+    'Cliente', 'Documentos', 'Observaciones', 'Adjuntos', 'ID Responsable',
+    'Autor', 'Asignación', 'Provenance', 'Clave'
   ]);
+
+  // Comisiones (NUEVA HOJA)
+  getOrCreateSheet_(ss, SHEET_COMISIONES, ['ID', 'Provenance', 'Porcentaje', 'Fecha Registro']);
 
   // Asegurar columna Identificador en Responsables y rellenar vacíos
   const shR = ss.getSheetByName(SHEET_RESPONSABLES);
@@ -188,8 +160,8 @@ function ensureSchema_() {
   forceTextColumn_(ss.getSheetByName(SHEET_PROYECTOS), 6);
   forceTextColumn_(ss.getSheetByName(SHEET_SUBPROYECTOS), 8);
   forceTextColumn_(ss.getSheetByName(SHEET_TAREAS), COL_TAREA_ASIGNACION);
-  
-  // Forzar columna Asignación en RegistrosObra como TEXTO
+
+  // Forzar columna Asignación en RegistrosObra como TEXTO (ahora es R)
   forceTextColumn_(ss.getSheetByName(SHEET_REGISTROS_OBRA), COL_REGISTROS_ASIGNACION);
 }
 
@@ -285,7 +257,7 @@ function generateObraAsignacion_(ss) {
   const sh = ss.getSheetByName(SHEET_REGISTROS_OBRA);
   const rows = sh.getDataRange().getValues();
   let maxNum = 0;
-  
+
   for (let i = 1; i < rows.length; i++) {
     const asignacion = normalizeAsignacion_(rows[i][COL_REGISTROS_ASIGNACION - 1]);
     const match = asignacion.match(/^obra-(\d+)$/);
@@ -293,7 +265,7 @@ function generateObraAsignacion_(ss) {
       maxNum = Math.max(maxNum, parseInt(match[1], 10));
     }
   }
-  
+
   return `obra-${maxNum + 1}`;
 }
 
@@ -364,7 +336,7 @@ function parseAdjuntosCell_(cellValue) {
     try {
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
-    } catch (_) {}
+    } catch (_) { }
   }
 
   return raw.split(',').map(s => s.trim()).filter(Boolean)
@@ -454,7 +426,11 @@ function getAttachmentsFolder_() {
 }
 
 function ensureFileIsShareable_(file) {
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {
+    console.warn('No se pudo cambiar sharing: ' + e);
+  }
 }
 
 // ======================================================
@@ -648,7 +624,7 @@ function doGet() {
       fecha_registro: r[8] || ''
     }));
 
-    // NUEVO: DATOS DE REGISTROS OBRA
+    // RegistrosObra
     const shO = ss.getSheetByName(SHEET_REGISTROS_OBRA);
     const registrosData = shO.getDataRange().getValues();
     const registrosObra = registrosData.slice(1).map(r => ({
@@ -668,19 +644,33 @@ function doGet() {
       observaciones: r[13] || '',
       adjuntos: parseAdjuntosObra_(r[14]),
       id_responsable: (r[15] || '').toString(),
-      asignacion: normalizeAsignacion_(r[16])
+      autor: r[16] || '',
+      asignacion: normalizeAsignacion_(r[17]),
+      provenance: r[18] || '',
+      clave: r[19] || ''
+    }));
+
+    // Comisiones
+    const shCo = ss.getSheetByName(SHEET_COMISIONES);
+    const comisionesData = shCo.getDataRange().getValues();
+    const comisiones = comisionesData.slice(1).map(r => ({
+      id: (r[0] || '').toString(),
+      provenance: (r[1] || '').toString(),
+      porcentaje: parseFloat(r[2]) || 0,
+      fecha_registro: r[3] || ''
     }));
 
     return ContentService
-      .createTextOutput(JSON.stringify({ 
-        proyectos, 
-        subproyectos, 
-        tareas, 
-        responsables, 
-        comentarios, 
-        historial, 
+      .createTextOutput(JSON.stringify({
+        proyectos,
+        subproyectos,
+        tareas,
+        responsables,
+        comentarios,
+        historial,
         finanzas,
-        registrosObra 
+        registrosObra,
+        comisiones
       }))
       .setMimeType(ContentService.MimeType.JSON);
 
@@ -694,7 +684,8 @@ function doGet() {
       comentarios: [],
       historial: [],
       finanzas: [],
-      registrosObra: []
+      registrosObra: [],
+      comisiones: []
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
@@ -1182,7 +1173,7 @@ function doPost(e) {
     }
 
     // ======================================================
-    // REGISTROS OBRA / FICHA TÉCNICA (CRUD)
+    // REGISTROS OBRA / FICHA TÉCNICA (CRUD) + autor/provenance/clave
     // ======================================================
     else if (action === 'registro_obra_add' || action === 'registro_obra_update' || action === 'registro_obra_delete') {
       const sh = ss.getSheetByName(SHEET_REGISTROS_OBRA);
@@ -1190,7 +1181,7 @@ function doPost(e) {
       if (action === 'registro_obra_add') {
         const asignacion = generateObraAsignacion_(ss);
         const fechaRegistro = data.fecha_registro || new Date().toISOString().split('T')[0];
-        
+
         sh.appendRow([
           data.id,
           data.nombre_obra || '',
@@ -1208,13 +1199,16 @@ function doPost(e) {
           data.observaciones || '',
           '[]',  // Adjuntos (JSON)
           data.id_responsable || '',
-          ''
+          data.autor || '',
+          '',     // Asignación (se setea abajo)
+          data.provenance || '',
+          data.clave || ''
         ]);
 
         const lastRow = sh.getLastRow();
         sh.getRange(lastRow, COL_REGISTROS_ASIGNACION).setNumberFormat('@STRING@');
         sh.getRange(lastRow, COL_REGISTROS_ASIGNACION).setValue(String(asignacion));
-        
+
         // Inicializar JSON vacíos si no existen
         if (sh.getLastColumn() >= COL_REGISTROS_DOCUMENTOS) {
           sh.getRange(lastRow, COL_REGISTROS_DOCUMENTOS).setValue('[]');
@@ -1222,7 +1216,7 @@ function doPost(e) {
         if (sh.getLastColumn() >= COL_REGISTROS_ADJUNTOS) {
           sh.getRange(lastRow, COL_REGISTROS_ADJUNTOS).setValue('[]');
         }
-        
+
       } else if (action === 'registro_obra_update') {
         const rows = sh.getDataRange().getValues();
         for (let i = 1; i < rows.length; i++) {
@@ -1234,12 +1228,22 @@ function doPost(e) {
             if (data.superficie !== undefined) sh.getRange(i + 1, COL_REGISTROS_SUPERFICIE).setValue(data.superficie);
             if (data.precio_lista !== undefined) sh.getRange(i + 1, COL_REGISTROS_PRECIO_LISTA).setValue(data.precio_lista);
             if (data.precio_venta !== undefined) sh.getRange(i + 1, COL_REGISTROS_PRECIO_VENTA).setValue(data.precio_venta);
+            if (data.fecha_registro !== undefined) sh.getRange(i + 1, COL_REGISTROS_FECHA_REGISTRO).setValue(data.fecha_registro);
             if (data.fecha_adquisicion !== undefined) sh.getRange(i + 1, COL_REGISTROS_FECHA_ADQUISICION).setValue(data.fecha_adquisicion);
             if (data.fecha_venta !== undefined) sh.getRange(i + 1, COL_REGISTROS_FECHA_VENTA).setValue(data.fecha_venta);
             if (data.cliente !== undefined) sh.getRange(i + 1, COL_REGISTROS_CLIENTE).setValue(data.cliente);
             if (data.observaciones !== undefined) sh.getRange(i + 1, COL_REGISTROS_OBSERVACIONES).setValue(data.observaciones);
             if (data.id_responsable !== undefined) sh.getRange(i + 1, COL_REGISTROS_ID_RESPONSABLE).setValue(data.id_responsable);
-            
+
+            // NUEVOS CAMPOS
+            if (data.autor !== undefined) sh.getRange(i + 1, COL_REGISTROS_AUTOR).setValue(data.autor);
+            if (data.asignacion !== undefined) {
+              sh.getRange(i + 1, COL_REGISTROS_ASIGNACION).setNumberFormat('@STRING@');
+              sh.getRange(i + 1, COL_REGISTROS_ASIGNACION).setValue(String(data.asignacion));
+            }
+            if (data.provenance !== undefined) sh.getRange(i + 1, COL_REGISTROS_PROVENANCE).setValue(data.provenance);
+            if (data.clave !== undefined) sh.getRange(i + 1, COL_REGISTROS_CLAVE).setValue(data.clave);
+
             // Manejo de JSON (Documentos)
             if (data.documentos !== undefined) {
               if (Array.isArray(data.documentos)) {
@@ -1248,7 +1252,7 @@ function doPost(e) {
                 sh.getRange(i + 1, COL_REGISTROS_DOCUMENTOS).setValue(data.documentos);
               }
             }
-            
+
             // Manejo de JSON (Adjuntos)
             if (data.adjuntos !== undefined) {
               if (Array.isArray(data.adjuntos)) {
@@ -1270,7 +1274,7 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
     // REGISTROS OBRA - DOCUMENTOS (CRUD sobre JSON)
     // ======================================================
@@ -1289,7 +1293,7 @@ function doPost(e) {
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(documentos));
       return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
-    
+
     else if (action === 'registro_obra_documento_add') {
       const idObra = (data.id_obra || '').toString().trim();
       const actorId = (data.id_actor || '').toString().trim();
@@ -1317,7 +1321,7 @@ function doPost(e) {
 
       return ContentService.createTextOutput(JSON.stringify({ result: 'success', documento: newDoc })).setMimeType(ContentService.MimeType.JSON);
     }
-    
+
     else if (action === 'registro_obra_documento_delete') {
       const idObra = (data.id_obra || '').toString().trim();
       const actorId = (data.id_actor || '').toString().trim();
@@ -1337,7 +1341,7 @@ function doPost(e) {
 
       return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
-    
+
     // ======================================================
     // REGISTROS OBRA - ADJUNTOS ARCHIVOS (Drive)
     // ======================================================
@@ -1352,7 +1356,7 @@ function doPost(e) {
       // Verificar permisos (solo supervisor/director o responsable asignado)
       const obra = getRegistroObraById_(ss, idObra);
       if (!obra) throw new Error('Registro de obra no encontrado');
-      
+
       const obraResponsableId = (obra.values[COL_REGISTROS_ID_RESPONSABLE - 1] || '').toString();
       if (!isPrivileged_(ss, actorId) && actorId !== obraResponsableId) {
         throw new Error('No autorizado: solo el responsable o supervisor puede subir adjuntos');
@@ -1388,7 +1392,7 @@ function doPost(e) {
 
       return ContentService.createTextOutput(JSON.stringify({ result: 'success', fileId, url: fileUrl })).setMimeType(ContentService.MimeType.JSON);
     }
-    
+
     else if (action === 'registro_obra_adjunto_eliminar') {
       const idObra = (data.id_obra || '').toString().trim();
       const fileId = (data.fileId || '').toString().trim();
@@ -1400,11 +1404,10 @@ function doPost(e) {
 
       assertPrivileged_(ss, actorId);
 
-      // Eliminar de Drive
       try {
         DriveApp.getFileById(fileId).setTrashed(true);
       } catch (e) {
-        // El archivo puede no existir, continuar
+        // continuar
       }
 
       const obra = getRegistroObraById_(ss, idObra);
@@ -1413,6 +1416,49 @@ function doPost(e) {
         const prevAdj = parseAdjuntosObra_(prevRaw);
         const nextAdj = prevAdj.filter(a => (a.id || '') !== fileId);
         obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).setValue(stringifyAdjuntosObra_(nextAdj));
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ======================================================
+    // COMISIONES (CRUD)
+    // ======================================================
+    else if (action === 'comision_add' || action === 'comision_update' || action === 'comision_delete') {
+      const sh = ss.getSheetByName(SHEET_COMISIONES);
+
+      if (action === 'comision_add') {
+        const id = (data.id || ('com_' + Date.now().toString())).toString();
+        const provenance = (data.provenance || '').toString();
+        const porcentaje = (data.porcentaje !== undefined) ? data.porcentaje : 0;
+        const fechaRegistro = new Date().toISOString();
+
+        sh.appendRow([id, provenance, porcentaje, fechaRegistro]);
+      }
+      else if (action === 'comision_update') {
+        const id = (data.id || '').toString();
+        if (!id) throw new Error('Falta data.id');
+
+        const rows = sh.getDataRange().getValues();
+        for (let i = 1; i < rows.length; i++) {
+          if ((rows[i][0] || '').toString() === id) {
+            if (data.provenance !== undefined) sh.getRange(i + 1, COL_COMISION_PROVENANCE).setValue(String(data.provenance));
+            if (data.porcentaje !== undefined) sh.getRange(i + 1, COL_COMISION_PORCENTAJE).setValue(data.porcentaje);
+            break;
+          }
+        }
+      }
+      else if (action === 'comision_delete') {
+        const id = (data.id || '').toString();
+        if (!id) throw new Error('Falta data.id');
+
+        const rows = sh.getDataRange().getValues();
+        for (let i = 1; i < rows.length; i++) {
+          if ((rows[i][0] || '').toString() === id) {
+            sh.deleteRow(i + 1);
+            break;
+          }
+        }
       }
 
       return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
