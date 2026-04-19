@@ -23,6 +23,7 @@
             #responsables-section { display: none !important; }
             #finanzas-section { display: none !important; }
             #obras-section { display: none !important; }
+            #comisiones-section { display: none !important; }
             .print-only { display: block !important; }
             #pdf-report-header { display: block !important; }
             #loading { display: none !important; }
@@ -101,6 +102,10 @@
             <button onclick="switchTab('obras')" id="tab-btn-obras"
                     class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all text-slate-600 hover:text-slate-900">
                 🏗️ Registro de Obra
+            </button>
+            <button onclick="switchTab('comisiones')" id="tab-btn-comisiones"
+                    class="tab-btn px-6 py-2 rounded-lg font-semibold text-sm transition-all text-slate-600 hover:text-slate-900">
+                💼 Comisiones
             </button>
         </nav>
 
@@ -472,6 +477,34 @@
                 </div>
             </div>
         </div>
+
+        <!-- TAB: Comisiones -->
+        <div id="comisiones-section" class="hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-slate-700">💼 Tabla de Comisiones</h2>
+                <button onclick="openComisionModal()"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold shadow-sm transition-all flex items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    Nueva Comisión
+                </button>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th class="p-4 font-semibold text-slate-600">Provenance</th>
+                            <th class="p-4 font-semibold text-slate-600 text-right">Porcentaje (%)</th>
+                            <th class="p-4 font-semibold text-slate-600 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comisiones-table-body">
+                        <tr><td colspan="3" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
 
@@ -758,6 +791,29 @@
                         </select>
                     </div>
 
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Autor</label>
+                        <input type="text" id="obraAutor" placeholder="Nombre del autor"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-1">Provenance</label>
+                        <select id="obraProvenance"
+                                class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Sin provenance</option>
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-bold text-slate-700 mb-1">
+                            Clave
+                            <span class="text-xs font-normal text-slate-400 ml-1">(generada automáticamente)</span>
+                        </label>
+                        <input type="text" id="obraClave" readonly placeholder="Se genera al seleccionar Provenance y Autor"
+                               class="w-full px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 font-mono text-xs focus:outline-none cursor-default" />
+                    </div>
+
                     <div class="sm:col-span-2">
                         <label class="block text-sm font-bold text-slate-700 mb-1">Observaciones</label>
                         <textarea id="obraObservaciones" rows="3" placeholder="Notas adicionales…"
@@ -791,8 +847,8 @@
                         </div>
                     </div>
 
-                    <!-- ADJUNTOS (solo en modo edición) -->
-                    <div id="obra-adj-section" class="sm:col-span-2 hidden">
+                    <!-- ADJUNTOS (disponible en creación y edición) -->
+                    <div id="obra-adj-section" class="sm:col-span-2">
                         <div class="border border-slate-200 rounded-xl p-4 space-y-3">
                             <h4 class="text-sm font-bold text-slate-700">
                                 📎 Adjuntos
@@ -838,6 +894,59 @@
         </div>
     </div>
 
+    <!-- MODAL Comisión -->
+    <div id="comisionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="comision-modal-title" class="text-xl font-bold text-slate-800">Nueva Comisión</h3>
+                <button onclick="closeComisionModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="comisionForm" class="p-6 space-y-4" onsubmit="saveComision(event)">
+                <input type="hidden" id="comisionId" />
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Provenance <span class="text-red-500">*</span></label>
+                    <input type="text" id="comisionProvenance" required placeholder="Ej: Galería Norte, Cliente X…"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-1">Porcentaje (%) <span class="text-red-500">*</span></label>
+                    <input type="number" id="comisionPorcentaje" required min="0" max="100" step="0.01" placeholder="0.00"
+                           class="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeComisionModal()"
+                            class="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="comision-btn-save"
+                            class="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                        <span id="comision-btn-save-text">Guardar</span>
+                        <span id="comision-btn-save-spinner" class="hidden">
+                            <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+
+                <button type="button" id="comision-btn-delete"
+                        onclick="deleteCurrentComision()"
+                        class="w-full mt-2 text-red-500 text-sm font-medium hover:underline hidden">
+                    Eliminar Comisión
+                </button>
+            </form>
+        </div>
+    </div>
+
     <script>
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxmPBIboe_Evn45ZHjtkjydbmlPRMuSax_sEiTc2iN8cqqi2i4-Pf_lOd6875cQXEd_yg/exec';
 
@@ -850,6 +959,7 @@
         let allSubproyectos = [];
         let allFinanzas = [];
         let allRegistrosObra = [];
+        let allComisiones = [];
         let rendimientoFiltered = [];
         let finanzasFiltered = [];
         let obrasFiltered = [];
@@ -857,9 +967,11 @@
         let fullDataLoaded = false;
         let finanzasDataLoaded = false;
         let obrasDataLoaded = false;
+        let comisionesDataLoaded = false;
         let currentObraId = null;
         let currentObraDocumentos = [];
         let currentObraAdjuntos = [];
+        let pendingAdjuntos = [];
 
         document.addEventListener('DOMContentLoaded', loadResponsables);
 
@@ -899,6 +1011,7 @@
             document.getElementById('rendimiento-section').classList.toggle('hidden', tab !== 'rendimiento');
             document.getElementById('finanzas-section').classList.toggle('hidden', tab !== 'finanzas');
             document.getElementById('obras-section').classList.toggle('hidden', tab !== 'obras');
+            document.getElementById('comisiones-section').classList.toggle('hidden', tab !== 'comisiones');
             document.getElementById('btn-nuevo-responsable').classList.toggle('hidden', tab !== 'responsables');
 
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -923,6 +1036,10 @@
             } else if (tab === 'obras' && obrasDataLoaded) {
                 populateObrasFilterSelects();
                 renderRegistrosObra();
+            } else if (tab === 'comisiones' && !comisionesDataLoaded) {
+                loadFullData();
+            } else if (tab === 'comisiones' && comisionesDataLoaded) {
+                renderComisiones();
             }
         }
 
@@ -956,6 +1073,11 @@
                     obrasDataLoaded = true;
                 }
 
+                if (Array.isArray(data.comisiones)) {
+                    allComisiones = data.comisiones;
+                    comisionesDataLoaded = true;
+                }
+
                 renderResponsables();
                 populateFilterSelects();
             } catch (error) {
@@ -977,9 +1099,11 @@
                 allSubproyectos = data.subproyectos || [];
                 allFinanzas = data.finanzas || [];
                 allRegistrosObra = data.registrosObra || [];
+                allComisiones = data.comisiones || [];
                 fullDataLoaded = true;
                 finanzasDataLoaded = true;
                 obrasDataLoaded = true;
+                comisionesDataLoaded = true;
                 populateFilterSelects();
                 if (activeTab === 'rendimiento') {
                     renderRendimiento();
@@ -989,6 +1113,8 @@
                 } else if (activeTab === 'obras') {
                     populateObrasFilterSelects();
                     renderRegistrosObra();
+                } else if (activeTab === 'comisiones') {
+                    renderComisiones();
                 }
             } catch (error) {
                 console.error('Error cargando datos:', error);
@@ -998,6 +1124,8 @@
                     '<tr><td colspan="8" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
                 document.getElementById('obras-table-body').innerHTML =
                     '<tr><td colspan="10" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
+                document.getElementById('comisiones-table-body').innerHTML =
+                    '<tr><td colspan="3" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
             } finally {
                 showLoading(false);
             }
@@ -1790,12 +1918,25 @@
                 opt.textContent = r.nombre || r.id;
                 selResp.appendChild(opt);
             });
+
+            const selProv = document.getElementById('obraProvenance');
+            selProv.innerHTML = '<option value="">Sin provenance</option>';
+            allComisiones.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.provenance + ' (' + parseFloat(c.porcentaje || 0).toFixed(2) + '%)';
+                selProv.appendChild(opt);
+            });
         }
 
         function openObraModal(obra = null) {
             populateObraModalSelects();
             document.getElementById('obraForm').reset();
             const btnDel = document.getElementById('obra-btn-delete');
+
+            // Attach change listeners for auto-generating clave
+            document.getElementById('obraProvenance').onchange = updateObraClave;
+            document.getElementById('obraAutor').oninput = updateObraClave;
 
             if (obra) {
                 document.getElementById('obra-modal-title').textContent = 'Editar Obra';
@@ -1812,13 +1953,16 @@
                 document.getElementById('obraFechaAdquisicion').value = obra.fecha_adquisicion || '';
                 document.getElementById('obraFechaVenta').value = obra.fecha_venta || '';
                 document.getElementById('obraResponsable').value = obra.id_responsable || '';
+                document.getElementById('obraAutor').value = obra.autor || '';
+                document.getElementById('obraProvenance').value = obra.id_comision || '';
+                document.getElementById('obraClave').value = obra.clave || '';
                 document.getElementById('obraObservaciones').value = obra.observaciones || '';
                 btnDel.classList.remove('hidden');
                 currentObraId = obra.id;
                 currentObraDocumentos = Array.isArray(obra.documentos) ? [...obra.documentos] : [];
                 currentObraAdjuntos = Array.isArray(obra.adjuntos) ? [...obra.adjuntos] : [];
+                pendingAdjuntos = [];
                 document.getElementById('obra-docs-section').classList.remove('hidden');
-                document.getElementById('obra-adj-section').classList.remove('hidden');
                 renderObraDocumentos();
                 renderObraAdjuntos();
             } else {
@@ -1829,8 +1973,9 @@
                 currentObraId = null;
                 currentObraDocumentos = [];
                 currentObraAdjuntos = [];
+                pendingAdjuntos = [];
                 document.getElementById('obra-docs-section').classList.add('hidden');
-                document.getElementById('obra-adj-section').classList.add('hidden');
+                renderPendingAdjuntos();
             }
 
             document.getElementById('obraModal').classList.remove('hidden');
@@ -1950,46 +2095,30 @@
             const fileInput = document.getElementById('obraAdjFile');
             const file = fileInput.files[0];
             if (!file) { alert('Selecciona un archivo primero'); return; }
+
+            // In create mode: queue the file for upload after save
+            if (!currentObraId) {
+                pendingAdjuntos.push(file);
+                renderPendingAdjuntos();
+                fileInput.value = '';
+                return;
+            }
+
             const actorId = getActorId();
             if (!actorId) { alert('No se pudo determinar el usuario actual'); return; }
             const btn = document.getElementById('obra-adj-upload-btn');
             btn.disabled = true;
             btn.textContent = 'Subiendo…';
             try {
-                const base64 = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = e => resolve(e.target.result.split(',')[1]);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-                const resp = await fetch(WEB_APP_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'registro_obra_upload_adjunto', data: {
-                        id_obra: currentObraId,
-                        id_actor: actorId,
-                        filename: file.name,
-                        mimeType: file.type || 'application/octet-stream',
-                        base64
-                    }})
-                });
-                const result = await resp.json();
-                if (result.result === 'success') {
-                    const newAdj = {
-                        id: result.fileId,
-                        name: file.name,
-                        url: result.url,
-                        kind: 'adjunto_obra',
-                        uploadedBy: actorId,
-                        createdAt: new Date().toISOString(),
-                        mimeType: file.type || 'application/octet-stream'
-                    };
+                const newAdj = await uploadFileToObra(currentObraId, file, actorId);
+                if (newAdj) {
                     currentObraAdjuntos.push(newAdj);
                     const idx = allRegistrosObra.findIndex(x => x.id === currentObraId);
                     if (idx !== -1) allRegistrosObra[idx].adjuntos = [...currentObraAdjuntos];
                     renderObraAdjuntos();
                     fileInput.value = '';
                 } else {
-                    alert('Error: ' + (result.message || 'No se pudo subir el archivo'));
+                    alert('No se pudo subir el archivo');
                 }
             } catch (e) {
                 alert('Error al subir archivo');
@@ -2057,6 +2186,9 @@
                     fecha_adquisicion: document.getElementById('obraFechaAdquisicion').value,
                     fecha_venta: document.getElementById('obraFechaVenta').value,
                     id_responsable: document.getElementById('obraResponsable').value,
+                    autor: document.getElementById('obraAutor').value.trim(),
+                    id_comision: document.getElementById('obraProvenance').value,
+                    clave: document.getElementById('obraClave').value.trim(),
                     observaciones: document.getElementById('obraObservaciones').value.trim()
                 };
                 const action = id ? 'registro_obra_update' : 'registro_obra_add';
@@ -2064,6 +2196,21 @@
                     method: 'POST',
                     body: JSON.stringify({ action, data: payload })
                 });
+
+                // Upload pending adjuntos for new obra
+                if (!id && pendingAdjuntos.length) {
+                    const actorId = getActorId() || payload.id_responsable || payload.id;
+                    const uploadedAdjs = [];
+                    for (const file of pendingAdjuntos) {
+                        const adj = await uploadFileToObra(payload.id, file, actorId);
+                        if (adj) uploadedAdjs.push(adj);
+                    }
+                    if (uploadedAdjs.length) {
+                        payload.adjuntos = uploadedAdjs;
+                    }
+                    pendingAdjuntos = [];
+                }
+
                 closeObraModal();
                 if (id) {
                     const idx = allRegistrosObra.findIndex(x => x.id === id);
@@ -2111,6 +2258,216 @@
             if (!id) return;
             closeObraModal();
             await deleteObra(id);
+        }
+
+        // ============================================================
+        // ENCRYPTION HELPERS (XOR + Base64, key = "Atlas")
+        // ============================================================
+        function xorCipher(text, key) {
+            let result = '';
+            for (let i = 0; i < text.length; i++) {
+                result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return result;
+        }
+
+        function encryptClave(provenance, porcentaje, autor) {
+            if (!provenance && !autor) return '';
+            const plain = [provenance, porcentaje, autor].join('|');
+            try {
+                return btoa(unescape(encodeURIComponent(xorCipher(plain, 'Atlas'))));
+            } catch (_) {
+                return btoa(xorCipher(plain, 'Atlas'));
+            }
+        }
+
+        function decryptClave(clave) {
+            if (!clave) return '';
+            try {
+                return xorCipher(decodeURIComponent(escape(atob(clave))), 'Atlas');
+            } catch (_) {
+                try { return xorCipher(atob(clave), 'Atlas'); } catch (__) { return ''; }
+            }
+        }
+
+        function updateObraClave() {
+            const sel = document.getElementById('obraProvenance');
+            const autor = (document.getElementById('obraAutor').value || '').trim();
+            const provenanceVal = sel ? sel.value : '';
+            let porcentaje = '';
+            if (provenanceVal) {
+                const com = allComisiones.find(c => c.id === provenanceVal);
+                porcentaje = com ? String(com.porcentaje || '') : '';
+            }
+            const provLabel = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+            document.getElementById('obraClave').value = encryptClave(provLabel, porcentaje, autor);
+        }
+
+        // ============================================================
+        // COMISIONES CRUD
+        // ============================================================
+        function renderComisiones() {
+            const tbody = document.getElementById('comisiones-table-body');
+            tbody.innerHTML = '';
+            if (!allComisiones.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-slate-400">No hay comisiones registradas</td></tr>';
+                return;
+            }
+            const sorted = [...allComisiones].sort((a, b) => (a.provenance || '').localeCompare(b.provenance || '', 'es'));
+            sorted.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100 hover:bg-slate-50';
+                tr.innerHTML = `
+                    <td class="p-4 font-medium text-slate-800">${escapeHtml(c.provenance || '—')}</td>
+                    <td class="p-4 text-right text-slate-700">${parseFloat(c.porcentaje || 0).toFixed(2)}%</td>
+                    <td class="p-4 text-right whitespace-nowrap">
+                        <button onclick="editComision('${escapeHtml(c.id)}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-1">Editar</button>
+                        <button onclick="deleteComision('${escapeHtml(c.id)}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openComisionModal(comision = null) {
+            document.getElementById('comisionForm').reset();
+            const btnDel = document.getElementById('comision-btn-delete');
+            if (comision) {
+                document.getElementById('comision-modal-title').textContent = 'Editar Comisión';
+                document.getElementById('comisionId').value = comision.id;
+                document.getElementById('comisionProvenance').value = comision.provenance || '';
+                document.getElementById('comisionPorcentaje').value = comision.porcentaje || '';
+                btnDel.classList.remove('hidden');
+            } else {
+                document.getElementById('comision-modal-title').textContent = 'Nueva Comisión';
+                document.getElementById('comisionId').value = '';
+                btnDel.classList.add('hidden');
+            }
+            document.getElementById('comisionModal').classList.remove('hidden');
+        }
+
+        function closeComisionModal() {
+            document.getElementById('comisionModal').classList.add('hidden');
+        }
+
+        function setComisionLoading(loading) {
+            const btn = document.getElementById('comision-btn-save');
+            const btnText = document.getElementById('comision-btn-save-text');
+            const btnSpinner = document.getElementById('comision-btn-save-spinner');
+            btn.disabled = loading;
+            btn.classList.toggle('opacity-75', loading);
+            btn.classList.toggle('cursor-not-allowed', loading);
+            btnText.classList.toggle('hidden', loading);
+            btnSpinner.classList.toggle('hidden', !loading);
+        }
+
+        async function saveComision(e) {
+            e.preventDefault();
+            if (document.getElementById('comision-btn-save').disabled) return;
+            setComisionLoading(true);
+            try {
+                const id = document.getElementById('comisionId').value;
+                const payload = {
+                    id: id || ('com_' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)))),
+                    provenance: document.getElementById('comisionProvenance').value.trim(),
+                    porcentaje: parseFloat(document.getElementById('comisionPorcentaje').value) || 0
+                };
+                const action = id ? 'comision_update' : 'comision_add';
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, data: payload })
+                });
+                if (id) {
+                    const idx = allComisiones.findIndex(x => x.id === id);
+                    if (idx !== -1) allComisiones[idx] = payload; else allComisiones.push(payload);
+                } else {
+                    allComisiones.push(payload);
+                }
+                closeComisionModal();
+                renderComisiones();
+            } catch (error) {
+                console.error('Error guardando comisión:', error);
+                alert('Error al guardar comisión');
+            } finally {
+                setComisionLoading(false);
+            }
+        }
+
+        function editComision(id) {
+            const c = allComisiones.find(x => x.id === id);
+            if (c) openComisionModal(c);
+        }
+
+        async function deleteComision(id) {
+            if (!confirm('¿Estás seguro de eliminar esta comisión?')) return;
+            showLoading(true);
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'comision_delete', data: { id } })
+                });
+                allComisiones = allComisiones.filter(x => x.id !== id);
+                renderComisiones();
+            } catch (error) {
+                console.error('Error eliminando comisión:', error);
+                alert('Error al eliminar comisión');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteCurrentComision() {
+            const id = document.getElementById('comisionId').value;
+            if (!id) return;
+            closeComisionModal();
+            await deleteComision(id);
+        }
+
+        // ============================================================
+        // PENDING ADJUNTOS (for new obra creation)
+        // ============================================================
+        function renderPendingAdjuntos() {
+            const list = document.getElementById('obra-adj-list');
+            if (!pendingAdjuntos.length) {
+                list.innerHTML = '<p class="text-slate-400 text-xs">Sin adjuntos. Los archivos se subirán al guardar.</p>';
+                return;
+            }
+            list.innerHTML = pendingAdjuntos.map((f, i) => `
+                <div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                    <span class="flex-1 min-w-0 truncate text-slate-700 text-sm">${escapeHtml(f.name)}</span>
+                    <button type="button" onclick="removePendingAdjunto(${i})"
+                            class="text-red-400 hover:text-red-600 text-xs shrink-0 ml-1" title="Quitar">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function removePendingAdjunto(i) {
+            pendingAdjuntos.splice(i, 1);
+            renderPendingAdjuntos();
+        }
+
+        async function uploadFileToObra(obraId, file, actorId) {
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = ev => resolve(ev.target.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            const resp = await fetch(WEB_APP_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'registro_obra_upload_adjunto', data: {
+                    id_obra: obraId,
+                    id_actor: actorId,
+                    filename: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    base64
+                }})
+            });
+            const result = await resp.json();
+            if (result.result === 'success') {
+                return { id: result.fileId, name: file.name, url: result.url, kind: 'adjunto_obra', uploadedBy: actorId, createdAt: new Date().toISOString(), mimeType: file.type || 'application/octet-stream' };
+            }
+            return null;
         }
     </script>
 </body>
