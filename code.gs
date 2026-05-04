@@ -1483,8 +1483,17 @@ function testAttachmentsFolder() {
   Logger.log(f.getUrl());
 }
 
-function verificarScopes() {
-  const authInfo = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);
-  Logger.log('Scopes otorgados:');
-  Logger.log(authInfo.getScopes());
+function crearHojaComisiones() {
+    const ss = SpreadsheetApp.openById('<ID-HOJA>');
+    let hojaComision = ss.getSheetByName('Comisiones');
+    if (!hojaComision) {
+        // Crea la hoja si no existe
+        hojaComision = ss.insertSheet('Comisiones');
+        
+        // Añade las cabeceras iniciales (recomendado)
+        hojaComision.appendRow(['Nombre', 'Cantidad', 'Fecha']);
+    } else {
+        Logger.log('La hoja ya existe.');
+    }
+    return hojaComision;
 }
