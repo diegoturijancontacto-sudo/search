@@ -1061,6 +1061,9 @@ const sh = ss.getSheetByName(SHEET_REGISTROS_OBRA);
 if (action === 'registro_obra_add') {
 const asignacion = generateObraAsignacion_(ss);
 const fechaRegistro = data.fecha_registro || new Date().toISOString().split('T')[0];
+const tagsValue = Array.isArray(data.tags)
+? stringifyTagsCell_(data.tags)
+: (typeof data.tags === 'string' ? data.tags : '[]');
 sh.appendRow([
 data.id,
 data.nombre_obra || '',
@@ -1085,7 +1088,7 @@ data.clave || '',
 data.ancho || 0, // NUEVO
 data.alto || 0, // NUEVO
 data.largo || 0, // NUEVO
-'[]' // Tags (JSON) - INICIALIZAR VACÍO
+tagsValue // Tags (JSON)
 ]);
 const lastRow = sh.getLastRow();
 sh.getRange(lastRow, COL_REGISTROS_ASIGNACION).setNumberFormat('@STRING@');
