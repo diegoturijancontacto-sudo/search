@@ -398,7 +398,7 @@
 
             <!-- Filters -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                     <div>
                         <label class="block text-xs font-bold text-slate-500 mb-1">Buscar por nombre</label>
                         <input type="text" id="obras-filter-nombre" placeholder="Nombre de la obra…"
@@ -424,6 +424,13 @@
                     <div>
                         <label class="block text-xs font-bold text-slate-500 mb-1">Responsable</label>
                         <select id="obras-filter-responsable"
+                                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">Tag</label>
+                        <select id="obras-filter-tag"
                                 class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white">
                             <option value="">Todos</option>
                         </select>
@@ -468,11 +475,12 @@
                                 <th class="p-3 font-semibold text-slate-600 text-right">Precio Venta</th>
                                 <th class="p-3 font-semibold text-slate-600">Cliente</th>
                                 <th class="p-3 font-semibold text-slate-600">Clave</th>
+                                <th class="p-3 font-semibold text-slate-600">Tags</th>
                                 <th class="p-3 font-semibold text-slate-600 text-right">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="obras-table-body">
-                            <tr><td colspan="11" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
+                            <tr><td colspan="12" class="text-center py-8 text-slate-400">Cargando datos…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1149,7 +1157,7 @@
                 document.getElementById('finanzas-table-body').innerHTML =
                     '<tr><td colspan="8" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
                 document.getElementById('obras-table-body').innerHTML =
-                    '<tr><td colspan="11" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
+                    '<tr><td colspan="12" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
                 document.getElementById('comisiones-table-body').innerHTML =
                     '<tr><td colspan="3" class="text-center py-8 text-red-400">Error al cargar datos. Intenta de nuevo.</td></tr>';
             } finally {
@@ -1831,6 +1839,7 @@
         function populateObrasFilterSelects() {
             const selTipo = document.getElementById('obras-filter-tipo');
             const selResp = document.getElementById('obras-filter-responsable');
+            const selTag  = document.getElementById('obras-filter-tag');
 
             const tipos = new Set(allRegistrosObra.map(o => o.tipo_obra).filter(Boolean));
             selTipo.innerHTML = '<option value="">Todos</option>';
@@ -1848,6 +1857,18 @@
                 opt.textContent = r.nombre || r.id;
                 selResp.appendChild(opt);
             });
+
+            const allTags = new Set();
+            allRegistrosObra.forEach(o => {
+                if (Array.isArray(o.tags)) o.tags.forEach(t => t && allTags.add(t));
+            });
+            selTag.innerHTML = '<option value="">Todos</option>';
+            [...allTags].sort((a, b) => a.localeCompare(b, 'es')).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                selTag.appendChild(opt);
+            });
         }
 
         function applyObraFilters() {
@@ -1855,12 +1876,14 @@
             const estatus = document.getElementById('obras-filter-estatus').value;
             const tipo = document.getElementById('obras-filter-tipo').value;
             const respId = document.getElementById('obras-filter-responsable').value;
+            const tag = document.getElementById('obras-filter-tag').value;
 
             obrasFiltered = allRegistrosObra.filter(o => {
                 if (nombre && !(o.nombre_obra || '').toLowerCase().includes(nombre)) return false;
                 if (estatus && o.estatus !== estatus) return false;
                 if (tipo && o.tipo_obra !== tipo) return false;
                 if (respId && o.id_responsable !== respId) return false;
+                if (tag && !(Array.isArray(o.tags) && o.tags.includes(tag))) return false;
                 return true;
             });
 
@@ -1873,6 +1896,7 @@
             document.getElementById('obras-filter-estatus').value = '';
             document.getElementById('obras-filter-tipo').value = '';
             document.getElementById('obras-filter-responsable').value = '';
+            document.getElementById('obras-filter-tag').value = '';
             renderRegistrosObra();
         }
 
@@ -1895,7 +1919,7 @@
             tbody.innerHTML = '';
 
             if (registros.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-8 text-slate-400">No hay obras con los filtros aplicados</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" class="text-center py-8 text-slate-400">No hay obras con los filtros aplicados</td></tr>';
                 countEl.textContent = '0 registros';
                 return;
             }
@@ -1928,6 +1952,11 @@
                     <td class="p-3 text-slate-600">${escapeHtml(o.cliente || '—')}</td>
                     <td class="p-3">
                         <span class="font-mono text-xs px-2 py-1 rounded bg-indigo-50 text-indigo-700">${escapeHtml(o.clave || '—')}</span>
+                    </td>
+                    <td class="p-3">
+                        ${Array.isArray(o.tags) && o.tags.length
+                            ? o.tags.map(t => `<span class="inline-block mr-1 mb-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">${escapeHtml(t)}</span>`).join('')
+                            : '<span class="text-slate-400">—</span>'}
                     </td>
                     <td class="p-3 text-right whitespace-nowrap">
                         <button onclick="editObra('${escapeHtml(o.id)}')" class="text-indigo-500 hover:bg-indigo-50 p-2 rounded-lg transition-colors font-bold text-xs uppercase mr-1">Editar</button>
