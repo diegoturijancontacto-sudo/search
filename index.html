@@ -130,6 +130,41 @@
       font-weight: 600;
     }
 
+    /* ESTILOS PARA LAS ETIQUETAS DE ESTADO */
+    .status-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.checking {
+      background: rgba(161, 161, 170, 0.15);
+      color: #a1a1aa;
+      border: 1px solid rgba(161, 161, 170, 0.2);
+    }
+
+    .status-badge.online {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .status-badge.offline {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .status-badge.internal {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
     .site-url {
       font-size: 14px;
       color: var(--accent);
@@ -179,14 +214,60 @@
       try {
         const res = await fetch('db.json');
         sitesData = await res.json();
-        renderSites(sitesData);
       } catch (e) {
         console.error('Error cargando db.json', e);
-        // Fallback para previsualización si db.json no existe localmente
+        // Fallback expandido para probar los estados
         sitesData = [
-          { name: "Panel de Gestión", url: "panel.html", notes: "Acceso al tablero Kanban y diagrama de Gantt." }
+          { name: "Panel de Gestión", url: "panel.html", notes: "Acceso al tablero Kanban y diagrama de Gantt." },
+          { name: "Google (Prueba Online)", url: "https://google.com", notes: "Este sitio debería marcar ONLINE." },
+          { name: "Dominio Falso (Prueba Caído)", url: "https://este-dominio-seguro-no-existe-123.com", notes: "Este sitio debería marcar CAÍDO." }
         ];
-        renderSites(sitesData);
+      }
+
+      // Inicializamos un ID y estado por defecto para cada sitio
+      sitesData.forEach((site, index) => {
+        site.id = index;
+        site.status = 'checking'; 
+      });
+
+      renderSites(sitesData);
+      checkAllStatuses(); // Iniciamos la comprobación en segundo plano
+    }
+
+    // Función para comprobar todos los sitios
+    async function checkAllStatuses() {
+      for (let site of sitesData) {
+        // Si no es un enlace HTTP (ej. panel.html), lo marcamos como interno
+        if (!site.url.startsWith('http')) {
+          site.status = 'internal';
+          updateBadgeDOM(site.id, site.status);
+          continue;
+        }
+
+        try {
+          // fetch con no-cors evita bloqueos del navegador. 
+          // Si la promesa se resuelve (incluso con error 404), la red respondió = ONLINE.
+          await fetch(site.url, { mode: 'no-cors', cache: 'no-cache' });
+          site.status = 'online';
+        } catch (error) {
+          // Si hace catch, significa que la conexión falló (DNS caído, servidor apagado, etc.) = CAÍDO.
+          site.status = 'offline';
+        }
+        
+        // Actualizamos el DOM visualmente sin recargar toda la lista
+        updateBadgeDOM(site.id, site.status);
+      }
+    }
+
+    // Función para actualizar solo la etiqueta de estado en el HTML
+    function updateBadgeDOM(id, status) {
+      const badge = document.querySelector(`.status-badge[data-id="${id}"]`);
+      if (badge) {
+        badge.className = `status-badge ${status}`;
+        if (status === 'online') badge.textContent = 'ONLINE';
+        else if (status === 'offline') badge.textContent = 'CAÍDO';
+        else if (status === 'internal') badge.textContent = 'LOCAL';
+        else badge.textContent = 'Comprobando...';
       }
     }
 
@@ -207,9 +288,15 @@
         li.className = 'site-card';
         li.style.animationDelay = `${index * 0.05}s`;
 
+        // Determinamos el texto actual del estado
+        const statusText = site.status === 'online' ? 'ONLINE' :
+                           site.status === 'offline' ? 'CAÍDO' :
+                           site.status === 'internal' ? 'LOCAL' : 'Comprobando...';
+
         li.innerHTML = `
           <div class="site-header">
             <div class="site-name">${site.name}</div>
+            <div class="status-badge ${site.status}" data-id="${site.id}">${statusText}</div>
           </div>
           <div class="site-url">${site.url}</div>
           <div class="version-notes">${site.notes}</div>
