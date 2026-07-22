@@ -1,5 +1,10 @@
 [
   {
+    "name": "base de datos Movil",
+    "url": "https://diegoturijancontacto-sudo.github.io/Finanzas/obra.html",
+    "notes": "es de solo lectura, para hacer registros es en: Panel > Usuarios > Registro de obra"
+  },
+  {
     "name": "DEFINICIONES",
     "url": "https://diegoturijancontacto-sudo.github.io/WALLE/#/",
     "notes": "Recién añadidos"
@@ -15,8 +20,8 @@
     "notes": "Recién añadidos"
   },
   {
-    "name": "Catalogo",
-    "url": "https://diegoturijancontacto-sudo.github.io/ArtTools/",
+    "name": "generador de catálogos",
+    "url": "https://frontline-zeta-ecru.vercel.app/movil/",
     "notes": "Recién añadidos"
   },
   {
