@@ -2385,17 +2385,58 @@ function generateClave(provenance, artista, tecnica, claveActual) {
 
     // --- BLOQUE 2: Artista + Técnica ---
 
-    // 2.1 Artista: 1ra letra del primer nombre + primeras 2 letras del segundo nombre
+    // 2.1 Artista: Validación de lista de abreviaturas o generación automática
     let artistStr = '';
     if (artista && artista.trim() !== '') {
-        const wordsArtista = artista.trim().split(/\s+/);
-        const pNombre = wordsArtista[0] || '';
-        const sNombre = wordsArtista[1] || '';
+        const cleanArtista = artista.trim().toLowerCase();
+        
+        // Lista de abreviaturas de autores
+        const mapaAutores = {
+            "abelardo lópez": "ALP",[span_0](start_span)[span_0](end_span)
+            "alberto aragón": "ARG",[span_1](start_span)[span_1](end_span)
+            "amador montes": "AMT",[span_2](start_span)[span_2](end_span)
+            "armando fallas": "AFV",[span_3](start_span)[span_3](end_span)
+            "carlos abascal": "ABZ",[span_4](start_span)[span_4](end_span)
+            "carlos mérida": "CMR",[span_5](start_span)[span_5](end_span)
+            "carlos oviedo": "COV",[span_6](start_span)[span_6](end_span)
+            "diego isabel santos": "DIS",[span_7](start_span)[span_7](end_span)
+            "eddie martínez": "EDM",[span_8](start_span)[span_8](end_span)
+            "emiliano lópez javier": "MLJ",[span_9](start_span)[span_9](end_span)
+            "enrique flores": "FLR",[span_10](start_span)[span_10](end_span)
+            "fernando andriacci": "FAC",[span_11](start_span)[span_11](end_span)
+            "gerardo de la barrera": "GDL",[span_12](start_span)[span_12](end_span)
+            "ivonne kennedy": "IVK",[span_13](start_span)[span_13](end_span)
+            "josé luis cuevas": "JLC",[span_14](start_span)[span_14](end_span)
+            "josefa garcía": "JSG",[span_15](start_span)[span_15](end_span)
+            "leonardo nierman": "NRM",[span_16](start_span)[span_16](end_span)
+            "leonardo salinas": "LSL",[span_17](start_span)[span_17](end_span)
+            "leonora carrington": "LCG",[span_18](start_span)[span_18](end_span)
+            "luis nishizawa": "NSZ",[span_19](start_span)[span_19](end_span)
+            "maximino javier": "MXJ",[span_20](start_span)[span_20](end_span)
+            "miguel y erick jaramillo": "MEJ",[span_21](start_span)[span_21](end_span)
+            "pedro friedeberg": "FRG",[span_22](start_span)[span_22](end_span)
+            "rafael coronel": "RFC",[span_23](start_span)[span_23](end_span)
+            "rodrigo de la sierra": "RDS",[span_24](start_span)[span_24](end_span)
+            "rufino tamayo": "TMY",[span_25](start_span)[span_25](end_span)
+            "salvador jaramillo": "SVJ",[span_26](start_span)[span_26](end_span)
+            "santiago carbonell": "SCN",[span_27](start_span)[span_27](end_span)
+            "sebastián guirnalda": "SGU",[span_28](start_span)[span_28](end_span)
+            "virgilio santaella": "VST",[span_29](start_span)[span_29](end_span)
+            "vladimir cora": "VCR[span_30](start_span)"[span_30](end_span)
+        };
 
-        const iniP1 = pNombre.charAt(0).toUpperCase();
-        const iniS2 = sNombre.substring(0, 2).toUpperCase();
+        if (mapaAutores[cleanArtista]) {
+            artistStr = mapaAutores[cleanArtista];
+        } else {
+            const wordsArtista = artista.trim().split(/\s+/);
+            const pNombre = wordsArtista[0] || '';
+            const sNombre = wordsArtista[1] || '';
 
-        artistStr = `${iniP1}${iniS2}`;
+            const iniP1 = pNombre.charAt(0).toUpperCase();
+            const iniS2 = sNombre.substring(0, 2).toUpperCase();
+
+            artistStr = `${iniP1}${iniS2}`;
+        }
     }
 
     // 2.2 Técnica: Primeras 2 letras + última letra de la primera palabra
@@ -2455,6 +2496,7 @@ function updateObraClave() {
         claveInput.value = generateClave(provName, autor, tecnica, claveActual);
     }
 }
+
 
         // ============================================================
         // COMISIONES CRUD
