@@ -2408,34 +2408,34 @@ function generateClave(provenance, artista, tecnica, claveActual) {
     }
 
     // 1.2 Primeras 3 letras del Provenance o "RTB" por defecto
-    // MODIFICACIÓN: Si el nombre del provenance coincide con algún autor de la lista,
-    // se usa su abreviatura en lugar de generar las primeras 3 letras
+    // MODIFICACIÓN: Si el nombre del artista coincide con algún autor de la lista,
+    // se usa su abreviatura en lugar de generar las primeras 3 letras del provenance
     let provStr = 'RTB';
     
-    if (provenance && provenance.trim() !== '') {
-        const cleanProv = provenance.trim();
+    // PRIMERO: Verificar si el artista está en la lista de abreviaturas
+    let abreviaturaEncontrada = null;
+    
+    if (artista && artista.trim() !== '') {
+        const cleanArtista = artista.trim();
+        const artistaLower = cleanArtista.toLowerCase();
         
-        // Buscar si el provenance coincide exactamente con algún autor en la lista
-        let abreviaturaEncontrada = null;
-        
-        // Primero intentamos coincidencia exacta (case insensitive)
-        const provLower = cleanProv.toLowerCase();
+        // Buscar coincidencia exacta (case insensitive)
         for (const [nombreAutor, abreviatura] of Object.entries(AUTOR_ABREVIATURAS)) {
-            if (nombreAutor.toLowerCase() === provLower) {
+            if (nombreAutor.toLowerCase() === artistaLower) {
                 abreviaturaEncontrada = abreviatura;
                 break;
             }
         }
-        
-        if (abreviaturaEncontrada) {
-            // Si encontramos una abreviatura en la lista, la usamos directamente
-            provStr = abreviaturaEncontrada;
-        } else {
-            // Si no está en la lista, generamos las primeras 3 letras como antes
-            const cleanProvNoSpaces = cleanProv.replace(/\s+/g, '').toUpperCase();
-            if (cleanProvNoSpaces.length > 0) {
-                provStr = cleanProvNoSpaces.substring(0, 3).padEnd(3, 'X');
-            }
+    }
+    
+    if (abreviaturaEncontrada) {
+        // Si el artista está en la lista, usamos su abreviatura como provenance
+        provStr = abreviaturaEncontrada;
+    } else if (provenance && provenance.trim() !== '') {
+        // Si el artista NO está en la lista, usamos el provenance normal
+        const cleanProv = provenance.trim().replace(/\s+/g, '').toUpperCase();
+        if (cleanProv.length > 0) {
+            provStr = cleanProv.substring(0, 3).padEnd(3, 'X');
         }
     }
 
