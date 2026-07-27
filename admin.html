@@ -2341,6 +2341,41 @@
 // Ejemplo de salida: 0001RTB-COVOLO
 // ============================================================
 
+// LISTA DE ABREVIATURAS DE AUTORES
+const AUTOR_ABREVIATURAS = {
+    'Abelardo López': 'ALP',
+    'Alberto Aragón': 'ARG',
+    'Amador Montes': 'AMT',
+    'Armando Fallas': 'AFV',
+    'Carlos Abascal': 'ABZ',
+    'Carlos Mérida': 'CMR',
+    'Carlos Oviedo': 'COV',
+    'Diego Isabel Santos': 'DIS',
+    'Eddie Martínez': 'EDM',
+    'Emiliano López Javier': 'MLJ',
+    'Enrique Flores': 'FLR',
+    'Fernando Andriacci': 'FAC',
+    'Gerardo de la Barrera': 'GDL',
+    'Ivonne Kennedy': 'IVK',
+    'José Luis Cuevas': 'JLC',
+    'Josefa García': 'JSG',
+    'Leonardo Nierman': 'NRM',
+    'Leonardo Salinas': 'LSL',
+    'Leonora Carrington': 'LCG',
+    'Luis Nishizawa': 'NSZ',
+    'Maximino Javier': 'MXJ',
+    'Miguel y Erick Jaramillo': 'MEJ',
+    'Pedro Friedeberg': 'FRG',
+    'Rafael Coronel': 'RFC',
+    'Rodrigo de la Sierra': 'RDS',
+    'Rufino Tamayo': 'TMY',
+    'Salvador Jaramillo': 'SVJ',
+    'Santiago Carbonell': 'SCN',
+    'Sebastián Guirnalda': 'SGU',
+    'Virgilio Santaella': 'VST',
+    'Vladimir Cora': 'VCR'
+};
+
 function generateClave(provenance, artista, tecnica, claveActual) {
     // --- BLOQUE 1: Numero (4 dígitos) + Origen (3 letras) ---
     
@@ -2373,11 +2408,34 @@ function generateClave(provenance, artista, tecnica, claveActual) {
     }
 
     // 1.2 Primeras 3 letras del Provenance o "RTB" por defecto
+    // MODIFICACIÓN: Si el nombre del provenance coincide con algún autor de la lista,
+    // se usa su abreviatura en lugar de generar las primeras 3 letras
     let provStr = 'RTB';
+    
     if (provenance && provenance.trim() !== '') {
-        const cleanProv = provenance.trim().replace(/\s+/g, '').toUpperCase();
-        if (cleanProv.length > 0) {
-            provStr = cleanProv.substring(0, 3).padEnd(3, 'X'); // Ajusta a 3 caracteres si es más corto
+        const cleanProv = provenance.trim();
+        
+        // Buscar si el provenance coincide exactamente con algún autor en la lista
+        let abreviaturaEncontrada = null;
+        
+        // Primero intentamos coincidencia exacta (case insensitive)
+        const provLower = cleanProv.toLowerCase();
+        for (const [nombreAutor, abreviatura] of Object.entries(AUTOR_ABREVIATURAS)) {
+            if (nombreAutor.toLowerCase() === provLower) {
+                abreviaturaEncontrada = abreviatura;
+                break;
+            }
+        }
+        
+        if (abreviaturaEncontrada) {
+            // Si encontramos una abreviatura en la lista, la usamos directamente
+            provStr = abreviaturaEncontrada;
+        } else {
+            // Si no está en la lista, generamos las primeras 3 letras como antes
+            const cleanProvNoSpaces = cleanProv.replace(/\s+/g, '').toUpperCase();
+            if (cleanProvNoSpaces.length > 0) {
+                provStr = cleanProvNoSpaces.substring(0, 3).padEnd(3, 'X');
+            }
         }
     }
 
