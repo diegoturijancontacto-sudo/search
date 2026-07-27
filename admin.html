@@ -2337,134 +2337,124 @@
         }
         
         // ============================================================
-        // CLAVE HELPERS (Estructura de 2 Bloques: [ID_4DIG]+[PROV]-[ARTISTA]+[TECNICA])
-        // Ejemplo de salida: 0001RTB-COVOLO
-        // ============================================================
+// CLAVE HELPERS (Estructura de 2 Bloques: [ID_4DIG]+[PROV]-[ARTISTA]+[TECNICA])
+// Ejemplo de salida: 0001RTB-COVOLO
+// ============================================================
 
-        function generateClave(provenance, artista, tecnica, asignacionObra) {
-            // --- BLOQUE 1: Numero (4 dígitos) + Origen (3 letras) ---
-            
-           // 1.1 Calcular el siguiente número basado en el inventario actual
-let numStr = '0001'; // Valor por defecto si el inventario está vacío
+function generateClave(provenance, artista, tecnica, claveActual) {
+    // --- BLOQUE 1: Numero (4 dígitos) + Origen (3 letras) ---
+    
+    // 1.1 Calcular el siguiente número o conservar el existente
+    let numStr = '0001'; 
 
-// Verificamos que el arreglo global de obras exista y tenga elementos
-if (typeof allRegistrosObra !== 'undefined' && allRegistrosObra.length > 0) {
-    let maxBloque1 = 0;
+    if (claveActual && claveActual.length >= 4) {
+        // SI ESTAMOS EDITANDO O EL INPUT YA TIENE VALOR:
+        // Extraemos los primeros 4 caracteres de la clave existente (ej. "0001")
+        numStr = claveActual.substring(0, 4);
+    } else {
+        // SI ES OBRA NUEVA: Calculamos el máximo en base al inventario
+        if (typeof allRegistrosObra !== 'undefined' && allRegistrosObra.length > 0) {
+            let maxBloque1 = 0;
 
-    allRegistrosObra.forEach(obra => {
-        if (obra.clave) {
-            // Asumiendo formato 0001-PROV-AUTOR, separamos por guion y tomamos la primera parte
-            const partes = obra.clave.split('-'); 
-            const numeroActual = parseInt(partes[0], 10);
+            allRegistrosObra.forEach(obra => {
+                if (obra.clave) {
+                    // Como el formato es 0001RTB, tomamos estrictamente los primeros 4 caracteres
+                    const numeroActual = parseInt(obra.clave.substring(0, 4), 10);
 
-            if (!isNaN(numeroActual) && numeroActual > maxBloque1) {
-                maxBloque1 = numeroActual;
-            }
+                    if (!isNaN(numeroActual) && numeroActual > maxBloque1) {
+                        maxBloque1 = numeroActual;
+                    }
+                }
+            });
+
+            // Sumamos 1 al valor más alto encontrado y completamos a 4 dígitos
+            numStr = String(maxBloque1 + 1).padStart(4, '0');
         }
-    });
+    }
 
-    // Sumamos 1 al valor más alto encontrado y completamos a 4 dígitos
-    numStr = String(maxBloque1 + 1).padStart(4, '0');
+    // 1.2 Primeras 3 letras del Provenance o "RTB" por defecto
+    let provStr = 'RTB';
+    if (provenance && provenance.trim() !== '') {
+        const cleanProv = provenance.trim().replace(/\s+/g, '').toUpperCase();
+        if (cleanProv.length > 0) {
+            provStr = cleanProv.substring(0, 3).padEnd(3, 'X'); // Ajusta a 3 caracteres si es más corto
+        }
+    }
+
+    const bloque1 = `${numStr}${provStr}`;
+
+    // --- BLOQUE 2: Artista + Técnica ---
+
+    // 2.1 Artista: 1ra letra del primer nombre + primeras 2 letras del segundo nombre
+    let artistStr = '';
+    if (artista && artista.trim() !== '') {
+        const wordsArtista = artista.trim().split(/\s+/);
+        const pNombre = wordsArtista[0] || '';
+        const sNombre = wordsArtista[1] || '';
+
+        const iniP1 = pNombre.charAt(0).toUpperCase();
+        const iniS2 = sNombre.substring(0, 2).toUpperCase();
+
+        artistStr = `${iniP1}${iniS2}`;
+    }
+
+    // 2.2 Técnica: Primeras 2 letras + última letra de la primera palabra
+    let tecStr = '';
+    if (tecnica && tecnica.trim() !== '') {
+        const wordsTec = tecnica.trim().split(/\s+/);
+        const pPalabraTec = wordsTec[0] || '';
+
+        if (pPalabraTec.length >= 3) {
+            const p2 = pPalabraTec.substring(0, 2).toUpperCase();
+            const ult = pPalabraTec.charAt(pPalabraTec.length - 1).toUpperCase();
+            tecStr = `${p2}${ult}`;
+        } else {
+            // Respaldo por si la palabra tiene menos de 3 letras
+            tecStr = pPalabraTec.toUpperCase().padEnd(3, 'X');
+        }
+    }
+
+    const bloque2 = `${artistStr}${tecStr}`;
+
+    // --- CONCATENACIÓN FINAL CON GUION ---
+    if (bloque2 !== '') {
+        return `${bloque1}-${bloque2}`;
+    }
+    return bloque1;
 }
 
-
-            // 1.2 Primeras 3 letras del Provenance o "RTB" por defecto
-            let provStr = 'RTB';
-            if (provenance && provenance.trim() !== '') {
-                const cleanProv = provenance.trim().replace(/\s+/g, '').toUpperCase();
-                if (cleanProv.length > 0) {
-                    provStr = cleanProv.substring(0, 3).padEnd(3, 'X'); // Ajusta a 3 caracteres si es más corto
-                }
-            }
-
-            const bloque1 = `${numStr}${provStr}`;
-
-
-            // --- BLOQUE 2: Artista + Técnica ---
-
-            // 2.1 Artista: 1ra letra del primer nombre + primeras 2 letras del segundo nombre
-            let artistStr = '';
-            if (artista && artista.trim() !== '') {
-                const wordsArtista = artista.trim().split(/\s+/);
-                const pNombre = wordsArtista[0] || '';
-                const sNombre = wordsArtista[1] || '';
-
-                const iniP1 = pNombre.charAt(0).toUpperCase();
-                const iniS2 = sNombre.substring(0, 2).toUpperCase();
-
-                artistStr = `${iniP1}${iniS2}`;
-            }
-
-            // 2.2 Técnica: Primeras 2 letras + última letra de la primera palabra
-            let tecStr = '';
-            if (tecnica && tecnica.trim() !== '') {
-                const wordsTec = tecnica.trim().split(/\s+/);
-                const pPalabraTec = wordsTec[0] || '';
-
-                if (pPalabraTec.length >= 3) {
-                    const p2 = pPalabraTec.substring(0, 2).toUpperCase();
-                    const ult = pPalabraTec.charAt(pPalabraTec.length - 1).toUpperCase();
-                    tecStr = `${p2}${ult}`;
-                } else {
-                    // Respaldo por si la palabra tiene menos de 3 letras
-                    tecStr = pPalabraTec.toUpperCase().padEnd(3, 'X');
-                }
-            }
-
-            const bloque2 = `${artistStr}${tecStr}`;
-
-            // --- CONCATENACIÓN FINAL CON GUION ---
-            if (bloque2 !== '') {
-                return `${bloque1}-${bloque2}`;
-            }
-            return bloque1;
+function updateObraClave() {
+    // 1. Provenance
+    const selProvenance = document.getElementById('obraProvenance');
+    let provName = '';
+    const provenanceVal = selProvenance ? selProvenance.value : '';
+    if (provenanceVal) {
+        if (typeof allComisiones !== 'undefined' && Array.isArray(allComisiones)) {
+            const com = allComisiones.find(c => c.id === provenanceVal);
+            provName = com ? (com.provenance || '') : provenanceVal;
+        } else {
+            provName = provenanceVal;
         }
+    }
 
-        function updateObraClave() {
-            // 1. Provenance
-            const selProvenance = document.getElementById('obraProvenance');
-            let provName = '';
-            const provenanceVal = selProvenance ? selProvenance.value : '';
-            if (provenanceVal) {
-                if (typeof allComisiones !== 'undefined' && Array.isArray(allComisiones)) {
-                    const com = allComisiones.find(c => c.id === provenanceVal);
-                    provName = com ? (com.provenance || '') : provenanceVal;
-                } else {
-                    provName = provenanceVal;
-                }
-            }
+    // 2. Autor
+    const autor = (document.getElementById('obraAutor') ? document.getElementById('obraAutor').value : '').trim();
 
-            // 2. Autor
-            const autor = (document.getElementById('obraAutor') ? document.getElementById('obraAutor').value : '').trim();
+    // 3. Técnica / Tipo
+    const elTipo = document.getElementById('obraTipo') || document.getElementById('obraSoporte');
+    const tecnica = (elTipo ? elTipo.value : '').trim();
 
-            // 3. Técnica / Tipo
-            const elTipo = document.getElementById('obraTipo') || document.getElementById('obraSoporte');
-            const tecnica = (elTipo ? elTipo.value : '').trim();
+    // 4. OBTENER LA CLAVE ACTUAL DEL INPUT
+    // Esto es clave: leemos lo que ya está en la caja de texto para no perder el número al editar.
+    const claveInput = document.getElementById('obraClave');
+    const claveActual = claveInput ? claveInput.value.trim() : '';
 
-            // 4. CALCULAR SECUENCIA BASADA EN REGISTROS EXISTENTES
-            // Si tienes un array global de obras (por ejemplo 'allObras' o 'obrasData')
-            let totalObras = 0;
-            if (typeof allObras !== 'undefined' && Array.isArray(allObras)) {
-                totalObras = allObras.length;
-            } else {
-                // Si no hay array global, podemos contar cuántas filas/tarjetas hay en la interfaz
-                const contenedor = document.getElementById('obrasContainer') || document.querySelector('#tablaObras tbody');
-                if (contenedor) {
-                    totalObras = contenedor.children.length;
-                }
-            }
-
-            // Si la hoja tiene 1 fila de encabezado, el nuevo registro será la fila (totalObras + 1)
-            // O si prefieres la secuencia directa: número de registro = totalObras + 1
-            const siguienteNumero = totalObras + 1;
-            const asignacion = `obra-${siguienteNumero}`;
-
-            // 5. Inyectar clave generada
-            const claveInput = document.getElementById('obraClave');
-            if (claveInput) {
-                claveInput.value = generateClave(provName, autor, tecnica, asignacion);
-            }
-        }
+    // 5. Inyectar clave generada
+    if (claveInput) {
+        // En lugar de pasar una asignación falsa, le pasamos la clave que ya tiene el input
+        claveInput.value = generateClave(provName, autor, tecnica, claveActual);
+    }
+}
 
         // ============================================================
         // COMISIONES CRUD
