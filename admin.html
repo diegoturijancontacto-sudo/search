@@ -2429,46 +2429,29 @@
             const elTipo = document.getElementById('obraTipo') || document.getElementById('obraSoporte');
             const tecnica = (elTipo ? elTipo.value : '').trim();
 
-                        // 4. CALCULAR SECUENCIA BASADA EN LA MAYOR CLAVE ACTUAL
-            let maxNumero = 0;
-
+            // 4. CALCULAR SECUENCIA BASADA EN REGISTROS EXISTENTES
+            // Si tienes un array global de obras (por ejemplo 'allObras' o 'obrasData')
+            let totalObras = 0;
             if (typeof allObras !== 'undefined' && Array.isArray(allObras)) {
-                // Iterar sobre las obras para encontrar el número más alto en las claves existentes
-                allObras.forEach(obra => {
-                    // Ajusta 'obra.clave' si la propiedad en tu DB tiene otro nombre (ej. 'obra.id')
-                    const claveExistente = obra.clave || ''; 
-                    
-                    // Busca exactamente los primeros números al inicio del string (ej. "0015RTB" -> "0015")
-                    const match = String(claveExistente).match(/^(\d+)/);
-                    if (match) {
-                        const num = parseInt(match[1], 10);
-                        if (num > maxNumero) {
-                            maxNumero = num;
-                        }
-                    }
-                });
+                totalObras = allObras.length;
             } else {
-                // Fallback: Buscar en el DOM si no hay array global
-                // Busca en las celdas o tarjetas donde se imprime la clave actualmente
-                // Cambia '.clase-de-tu-clave' por el selector real (ej. 'td.clave' o '.card-id')
-                const contenedoresClave = document.querySelectorAll('.clase-de-tu-clave');
-                if (contenedoresClave.length > 0) {
-                    contenedoresClave.forEach(el => {
-                        const textoClave = el.textContent || el.innerText || el.value || '';
-                        const match = textoClave.match(/^(\d+)/);
-                        if (match) {
-                            const num = parseInt(match[1], 10);
-                            if (num > maxNumero) {
-                                maxNumero = num;
-                            }
-                        }
-                    });
+                // Si no hay array global, podemos contar cuántas filas/tarjetas hay en la interfaz
+                const contenedor = document.getElementById('obrasContainer') || document.querySelector('#tablaObras tbody');
+                if (contenedor) {
+                    totalObras = contenedor.children.length;
                 }
             }
 
-            // Sumamos 1 al ID más alto que hayamos encontrado
-            const siguienteNumero = maxNumero + 1;
+            // Si la hoja tiene 1 fila de encabezado, el nuevo registro será la fila (totalObras + 1)
+            // O si prefieres la secuencia directa: número de registro = totalObras + 1
+            const siguienteNumero = totalObras + 1;
             const asignacion = `obra-${siguienteNumero}`;
+
+            // 5. Inyectar clave generada
+            const claveInput = document.getElementById('obraClave');
+            if (claveInput) {
+                claveInput.value = generateClave(provName, autor, tecnica, asignacion);
+            }
         }
 
         // ============================================================
