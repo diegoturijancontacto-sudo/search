@@ -2344,17 +2344,29 @@
         function generateClave(provenance, artista, tecnica, asignacionObra) {
             // --- BLOQUE 1: Numero (4 dígitos) + Origen (3 letras) ---
             
-            // 1.1 Extraer el número X de "obra-X" o usar 0 por defecto
-            let numStr = '0000';
-            if (asignacionObra) {
-                // Elimina "obra-" (case-insensitive) o extrae directamente los dígitos
-                const cleanNum = String(asignacionObra).replace(/obra-/i, '').trim();
-                const parsedNum = parseInt(cleanNum, 10);
-                if (!isNaN(parsedNum)) {
-                    // Añade ceros a la izquierda hasta completar 4 dígitos
-                    numStr = String(parsedNum).padStart(4, '0');
-                }
+           // 1.1 Calcular el siguiente número basado en el inventario actual
+let numStr = '0001'; // Valor por defecto si el inventario está vacío
+
+// Verificamos que el arreglo global de obras exista y tenga elementos
+if (typeof allRegistrosObra !== 'undefined' && allRegistrosObra.length > 0) {
+    let maxBloque1 = 0;
+
+    allRegistrosObra.forEach(obra => {
+        if (obra.clave) {
+            // Asumiendo formato 0001-PROV-AUTOR, separamos por guion y tomamos la primera parte
+            const partes = obra.clave.split('-'); 
+            const numeroActual = parseInt(partes[0], 10);
+
+            if (!isNaN(numeroActual) && numeroActual > maxBloque1) {
+                maxBloque1 = numeroActual;
             }
+        }
+    });
+
+    // Sumamos 1 al valor más alto encontrado y completamos a 4 dígitos
+    numStr = String(maxBloque1 + 1).padStart(4, '0');
+}
+
 
             // 1.2 Primeras 3 letras del Provenance o "RTB" por defecto
             let provStr = 'RTB';
