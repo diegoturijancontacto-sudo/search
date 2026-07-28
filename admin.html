@@ -2408,34 +2408,11 @@ function generateClave(provenance, artista, tecnica, claveActual) {
     }
 
     // 1.2 Primeras 3 letras del Provenance o "RTB" por defecto
-    // MODIFICACIÓN: Si el nombre del artista coincide con algún autor de la lista,
-    // se usa su abreviatura en lugar de generar las primeras 3 letras del provenance
     let provStr = 'RTB';
-    
-    // PRIMERO: Verificar si el artista está en la lista de abreviaturas
-    let abreviaturaEncontrada = null;
-    
-    if (artista && artista.trim() !== '') {
-        const cleanArtista = artista.trim();
-        const artistaLower = cleanArtista.toLowerCase();
-        
-        // Buscar coincidencia exacta (case insensitive)
-        for (const [nombreAutor, abreviatura] of Object.entries(AUTOR_ABREVIATURAS)) {
-            if (nombreAutor.toLowerCase() === artistaLower) {
-                abreviaturaEncontrada = abreviatura;
-                break;
-            }
-        }
-    }
-    
-    if (abreviaturaEncontrada) {
-        // Si el artista está en la lista, usamos su abreviatura como provenance
-        provStr = abreviaturaEncontrada;
-    } else if (provenance && provenance.trim() !== '') {
-        // Si el artista NO está en la lista, usamos el provenance normal
+    if (provenance && provenance.trim() !== '') {
         const cleanProv = provenance.trim().replace(/\s+/g, '').toUpperCase();
         if (cleanProv.length > 0) {
-            provStr = cleanProv.substring(0, 3).padEnd(3, 'X');
+            provStr = cleanProv.substring(0, 3).padEnd(3, 'X'); // Ajusta a 3 caracteres si es más corto
         }
     }
 
@@ -2443,17 +2420,37 @@ function generateClave(provenance, artista, tecnica, claveActual) {
 
     // --- BLOQUE 2: Artista + Técnica ---
 
-    // 2.1 Artista: 1ra letra del primer nombre + primeras 2 letras del segundo nombre
+    // 2.1 Artista: Si el nombre del autor está en la lista, usar su abreviatura
+    // Si no está en la lista, generar con la regla: 1ra letra del primer nombre + primeras 2 letras del segundo nombre
     let artistStr = '';
     if (artista && artista.trim() !== '') {
-        const wordsArtista = artista.trim().split(/\s+/);
-        const pNombre = wordsArtista[0] || '';
-        const sNombre = wordsArtista[1] || '';
+        const cleanArtista = artista.trim();
+        
+        // Buscar si el autor coincide con algún autor en la lista (case insensitive)
+        let abreviaturaEncontrada = null;
+        const artistaLower = cleanArtista.toLowerCase();
+        
+        for (const [nombreAutor, abreviatura] of Object.entries(AUTOR_ABREVIATURAS)) {
+            if (nombreAutor.toLowerCase() === artistaLower) {
+                abreviaturaEncontrada = abreviatura;
+                break;
+            }
+        }
+        
+        if (abreviaturaEncontrada) {
+            // Si encontramos una abreviatura en la lista, la usamos directamente (3 letras)
+            artistStr = abreviaturaEncontrada;
+        } else {
+            // Si no está en la lista, generamos con la regla original
+            const wordsArtista = cleanArtista.split(/\s+/);
+            const pNombre = wordsArtista[0] || '';
+            const sNombre = wordsArtista[1] || '';
 
-        const iniP1 = pNombre.charAt(0).toUpperCase();
-        const iniS2 = sNombre.substring(0, 2).toUpperCase();
+            const iniP1 = pNombre.charAt(0).toUpperCase();
+            const iniS2 = sNombre.substring(0, 2).toUpperCase();
 
-        artistStr = `${iniP1}${iniS2}`;
+            artistStr = `${iniP1}${iniS2}`;
+        }
     }
 
     // 2.2 Técnica: Primeras 2 letras + última letra de la primera palabra
@@ -2513,7 +2510,6 @@ function updateObraClave() {
         claveInput.value = generateClave(provName, autor, tecnica, claveActual);
     }
 }
-
         // ============================================================
         // COMISIONES CRUD
         // ============================================================
