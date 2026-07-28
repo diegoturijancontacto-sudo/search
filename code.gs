@@ -33,7 +33,7 @@
 * K asignacion
 * L Entregables (JSON) <-- entregables estructurados (definición)
 *
-* ESTRUCTURA REGISTROS OBRA (Ficha técnica) - ACTUALIZADA con medidas, Tags y Moneda:
+* ESTRUCTURA REGISTROS OBRA (Ficha técnica) - ACTUALIZADA con medidas, Tags, Moneda y Verificada:
 * A ID
 * B Nombre Obra
 * C Ubicación (dirección, ciudad, coordenadas)
@@ -59,6 +59,7 @@
 * W Largo (m)
 * X Tags (JSON) - etiquetas personalizadas
 * Y Tipo de Moneda - (MXN, USD, etc.)
+* Z Verificada - (Sí/No)
 *
 * ESTRUCTURA COMISIONES:
 * A ID
@@ -107,7 +108,8 @@ const COL_REGISTROS_ANCHO = 21; // U
 const COL_REGISTROS_ALTO = 22; // V 
 const COL_REGISTROS_LARGO = 23; // W 
 const COL_REGISTROS_TAGS = 24; // X (JSON para etiquetas)
-const COL_REGISTROS_MONEDA = 25; // Y - NUEVO (Tipo de moneda: MXN, USD)
+const COL_REGISTROS_MONEDA = 25; // Y (Tipo de moneda: MXN, USD)
+const COL_REGISTROS_VERIFICADA = 26; // Z (Verificada: Sí/No)
 
 // Índices de columnas (1-based) en hoja Comisiones
 const COL_COMISION_ID = 1; // A
@@ -135,13 +137,13 @@ function ensureSchema_() {
   getOrCreateSheet_(ss, SHEET_HISTORIAL, ['ID', 'ID Tarea', 'ID Supervisor', 'Estado Anterior', 'Estado Nuevo', 'Fecha', 'Observaciones']);
   getOrCreateSheet_(ss, SHEET_FINANZAS, ['ID', 'Tipo', 'Monto', 'Concepto', 'Fecha', 'Categoria', 'ID Proyecto', 'ID Responsable', 'Fecha Registro']);
   
-  // RegistrosObra (ACTUALIZADO con Moneda)
+  // RegistrosObra (ACTUALIZADO con Moneda y Verificada)
   getOrCreateSheet_(ss, SHEET_REGISTROS_OBRA, [
     'ID', 'Nombre Obra', 'Ubicación', 'Estatus', 'Tipo de Obra', 'Superficie (m²)',
     'Precio Lista', 'Precio Venta', 'Fecha Registro', 'Fecha Adquisición', 'Fecha Venta',
     'Cliente', 'Documentos', 'Observaciones', 'Adjuntos', 'ID Responsable',
     'Autor', 'Asignación', 'Provenance', 'Clave',
-    'Ancho (m)', 'Alto (m)', 'Largo (m)', 'Tags', 'Tipo de Moneda'
+    'Ancho (m)', 'Alto (m)', 'Largo (m)', 'Tags', 'Tipo de Moneda', 'Verificada'
   ]);
   
   // Comisiones (NUEVA HOJA)
@@ -169,6 +171,28 @@ function ensureSchema_() {
   
   // Forzar columna Asignación en RegistrosObra como TEXTO (ahora es R)
   forceTextColumn_(ss.getSheetByName(SHEET_REGISTROS_OBRA), COL_REGISTROS_ASIGNACION);
+  
+  // Asegurar columna Verificada en RegistrosObra con valor por defecto 'No'
+  const shO = ss.getSheetByName(SHEET_REGISTROS_OBRA);
+  if (shO) {
+    const colVerif = ensureColumnWithHeader_(shO, 'Verificada');
+    const lastRowObra = shO.getLastRow();
+    if (lastRowObra > 1) {
+      const range = shO.getRange(2, colVerif, lastRowObra - 1, 1);
+      const values = range.getValues();
+      let needsUpdate = false;
+      for (let i = 0; i < values.length; i++) {
+        const val = (values[i][0] || '').toString().trim();
+        if (val !== 'Sí' && val !== 'No') {
+          values[i][0] = 'No';
+          needsUpdate = true;
+        }
+      }
+      if (needsUpdate) {
+        range.setValues(values);
+      }
+    }
+  }
 }
 
 function getOrCreateSheet_(ss, name, headers) {
@@ -620,7 +644,7 @@ function doGet() {
       fecha_registro: r[8] || ''
     }));
     
-    // RegistrosObra (ACTUALIZADO con Moneda)
+    // RegistrosObra (ACTUALIZADO con Moneda y Verificada)
     const shO = ss.getSheetByName(SHEET_REGISTROS_OBRA);
     const registrosData = shO.getDataRange().getValues();
     const registrosObra = registrosData.slice(1).map(r => ({
@@ -648,7 +672,8 @@ function doGet() {
       alto: parseFloat(r[21]) || 0,
       largo: parseFloat(r[22]) || 0,
       tags: parseTagsCell_(r[23]),
-      tipo_moneda: r[24] || '' // NUEVO: Moneda
+      tipo_moneda: r[24] || '',
+      verificada: (r[25] || '').toString() === 'Sí'
     }));
     
     // Comisiones
@@ -1125,7 +1150,7 @@ function doPost(e) {
     }
     
     // ======================================================
-    // REGISTROS OBRA / FICHA TÉCNICA (CRUD) + autor/provenance/clave + MEDIDAS + TAGS + MONEDA
+    // REGISTROS OBRA / FICHA TÉCNICA (CRUD) + autor/provenance/clave + MEDIDAS + TAGS + MONEDA + VERIFICADA
     // ======================================================
     else if (action === 'registro_obra_add' || action === 'registro_obra_update' || action === 'registro_obra_delete') {
       const sh = ss.getSheetByName(SHEET_REGISTROS_OBRA);
@@ -1160,7 +1185,8 @@ function doPost(e) {
           data.alto || 0, 
           data.largo || 0, 
           tagsValue, // Tags (JSON)
-          data.tipo_moneda || 'MXN' // NUEVO: Tipo de Moneda
+          data.tipo_moneda || 'MXN', // Tipo de Moneda
+          'No' // Verificada por defecto
         ]);
         const lastRow = sh.getLastRow();
         sh.getRange(lastRow, COL_REGISTROS_ASIGNACION).setNumberFormat('@STRING@');
@@ -1204,10 +1230,18 @@ function doPost(e) {
             if (data.alto !== undefined) sh.getRange(i + 1, COL_REGISTROS_ALTO).setValue(data.alto);
             if (data.largo !== undefined) sh.getRange(i + 1, COL_REGISTROS_LARGO).setValue(data.largo);
             
-            // NUEVO: Manejo del campo Moneda
+            // Manejo del campo Moneda
             if (data.tipo_moneda !== undefined) sh.getRange(i + 1, COL_REGISTROS_MONEDA).setValue(data.tipo_moneda);
             
-            // NUEVO: Manejo de Tags (JSON)
+            // NUEVO: Manejo del campo Verificada
+            if (data.verificada !== undefined) {
+              const verificado = typeof data.verificada === 'boolean' 
+                ? (data.verificada ? 'Sí' : 'No')
+                : (data.verificada === 'Sí' || data.verificada === 'true' ? 'Sí' : 'No');
+              sh.getRange(i + 1, COL_REGISTROS_VERIFICADA).setValue(verificado);
+            }
+            
+            // Manejo de Tags (JSON)
             if (data.tags !== undefined) {
               if (Array.isArray(data.tags)) {
                 sh.getRange(i + 1, COL_REGISTROS_TAGS).setValue(stringifyTagsCell_(data.tags));
@@ -1322,7 +1356,12 @@ function doPost(e) {
       const base64 = (data.base64 || '').toString();
       const bytes = Utilities.base64Decode(base64);
       const blob = Utilities.newBlob(bytes, mimeType, filename);
-      const finalName = `obra_${idObra}__${filename}`;
+      // CAMBIA ESTO:
+      // const finalName = `obra_${idObra}__${filename}`;
+
+      // POR ESTO:
+      const finalName = filename;
+
       const file = folder.createFile(blob).setName(finalName);
       ensureFileIsShareable_(file);
       const fileUrl = file.getUrl();
@@ -1413,6 +1452,30 @@ function doPost(e) {
       const next = prev.filter(t => t !== tag);
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_TAGS).setValue(stringifyTagsCell_(next));
       return ContentService.createTextOutput(JSON.stringify({ result: 'success', tags: next })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // ======================================================
+    // REGISTROS OBRA - VERIFICAR (ACCIÓN RÁPIDA)
+    // ======================================================
+    else if (action === 'registro_obra_verificar') {
+      const idObra = (data.id_obra || '').toString().trim();
+      const actorId = (data.id_actor || '').toString().trim();
+      const verificada = data.verificada === true || data.verificada === 'Sí' || data.verificada === 'true';
+      
+      if (!idObra) throw new Error('Falta data.id_obra');
+      if (!actorId) throw new Error('Falta data.id_actor');
+      assertPrivileged_(ss, actorId); // Solo supervisores/directores pueden verificar
+      
+      const obra = getRegistroObraById_(ss, idObra);
+      if (!obra) throw new Error('Registro de obra no encontrado');
+      
+      const valor = verificada ? 'Sí' : 'No';
+      obra.sh.getRange(obra.rowIndex, COL_REGISTROS_VERIFICADA).setValue(valor);
+      
+      return ContentService.createTextOutput(JSON.stringify({ 
+        result: 'success', 
+        verificada: verificada 
+      })).setMimeType(ContentService.MimeType.JSON);
     }
     
     // ======================================================
