@@ -11,6 +11,7 @@
 * - Finanzas (Ingresos y Egresos)
 * - RegistrosObra (Ficha técnica de obras)
 * - Comisiones (NUEVA HOJA)
+* - Abreviaturas (NUEVA HOJA)
 *
 * Asignación consecutiva:
 * - Proyecto: 1,2,3... (Proyectos!F)
@@ -66,7 +67,15 @@
 * B Provenance
 * C Porcentaje
 * D Fecha Registro
+*
+* ESTRUCTURA ABREVIATURAS:
+* A ID
+* B Nombre
+* C Abreviatura
+* D Tipo
+* E Fecha Registro
 */
+
 const SHEET_PROYECTOS = 'Proyectos';
 const SHEET_SUBPROYECTOS = 'Subproyectos';
 const SHEET_TAREAS = 'Tareas';
@@ -76,8 +85,14 @@ const SHEET_HISTORIAL = 'HistorialAprobaciones';
 const SHEET_FINANZAS = 'Finanzas';
 const SHEET_REGISTROS_OBRA = 'RegistrosObra';
 const SHEET_COMISIONES = 'Comisiones';
+const SHEET_ABREVIATURAS = 'Abreviaturas'; // NUEVA HOJA
+
 // Carpeta en Drive donde se guardan archivos
 const DRIVE_ATTACHMENTS_FOLDER_ID = '1IKdpJc0ezb6ZwtUzXJm6I91WZIO3s7FS';
+
+// Clave para el caché
+const CACHE_KEY_DB = 'OPCORE_DB_DATA';
+const CACHE_EXPIRATION_SECONDS = 21600; // 6 horas máximo permitido por Google
 
 // Índices de columnas (1-based) en hoja Tareas
 const COL_TAREA_ADJUNTOS = 8; // H
@@ -104,9 +119,9 @@ const COL_REGISTROS_AUTOR = 17; // Q
 const COL_REGISTROS_ASIGNACION = 18; // R
 const COL_REGISTROS_PROVENANCE = 19; // S
 const COL_REGISTROS_CLAVE = 20; // T
-const COL_REGISTROS_ANCHO = 21; // U 
-const COL_REGISTROS_ALTO = 22; // V 
-const COL_REGISTROS_LARGO = 23; // W 
+const COL_REGISTROS_ANCHO = 21; // U
+const COL_REGISTROS_ALTO = 22; // V
+const COL_REGISTROS_LARGO = 23; // W
 const COL_REGISTROS_TAGS = 24; // X (JSON para etiquetas)
 const COL_REGISTROS_MONEDA = 25; // Y (Tipo de moneda: MXN, USD)
 const COL_REGISTROS_VERIFICADA = 26; // Z (Verificada: Sí/No)
@@ -124,19 +139,19 @@ function ensureSchema_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   getOrCreateSheet_(ss, SHEET_PROYECTOS, ['ID', 'Nombre', 'Descripción', 'Fecha Creación', 'Estado', 'asignacion']);
   getOrCreateSheet_(ss, SHEET_SUBPROYECTOS, ['ID', 'ID Proyecto', 'Nombre', 'Descripción', 'Fecha Inicio', 'Fecha Fin Estimada', 'Fecha Creación', 'asignacion']);
-  
+
   // Tareas
   getOrCreateSheet_(ss, SHEET_TAREAS, [
     'ID', 'ID Subproyecto', 'ID Responsable', 'Prioridad', 'Estatus',
     'Detalles', 'Descripción', 'Adjuntos', 'Fecha Creación', 'Fecha Límite', 'asignacion',
     'Entregables'
   ]);
-  
+
   getOrCreateSheet_(ss, SHEET_RESPONSABLES, ['ID', 'Nombre', 'Departamento', 'Email', 'Rol', 'Fecha Registro', 'Identificador']);
   getOrCreateSheet_(ss, SHEET_COMENTARIOS, ['ID', 'ID Tarea', 'ID Responsable', 'Comentario', 'Fecha']);
   getOrCreateSheet_(ss, SHEET_HISTORIAL, ['ID', 'ID Tarea', 'ID Supervisor', 'Estado Anterior', 'Estado Nuevo', 'Fecha', 'Observaciones']);
   getOrCreateSheet_(ss, SHEET_FINANZAS, ['ID', 'Tipo', 'Monto', 'Concepto', 'Fecha', 'Categoria', 'ID Proyecto', 'ID Responsable', 'Fecha Registro']);
-  
+
   // RegistrosObra (ACTUALIZADO con Moneda y Verificada)
   getOrCreateSheet_(ss, SHEET_REGISTROS_OBRA, [
     'ID', 'Nombre Obra', 'Ubicación', 'Estatus', 'Tipo de Obra', 'Superficie (m²)',
@@ -145,10 +160,13 @@ function ensureSchema_() {
     'Autor', 'Asignación', 'Provenance', 'Clave',
     'Ancho (m)', 'Alto (m)', 'Largo (m)', 'Tags', 'Tipo de Moneda', 'Verificada'
   ]);
-  
+
   // Comisiones (NUEVA HOJA)
   getOrCreateSheet_(ss, SHEET_COMISIONES, ['ID', 'Provenance', 'Porcentaje', 'Fecha Registro']);
-  
+
+  // Abreviaturas (NUEVA HOJA)
+  getOrCreateSheet_(ss, SHEET_ABREVIATURAS, ['ID', 'Nombre', 'Abreviatura', 'Tipo', 'Fecha Registro']);
+
   // Asegurar columna Identificador en Responsables y rellenar vacíos
   const shR = ss.getSheetByName(SHEET_RESPONSABLES);
   const colIdent = ensureColumnWithHeader_(shR, 'Identificador');
@@ -163,15 +181,15 @@ function ensureSchema_() {
       }
     }
   }
-  
+
   // Forzar columnas asignacion como TEXTO
   forceTextColumn_(ss.getSheetByName(SHEET_PROYECTOS), 6);
   forceTextColumn_(ss.getSheetByName(SHEET_SUBPROYECTOS), 8);
   forceTextColumn_(ss.getSheetByName(SHEET_TAREAS), COL_TAREA_ASIGNACION);
-  
+
   // Forzar columna Asignación en RegistrosObra como TEXTO (ahora es R)
   forceTextColumn_(ss.getSheetByName(SHEET_REGISTROS_OBRA), COL_REGISTROS_ASIGNACION);
-  
+
   // Asegurar columna Verificada en RegistrosObra con valor por defecto 'No'
   const shO = ss.getSheetByName(SHEET_REGISTROS_OBRA);
   if (shO) {
@@ -250,8 +268,21 @@ function forceTextColumn_(sh, colIndex) {
 }
 
 // ======================================================
-// UTILIDADES
+// UTILIDADES Y CACHE
 // ======================================================
+function invalidateCache_() {
+  const cache = CacheService.getScriptCache();
+  // Clear the main cache key
+  cache.remove(CACHE_KEY_DB);
+  
+  // Also try to clear chunked keys just in case we implement chunking later
+  // for very large datasets (>100KB per key limit in Google Cache)
+  for(let i=0; i<10; i++) {
+     cache.remove(CACHE_KEY_DB + '_chunk_' + i);
+  }
+  console.log("Cache invalidado exitosamente");
+}
+
 function generarIdentificador(nombre) {
   if (!nombre) return 'xxx';
   const palabras = nombre.toLowerCase().split(' ');
@@ -545,13 +576,83 @@ function getNextTareaAsignacion_(ss, subproyectoId, responsableId) {
 }
 
 // ======================================================
-// GET
+// Helper Cache Chunking
+// Para evitar el límite de 100KB por item en CacheService
+// ======================================================
+function putDataToCache_(key, dataString, expirationInSeconds) {
+    const cache = CacheService.getScriptCache();
+    // String length is approx 2 bytes per char. We keep chunks around 90,000 characters
+    // to comfortably stay under the 100KB limit (approx 50,000 chars technically, let's use 45,000 to be safe)
+    const chunkSize = 45000; 
+    const numChunks = Math.ceil(dataString.length / chunkSize);
+    
+    // Si los datos son masivos (ej. > 10 chunks, ~ 450,000 caracteres, aprox 1MB),
+    // CacheService no es ideal. Limitemos los chunks a un número sensato.
+    if (numChunks > 30) {
+      console.warn("Dataset is too large for CacheService (>" + (numChunks*chunkSize) + " chars). Cache bypassed.");
+      return false; // Very large, don't cache
+    }
+
+    if (numChunks === 1) {
+        // Simple case, fits in one chunk
+        cache.put(key, dataString, expirationInSeconds);
+    } else {
+        // Create an index containing the number of chunks
+        cache.put(key, "CHUNKED_" + numChunks, expirationInSeconds);
+        // Store each chunk separately
+        for (let i = 0; i < numChunks; i++) {
+            const chunk = dataString.substring(i * chunkSize, (i + 1) * chunkSize);
+            cache.put(key + '_chunk_' + i, chunk, expirationInSeconds);
+        }
+    }
+    return true;
+}
+
+function getDataFromCache_(key) {
+    const cache = CacheService.getScriptCache();
+    const dataString = cache.get(key);
+    
+    if (!dataString) return null;
+    
+    // Check if it's a chunked pointer
+    if (dataString.startsWith("CHUNKED_")) {
+        const numChunks = parseInt(dataString.replace("CHUNKED_", ""), 10);
+        let fullString = "";
+        
+        for (let i = 0; i < numChunks; i++) {
+            const chunk = cache.get(key + '_chunk_' + i);
+            if (!chunk) {
+                // If any chunk is missing, the whole cache is considered invalid
+                return null; 
+            }
+            fullString += chunk;
+        }
+        return fullString;
+    }
+    
+    // Not chunked, return as is
+    return dataString;
+}
+
+// ======================================================
+// GET (AHORA CON CACHE)
 // ======================================================
 function doGet() {
   try {
+    // 1. INTENTAR LEER DESDE EL CACHÉ
+    const cachedData = getDataFromCache_(CACHE_KEY_DB);
+    if (cachedData) {
+      console.log("Serving data from Cache");
+      return ContentService
+        .createTextOutput(cachedData)
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2. SI NO HAY CACHÉ, LEER DE LA HOJA
+    console.log("Cache MISS. Reading from Google Sheets...");
     ensureSchema_();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
+
     const shP = ss.getSheetByName(SHEET_PROYECTOS);
     const proyectosData = shP.getDataRange().getValues();
     const proyectos = proyectosData.slice(1).map(r => ({
@@ -563,7 +664,7 @@ function doGet() {
       identificador: generarIdentificador(r[1] || ''),
       asignacion: normalizeAsignacion_(r[5])
     }));
-    
+
     const shS = ss.getSheetByName(SHEET_SUBPROYECTOS);
     const subData = shS.getDataRange().getValues();
     const subproyectos = subData.slice(1).map(r => ({
@@ -577,7 +678,7 @@ function doGet() {
       identificador: generarIdentificador(r[2] || ''),
       asignacion: normalizeAsignacion_(r[7])
     }));
-    
+
     const shT = ss.getSheetByName(SHEET_TAREAS);
     const tareasData = shT.getDataRange().getValues();
     const tareas = tareasData.slice(1).map(r => ({
@@ -594,7 +695,7 @@ function doGet() {
       asignacion: normalizeAsignacion_(r[10]),
       entregables: parseEntregablesCell_(r[11])
     }));
-    
+
     const shR = ss.getSheetByName(SHEET_RESPONSABLES);
     const colIdent = ensureColumnWithHeader_(shR, 'Identificador');
     const respData = shR.getDataRange().getValues();
@@ -607,7 +708,7 @@ function doGet() {
       fecha_registro: r[5] || '',
       identificador: (r[colIdent - 1] || '').toString() || generarIdentificador(r[1] || '')
     }));
-    
+
     const shC = ss.getSheetByName(SHEET_COMENTARIOS);
     const comData = shC.getDataRange().getValues();
     const comentarios = comData.slice(1).map(r => ({
@@ -617,7 +718,7 @@ function doGet() {
       comentario: r[3] || '',
       fecha: r[4] || ''
     }));
-    
+
     const shH = ss.getSheetByName(SHEET_HISTORIAL);
     const histData = shH.getDataRange().getValues();
     const historial = histData.slice(1).map(r => ({
@@ -629,7 +730,7 @@ function doGet() {
       fecha: r[5] || '',
       observaciones: r[6] || ''
     }));
-    
+
     const shF = ss.getSheetByName(SHEET_FINANZAS);
     const finanzasData = shF.getDataRange().getValues();
     const finanzas = finanzasData.slice(1).map(r => ({
@@ -643,7 +744,7 @@ function doGet() {
       id_responsable: (r[7] || '').toString(),
       fecha_registro: r[8] || ''
     }));
-    
+
     // RegistrosObra (ACTUALIZADO con Moneda y Verificada)
     const shO = ss.getSheetByName(SHEET_REGISTROS_OBRA);
     const registrosData = shO.getDataRange().getValues();
@@ -675,7 +776,7 @@ function doGet() {
       tipo_moneda: r[24] || '',
       verificada: (r[25] || '').toString() === 'Sí'
     }));
-    
+
     // Comisiones
     const shCo = ss.getSheetByName(SHEET_COMISIONES);
     const comisionesData = shCo.getDataRange().getValues();
@@ -685,9 +786,20 @@ function doGet() {
       porcentaje: parseFloat(r[2]) || 0,
       fecha_registro: r[3] || ''
     }));
-    
-    return ContentService
-      .createTextOutput(JSON.stringify({
+
+    // Abreviaturas (NUEVA)
+    const shA = ss.getSheetByName(SHEET_ABREVIATURAS);
+    const abreviaturasData = shA.getDataRange().getValues();
+    const abreviaturas = abreviaturasData.slice(1).map(r => ({
+      id: (r[0] || '').toString(),
+      nombre: (r[1] || '').toString(),
+      abreviatura: (r[2] || '').toString(),
+      tipo: (r[3] || '').toString(),
+      fecha_registro: (r[4] || '').toString()
+    }));
+
+    // Construir el objeto JSON completo
+    const resultObj = {
         proyectos,
         subproyectos,
         tareas,
@@ -696,11 +808,26 @@ function doGet() {
         historial,
         finanzas,
         registrosObra,
-        comisiones
-      }))
+        comisiones,
+        abreviaturas
+    };
+    
+    const resultString = JSON.stringify(resultObj);
+
+    // 3. GUARDAR EN CACHÉ PARA LA PRÓXIMA PETICIÓN
+    try {
+        putDataToCache_(CACHE_KEY_DB, resultString, CACHE_EXPIRATION_SECONDS);
+        console.log("Data successfully cached.");
+    } catch(e) {
+        console.warn("Failed to set cache: " + e.toString());
+    }
+
+    return ContentService
+      .createTextOutput(resultString)
       .setMimeType(ContentService.MimeType.JSON);
-      
+
   } catch (error) {
+    console.error("GET Error: " + error.toString());
     return ContentService.createTextOutput(JSON.stringify({
       error: error.toString(),
       proyectos: [],
@@ -711,7 +838,8 @@ function doGet() {
       historial: [],
       finanzas: [],
       registrosObra: [],
-      comisiones: []
+      comisiones: [],
+      abreviaturas: []
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
@@ -726,7 +854,10 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents);
     const action = body.action;
     const data = body.data || {};
-    
+
+    let resultPayload = { result: 'success' };
+    let shouldInvalidateCache = true; // Por defecto asumimos que el POST altera datos (mutación)
+
     // ======================================================
     // ENTREGABLES ESTRUCTURADOS (CRUD) => Tareas!L
     // ======================================================
@@ -741,7 +872,6 @@ function doPost(e) {
       const tarea = getTareaById_(ss, idTarea);
       if (!tarea) throw new Error('Tarea no encontrada');
       tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).setValue(stringifyEntregablesCell_(entregables));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
     else if (action === 'tarea_entregable_add') {
       const idTarea = (data.id_tarea || '').toString().trim();
@@ -763,7 +893,7 @@ function doPost(e) {
       };
       prev.push(newEnt);
       tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).setValue(stringifyEntregablesCell_(prev));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success', entregable: newEnt })).setMimeType(ContentService.MimeType.JSON);
+      resultPayload.entregable = newEnt;
     }
     else if (action === 'tarea_entregable_update') {
       const idTarea = (data.id_tarea || '').toString().trim();
@@ -789,7 +919,6 @@ function doPost(e) {
         };
       });
       tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).setValue(stringifyEntregablesCell_(next));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
     else if (action === 'tarea_entregable_delete') {
       const idTarea = (data.id_tarea || '').toString().trim();
@@ -804,9 +933,8 @@ function doPost(e) {
       const prev = parseEntregablesCell_(tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).getValue());
       const next = prev.filter(en => (en.id || '') !== entregableId);
       tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ENTREGABLES).setValue(stringifyEntregablesCell_(next));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
-    
+
     // ======================================================
     // SUBIR ARCHIVO (Adjunto o Entregable) => Tareas!H
     // ======================================================
@@ -844,9 +972,10 @@ function doPost(e) {
         });
         tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ADJUNTOS).setValue(stringifyAdjuntosCell_(prevAdj));
       }
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success', fileId, url: fileUrl })).setMimeType(ContentService.MimeType.JSON);
+      resultPayload.fileId = fileId;
+      resultPayload.url = fileUrl;
     }
-    
+
     // ======================================================
     // ELIMINAR ARCHIVO (Drive->Papelera + quitar de Tareas!H)
     // ======================================================
@@ -866,9 +995,8 @@ function doPost(e) {
         const nextAdj = prevAdj.filter(a => (a.id || '') !== fileId);
         tarea.sh.getRange(tarea.rowIndex, COL_TAREA_ADJUNTOS).setValue(stringifyAdjuntosCell_(nextAdj));
       }
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
-    
+
     // ======================================================
     // PROYECTOS (CRUD)
     // ======================================================
@@ -900,7 +1028,7 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
     // SUBPROYECTOS (CRUD)
     // ======================================================
@@ -943,7 +1071,7 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
     // TAREAS (CRUD normal)
     // ======================================================
@@ -1006,7 +1134,7 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
     // RESPONSABLES (CRUD)
     // ======================================================
@@ -1048,7 +1176,7 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
     // COMENTARIOS (add/delete)
     // ======================================================
@@ -1066,7 +1194,7 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
     // APROBACIONES + HISTORIAL (+ bloquear/desbloquear)
     // ======================================================
@@ -1106,7 +1234,7 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
     // FINANZAS / INGRESOS Y EGRESOS (CRUD)
     // ======================================================
@@ -1148,9 +1276,9 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
-    // REGISTROS OBRA / FICHA TÉCNICA (CRUD) + autor/provenance/clave + MEDIDAS + TAGS + MONEDA + VERIFICADA
+    // REGISTROS OBRA / FICHA TÉCNICA (CRUD)
     // ======================================================
     else if (action === 'registro_obra_add' || action === 'registro_obra_update' || action === 'registro_obra_delete') {
       const sh = ss.getSheetByName(SHEET_REGISTROS_OBRA);
@@ -1181,9 +1309,9 @@ function doPost(e) {
           '', // Asignación (se setea abajo)
           data.provenance || '',
           data.clave || '',
-          data.ancho || 0, 
-          data.alto || 0, 
-          data.largo || 0, 
+          data.ancho || 0,
+          data.alto || 0,
+          data.largo || 0,
           tagsValue, // Tags (JSON)
           data.tipo_moneda || 'MXN', // Tipo de Moneda
           'No' // Verificada por defecto
@@ -1191,16 +1319,13 @@ function doPost(e) {
         const lastRow = sh.getLastRow();
         sh.getRange(lastRow, COL_REGISTROS_ASIGNACION).setNumberFormat('@STRING@');
         sh.getRange(lastRow, COL_REGISTROS_ASIGNACION).setValue(String(asignacion));
-        
+
         // Inicializar JSON vacíos si no existen
         if (sh.getLastColumn() >= COL_REGISTROS_DOCUMENTOS) {
           sh.getRange(lastRow, COL_REGISTROS_DOCUMENTOS).setValue('[]');
         }
         if (sh.getLastColumn() >= COL_REGISTROS_ADJUNTOS) {
           sh.getRange(lastRow, COL_REGISTROS_ADJUNTOS).setValue('[]');
-        }
-        if (sh.getLastColumn() >= COL_REGISTROS_TAGS) {
-          sh.getRange(lastRow, COL_REGISTROS_TAGS).setValue('[]');
         }
       } else if (action === 'registro_obra_update') {
         const rows = sh.getDataRange().getValues();
@@ -1229,41 +1354,25 @@ function doPost(e) {
             if (data.ancho !== undefined) sh.getRange(i + 1, COL_REGISTROS_ANCHO).setValue(data.ancho);
             if (data.alto !== undefined) sh.getRange(i + 1, COL_REGISTROS_ALTO).setValue(data.alto);
             if (data.largo !== undefined) sh.getRange(i + 1, COL_REGISTROS_LARGO).setValue(data.largo);
-            
-            // Manejo del campo Moneda
             if (data.tipo_moneda !== undefined) sh.getRange(i + 1, COL_REGISTROS_MONEDA).setValue(data.tipo_moneda);
-            
-            // NUEVO: Manejo del campo Verificada
             if (data.verificada !== undefined) {
-              const verificado = typeof data.verificada === 'boolean' 
+              const verificado = typeof data.verificada === 'boolean'
                 ? (data.verificada ? 'Sí' : 'No')
                 : (data.verificada === 'Sí' || data.verificada === 'true' ? 'Sí' : 'No');
               sh.getRange(i + 1, COL_REGISTROS_VERIFICADA).setValue(verificado);
             }
-            
-            // Manejo de Tags (JSON)
+
             if (data.tags !== undefined) {
-              if (Array.isArray(data.tags)) {
-                sh.getRange(i + 1, COL_REGISTROS_TAGS).setValue(stringifyTagsCell_(data.tags));
-              } else if (typeof data.tags === 'string') {
-                sh.getRange(i + 1, COL_REGISTROS_TAGS).setValue(data.tags);
-              }
+              if (Array.isArray(data.tags)) sh.getRange(i + 1, COL_REGISTROS_TAGS).setValue(stringifyTagsCell_(data.tags));
+              else if (typeof data.tags === 'string') sh.getRange(i + 1, COL_REGISTROS_TAGS).setValue(data.tags);
             }
-            // Manejo de JSON (Documentos)
             if (data.documentos !== undefined) {
-              if (Array.isArray(data.documentos)) {
-                sh.getRange(i + 1, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(data.documentos));
-              } else if (typeof data.documentos === 'string') {
-                sh.getRange(i + 1, COL_REGISTROS_DOCUMENTOS).setValue(data.documentos);
-              }
+              if (Array.isArray(data.documentos)) sh.getRange(i + 1, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(data.documentos));
+              else if (typeof data.documentos === 'string') sh.getRange(i + 1, COL_REGISTROS_DOCUMENTOS).setValue(data.documentos);
             }
-            // Manejo de JSON (Adjuntos)
             if (data.adjuntos !== undefined) {
-              if (Array.isArray(data.adjuntos)) {
-                sh.getRange(i + 1, COL_REGISTROS_ADJUNTOS).setValue(stringifyAdjuntosObra_(data.adjuntos));
-              } else if (typeof data.adjuntos === 'string') {
-                sh.getRange(i + 1, COL_REGISTROS_ADJUNTOS).setValue(data.adjuntos);
-              }
+              if (Array.isArray(data.adjuntos)) sh.getRange(i + 1, COL_REGISTROS_ADJUNTOS).setValue(stringifyAdjuntosObra_(data.adjuntos));
+              else if (typeof data.adjuntos === 'string') sh.getRange(i + 1, COL_REGISTROS_ADJUNTOS).setValue(data.adjuntos);
             }
             break;
           }
@@ -1278,9 +1387,9 @@ function doPost(e) {
         }
       }
     }
-    
+
     // ======================================================
-    // REGISTROS OBRA - DOCUMENTOS (CRUD sobre JSON)
+    // REGISTROS OBRA - EXTRAS (Documentos, tags, verificación, etc)
     // ======================================================
     else if (action === 'registro_obra_documentos_set') {
       const idObra = (data.id_obra || '').toString().trim();
@@ -1292,9 +1401,9 @@ function doPost(e) {
       const obra = getRegistroObraById_(ss, idObra);
       if (!obra) throw new Error('Registro de obra no encontrado');
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(documentos));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
     else if (action === 'registro_obra_documento_add') {
+       // ... [código idéntico al que tenías para registro_obra_documento_add]
       const idObra = (data.id_obra || '').toString().trim();
       const actorId = (data.id_actor || '').toString().trim();
       const documento = data.documento || {};
@@ -1314,7 +1423,7 @@ function doPost(e) {
       };
       prev.push(newDoc);
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(prev));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success', documento: newDoc })).setMimeType(ContentService.MimeType.JSON);
+      resultPayload.documento = newDoc;
     }
     else if (action === 'registro_obra_documento_delete') {
       const idObra = (data.id_obra || '').toString().trim();
@@ -1329,44 +1438,33 @@ function doPost(e) {
       const prev = parseDocumentosObra_(obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).getValue());
       const next = prev.filter(doc => (doc.id || '') !== documentoId);
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_DOCUMENTOS).setValue(stringifyDocumentosObra_(next));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
-    
-    // ======================================================
-    // REGISTROS OBRA - ADJUNTOS ARCHIVOS (Drive)
-    // ======================================================
     else if (action === 'registro_obra_upload_adjunto') {
       const idObra = (data.id_obra || '').toString().trim();
       const actorId = (data.id_actor || '').toString().trim();
       if (!idObra) throw new Error('Falta data.id_obra');
       if (!actorId) throw new Error('Falta data.id_actor');
       if (!data.base64) throw new Error('Falta data.base64');
-      
-      // Verificar permisos (solo supervisor/director o responsable asignado)
+
       const obra = getRegistroObraById_(ss, idObra);
       if (!obra) throw new Error('Registro de obra no encontrado');
       const obraResponsableId = (obra.values[COL_REGISTROS_ID_RESPONSABLE - 1] || '').toString();
       if (!isPrivileged_(ss, actorId) && actorId !== obraResponsableId) {
         throw new Error('No autorizado: solo el responsable o supervisor puede subir adjuntos');
       }
-      
+
       const folder = getAttachmentsFolder_();
       const filename = (data.filename || 'adjunto_obra').toString();
       const mimeType = (data.mimeType || 'application/octet-stream').toString();
       const base64 = (data.base64 || '').toString();
       const bytes = Utilities.base64Decode(base64);
       const blob = Utilities.newBlob(bytes, mimeType, filename);
-      // CAMBIA ESTO:
-      // const finalName = `obra_${idObra}__${filename}`;
-
-      // POR ESTO:
-      const finalName = filename;
-
-      const file = folder.createFile(blob).setName(finalName);
+      const file = folder.createFile(blob).setName(filename);
       ensureFileIsShareable_(file);
+      
       const fileUrl = file.getUrl();
       const fileId = file.getId();
-      
+
       const prevRaw = obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).getValue();
       const prevAdj = parseAdjuntosObra_(prevRaw);
       prevAdj.push({
@@ -1379,9 +1477,11 @@ function doPost(e) {
         mimeType: mimeType
       });
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).setValue(stringifyAdjuntosObra_(prevAdj));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success', fileId, url: fileUrl })).setMimeType(ContentService.MimeType.JSON);
+      resultPayload.fileId = fileId;
+      resultPayload.url = fileUrl;
     }
     else if (action === 'registro_obra_adjunto_eliminar') {
+       // ...
       const idObra = (data.id_obra || '').toString().trim();
       const fileId = (data.fileId || '').toString().trim();
       const actorId = (data.id_actor || '').toString().trim();
@@ -1389,12 +1489,8 @@ function doPost(e) {
       if (!fileId) throw new Error('Falta data.fileId');
       if (!actorId) throw new Error('Falta data.id_actor');
       assertPrivileged_(ss, actorId);
-      
-      try {
-        DriveApp.getFileById(fileId).setTrashed(true);
-      } catch (e) {
-        // continuar
-      }
+
+      try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { }
       const obra = getRegistroObraById_(ss, idObra);
       if (obra) {
         const prevRaw = obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).getValue();
@@ -1402,12 +1498,7 @@ function doPost(e) {
         const nextAdj = prevAdj.filter(a => (a.id || '') !== fileId);
         obra.sh.getRange(obra.rowIndex, COL_REGISTROS_ADJUNTOS).setValue(stringifyAdjuntosObra_(nextAdj));
       }
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
-    
-    // ======================================================
-    // REGISTROS OBRA - TAGS (CRUD sobre JSON)
-    // ======================================================
     else if (action === 'registro_obra_tags_set') {
       const idObra = (data.id_obra || '').toString().trim();
       const actorId = (data.id_actor || '').toString().trim();
@@ -1418,7 +1509,6 @@ function doPost(e) {
       const obra = getRegistroObraById_(ss, idObra);
       if (!obra) throw new Error('Registro de obra no encontrado');
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_TAGS).setValue(stringifyTagsCell_(tags));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
     else if (action === 'registro_obra_tag_add') {
       const idObra = (data.id_obra || '').toString().trim();
@@ -1431,12 +1521,11 @@ function doPost(e) {
       const obra = getRegistroObraById_(ss, idObra);
       if (!obra) throw new Error('Registro de obra no encontrado');
       const prev = parseTagsCell_(obra.sh.getRange(obra.rowIndex, COL_REGISTROS_TAGS).getValue());
-      // Evitar duplicados
       if (!prev.includes(tag)) {
         prev.push(tag);
         obra.sh.getRange(obra.rowIndex, COL_REGISTROS_TAGS).setValue(stringifyTagsCell_(prev));
       }
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success', tags: prev })).setMimeType(ContentService.MimeType.JSON);
+      resultPayload.tags = prev;
     }
     else if (action === 'registro_obra_tag_remove') {
       const idObra = (data.id_obra || '').toString().trim();
@@ -1451,33 +1540,25 @@ function doPost(e) {
       const prev = parseTagsCell_(obra.sh.getRange(obra.rowIndex, COL_REGISTROS_TAGS).getValue());
       const next = prev.filter(t => t !== tag);
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_TAGS).setValue(stringifyTagsCell_(next));
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success', tags: next })).setMimeType(ContentService.MimeType.JSON);
+      resultPayload.tags = next;
     }
-    
-    // ======================================================
-    // REGISTROS OBRA - VERIFICAR (ACCIÓN RÁPIDA)
-    // ======================================================
     else if (action === 'registro_obra_verificar') {
       const idObra = (data.id_obra || '').toString().trim();
       const actorId = (data.id_actor || '').toString().trim();
       const verificada = data.verificada === true || data.verificada === 'Sí' || data.verificada === 'true';
-      
+
       if (!idObra) throw new Error('Falta data.id_obra');
       if (!actorId) throw new Error('Falta data.id_actor');
       assertPrivileged_(ss, actorId); // Solo supervisores/directores pueden verificar
-      
+
       const obra = getRegistroObraById_(ss, idObra);
       if (!obra) throw new Error('Registro de obra no encontrado');
-      
+
       const valor = verificada ? 'Sí' : 'No';
       obra.sh.getRange(obra.rowIndex, COL_REGISTROS_VERIFICADA).setValue(valor);
-      
-      return ContentService.createTextOutput(JSON.stringify({ 
-        result: 'success', 
-        verificada: verificada 
-      })).setMimeType(ContentService.MimeType.JSON);
+      resultPayload.verificada = verificada;
     }
-    
+
     // ======================================================
     // COMISIONES (CRUD)
     // ======================================================
@@ -1513,12 +1594,66 @@ function doPost(e) {
           }
         }
       }
-      return ContentService.createTextOutput(JSON.stringify({ result: 'success' })).setMimeType(ContentService.MimeType.JSON);
     }
-    
-    return ContentService.createTextOutput(JSON.stringify({ result: 'success', message: 'Operación completada' })).setMimeType(ContentService.MimeType.JSON);
-    
+
+    // ======================================================
+    // ABREVIATURAS (CRUD)
+    // ======================================================
+    else if (action === 'abreviatura_add') {
+      const sh = ss.getSheetByName(SHEET_ABREVIATURAS);
+      const id = data.id || `abrev_${Date.now().toString()}`;
+      const fechaRegistro = data.fecha_registro || new Date().toISOString();
+      sh.appendRow([id, data.nombre || '', data.abreviatura || '', data.tipo || '', fechaRegistro]);
+      resultPayload.id = id;
+    }
+    else if (action === 'abreviatura_update') {
+      const sh = ss.getSheetByName(SHEET_ABREVIATURAS);
+      const id = (data.id || '').toString().trim();
+      if (!id) throw new Error('Falta data.id');
+
+      const rows = sh.getDataRange().getValues();
+      let encontrado = false;
+      for (let i = 1; i < rows.length; i++) {
+        if ((rows[i][0] || '').toString() === id) {
+          const rowIndex = i + 1;
+          if (data.nombre !== undefined) sh.getRange(rowIndex, 2).setValue(data.nombre);
+          if (data.abreviatura !== undefined) sh.getRange(rowIndex, 3).setValue(data.abreviatura);
+          if (data.tipo !== undefined) sh.getRange(rowIndex, 4).setValue(data.tipo);
+          encontrado = true;
+          break;
+        }
+      }
+      if (!encontrado) throw new Error('Abreviatura no encontrada');
+    }
+    else if (action === 'abreviatura_delete') {
+      const sh = ss.getSheetByName(SHEET_ABREVIATURAS);
+      const id = (data.id || '').toString().trim();
+      if (!id) throw new Error('Falta data.id');
+      const rows = sh.getDataRange().getValues();
+      let eliminado = false;
+      for (let i = 1; i < rows.length; i++) {
+        if ((rows[i][0] || '').toString() === id) {
+          sh.deleteRow(i + 1);
+          eliminado = true;
+          break;
+        }
+      }
+      if(!eliminado) throw new Error('Abreviatura no encontrada');
+    } else {
+        // Si no es ninguna de las acciones anteriores, no invalidamos el caché (puede ser una acción de solo lectura, aunque doPost suele ser mutación)
+        // shouldInvalidateCache = false;
+    }
+
+    // AL FINALIZAR CUALQUIER MUTACIÓN CON ÉXITO, INVALIDAR EL CACHÉ
+    if (shouldInvalidateCache) {
+       invalidateCache_();
+    }
+
+    resultPayload.message = 'Operación completada';
+    return ContentService.createTextOutput(JSON.stringify(resultPayload)).setMimeType(ContentService.MimeType.JSON);
+
   } catch (error) {
+    console.error("POST Error: " + error.toString());
     return ContentService.createTextOutput(JSON.stringify({ result: 'error', message: error.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 }
